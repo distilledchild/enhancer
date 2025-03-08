@@ -19,7 +19,10 @@ library("broom")
 library("igraph")
 library("ggraph")
 library("writexl")
-library(ggrepel)
+library("ggrepel")
+library("pdftools")
+library("magick")
+library("tools")
 
 getwd()
 
@@ -876,13 +879,16 @@ for (chr in chromosomes) {
   })
 }
 
-pdf("./figures/submission/lt2mb/overall_distribution_of_CTCF_by_chromosome_wo_capping_lt2mb.pdf", width = 11*0.8, height = 8.5*0.8)
+pdf_path_overall_wo_capping_lt2mb_path <- "./figures/submission/lt2mb/overall_distribution_of_CTCF_by_chromosome_wo_capping_lt2mb.pdf"
+png_path_overall_wo_capping_lt2mb_path <- paste0(file_path_sans_ext(pdf_path_overall_wo_capping_lt2mb_path), ".png")
 
-num_plots <- length(plot_ctcf_list) # 22 chromosomes
-plots_per_page <- 4
+pdf(pdf_path_overall_ctcf_wo_capping_lt2mb, width = 11*0.8, height = 8.5*0.8)
 
-for (i in seq(1, num_plots, by = plots_per_page)) {
-  end_idx <- min(i + plots_per_page - 1, num_plots)
+ctcf_num_plots <- length(plot_ctcf_list) # 22 chromosomes
+ctcf_plots_per_page <- 4
+
+for (i in seq(1, ctcf_num_plots, by = ctcf_plots_per_page)) {
+  end_idx <- min(i + ctcf_plots_per_page - 1, ctcf_num_plots)
   page_plots <- plot_ctcf_list[i:end_idx]
   
   combined_page <- plot_grid(plotlist = page_plots, ncol = 1, nrow = 4)
@@ -891,6 +897,37 @@ for (i in seq(1, num_plots, by = plots_per_page)) {
 }
 
 dev.off()
+
+merge_pdf_pages_to_single_image <- function(pdf_path, output_pdf_path, output_png_path, dpi = 150, stack = TRUE) {
+  # Step 1: checking page count
+  n_pages <- pdf_info(pdf_path)$pages
+  
+  # Step 2: converting each page to image
+  pdf_images <- lapply(1:n_pages, function(p) {
+    image_read(pdf_render_page(pdf_path, page = p, dpi = dpi))
+  })
+  
+  # Step 3: merging images vertically
+  merged_img <- image_append(do.call(c, pdf_images), stack = stack)
+  
+  # Step 4: generating output paths
+  base_path <- file_path_sans_ext(pdf_path)
+  output_pdf_path <- paste0(base_path, "_merged.pdf")
+  output_png_path <- paste0(base_path, "_merged.png")
+  
+  # Step 5: saving PDF and PNG
+  image_write(merged_img, path = output_pdf_path, format = "pdf")
+  image_write(merged_img, path = output_png_path, format = "png")
+  
+  # Optional: return paths for confirmation
+  return(list(pdf = output_pdf_path, png = output_png_path))
+}
+
+merge_pdf_pages_to_single_image(
+  pdf_path = pdf_path_overall_wo_capping_lt2mb_path,
+  output_pdf_path = pdf_path_overall_wo_capping_lt2mb_path,
+  output_png_path = png_path_overall_wo_capping_lt2mb_path
+)
 
 relative.pos.df.ctcf.dist.result %>% head()
 
@@ -1519,7 +1556,11 @@ for (chr in chromosomes) {
   })
 }
 
-pdf("./figures/submission/lt2mb/overall_distribution_of_TSS_by_chromosome_wo_capping_lt2mb.pdf", width = 11*0.8, height = 8.5*0.8)
+pdf_path_TSS_overall_wo_capping_lt2mb_path <- "./figures/submission/lt2mb/overall_distribution_of_TSS_by_chromosome_wo_capping_lt2mb.pdf"
+png_path_TSS_overall_wo_capping_lt2mb_path <- paste0(file_path_sans_ext(pdf_path_TSS_overall_wo_capping_lt2mb_path), ".png")
+
+pdf(pdf_path_TSS_overall_wo_capping_lt2mb_path, width = 11*0.8, height = 8.5*0.8)
+
 tss_num_plots <- length(plot_tss_list) # 22 chromosomes
 tss_plots_per_page <- 4
 
@@ -1534,6 +1575,11 @@ for (i in seq(1, tss_num_plots, by = tss_plots_per_page)) {
 
 dev.off()
 
+merge_pdf_pages_to_single_image(
+  pdf_path = pdf_path_TSS_overall_wo_capping_lt2mb_path,
+  output_pdf_path = pdf_path_TSS_overall_wo_capping_lt2mb_path,
+  output_png_path = png_path_TSS_overall_wo_capping_lt2mb_path
+)
 ########################
 # 3. TSS
 # 3-3. overall distribution of TSS on loops: figures
@@ -2214,7 +2260,10 @@ for (chr in chromosomes) {
   })
 }
 
-pdf("./figures/submission/lt2mb/overall_distribution_of_promoter_by_chromosome_wo_capping_lt2mb.pdf", width = 11*0.8, height = 8.5*0.8)
+pdf_path_promoter_overall_wo_capping_lt2mb_path <- "./figures/submission/lt2mb/overall_distribution_of_promoter_by_chromosome_wo_capping_lt2mb.pdf"
+png_path_promoter_overall_wo_capping_lt2mb_path <- paste0(file_path_sans_ext(pdf_path_promoter_overall_wo_capping_lt2mb_path), ".png")
+
+pdf(pdf_path_promoter_overall_wo_capping_lt2mb_path, width = 11*0.8, height = 8.5*0.8)
 
 promoter_num_plots <- length(plot_promoter_list) # 22 chromosomes
 promoter_plots_per_page <- 4
@@ -2229,6 +2278,12 @@ for (i in seq(1, promoter_num_plots, by = promoter_plots_per_page)) {
 }
 
 dev.off()
+
+merge_pdf_pages_to_single_image(
+  pdf_path = pdf_path_promoter_overall_wo_capping_lt2mb_path,
+  output_pdf_path = pdf_path_promoter_overall_wo_capping_lt2mb_path,
+  output_png_path = png_path_promoter_overall_wo_capping_lt2mb_path
+)
 
 ########################
 # 4. promoter
@@ -2269,6 +2324,57 @@ final_promoter_plot <- plot.promoter.hist | plot.promoter.dens
 print(final_promoter_plot)
 
 dev.off()
+
+#########################################
+#########################################
+# Figure for new ones
+#########################################
+#########################################
+
+p1 <- plot.ctcf.dens
+p2 <- plot.tss.dens
+p3 <- plot.promoter.dens
+
+p1 <- plot.ctcf.hist
+p2 <- plot.tss.hist
+p3 <- plot.promoter.hist
+
+base_theme <- theme_bw(base_size = 12) +
+  theme(plot.title.position = "plot",
+        panel.grid.minor = element_blank())
+
+p1 <- p1 + base_theme
+p2 <- p2 + base_theme
+p3 <- p3 + base_theme
+
+# ylim to c(0,0.75)
+
+
+# 1row 3col legend
+fig_combined <-
+  (p1 | p2 | p3) +
+  plot_layout(ncol = 3, guides = "collect", widths = c(1, 1, 1)) &
+  theme(legend.position = "bottom",
+        legend.margin = margin(2, 6, 2, 6),
+        plot.tag = element_text(face = "bold", size = 12))
+
+# title/subtitle/pannel tag(a, b, c)
+fig_combined <- fig_combined +
+  plot_annotation(
+    # title = "Figure X. Your overall title",
+    # subtitle = "Optional subtitle or notes",
+    tag_levels = "a"
+  )
+
+fig_combined
+
+# save (10 x 8.5 inch, 300 dpi)
+ggsave("./figures/submission/lt2mb/density_combined_all.png", fig_combined,
+       width = 11, height = 8.5, dpi = 300, bg = "white")
+ggsave("./figures/submission/lt2mb/histogram_combined_all.png", fig_combined,
+       width = 11, height = 8.5, dpi = 300, bg = "white")
+#########################################
+#########################################
 
 ########################
 # 4. promoter
@@ -2481,7 +2587,6 @@ df.loop.with.promoter.case %>% count(case)
 
 df.promoter.counts
 
-
 # threshould for ctcf is about 2^2.5, regardless resolution
 p.hist.promoter.loopend.count<-ggplot(df.promoter.counts, aes(x=log2(promoter_count)))+
   geom_histogram()+
@@ -2568,7 +2673,6 @@ print(top50_genes_for_gprofiler)
 # gProfiler용 gene 리스트만 추출 (문자 벡터 형태)
 gene_list_for_gprofiler <- top50_genes_for_gprofiler$gene.id
 print(gene_list_for_gprofiler)
-
 
 ###################
 # Genes per Loop
@@ -2738,7 +2842,6 @@ df.final.loop.dataset.tss %>% head(3)
 ##########################################################
 library(RIdeogram)
 library(rsvg)
-library(magick)
 library(scales)
 
 getwd()
@@ -3361,52 +3464,7 @@ for (chr in unique_chromosomes) {
 
 dev.off()
 
-#########################################
-# Figure for new ones
-#########################################
 
-p1 <- plot.ctcf.dens
-p2 <- plot.tss.dens
-p3 <- plot.promoter.dens
-
-p1 <- plot.ctcf.hist
-p2 <- plot.tss.hist
-p3 <- plot.promoter.hist
-
-base_theme <- theme_bw(base_size = 12) +
-  theme(plot.title.position = "plot",
-        panel.grid.minor = element_blank())
-
-p1 <- p1 + base_theme
-p2 <- p2 + base_theme
-p3 <- p3 + base_theme
-
-# ylim to c(0,0.75)
-
-
-# 1row 3col legend
-fig_combined <-
-  (p1 | p2 | p3) +
-  plot_layout(ncol = 3, guides = "collect", widths = c(1, 1, 1)) &
-  theme(legend.position = "bottom",
-        legend.margin = margin(2, 6, 2, 6),
-        plot.tag = element_text(face = "bold", size = 12))
-
-# title/subtitle/pannel tag(a, b, c)
-fig_combined <- fig_combined +
-  plot_annotation(
-    # title = "Figure X. Your overall title",
-    # subtitle = "Optional subtitle or notes",
-    tag_levels = "a"
-  )
-
-fig_combined
-
-# save (10 x 8.5 inch, 300 dpi)
-ggsave("./figures/submission/density_combined_all.png", fig_combined,
-       width = 11, height = 8.5, dpi = 300, bg = "white")
-ggsave("./figures/submission/histogram_combined_all.png", fig_combined,
-       width = 11, height = 8.5, dpi = 300, bg = "white")
         
         
         
