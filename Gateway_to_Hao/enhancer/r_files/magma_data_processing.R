@@ -98,7 +98,7 @@ df.magma.out.full.join.category <- df.magma.out.full.join %>%
     
     TRUE ~ NA_character_
   )) 
-  
+
 # 114606
 df.magma.out.full.join.category
 df.magma.out.full.join.category %>% 
@@ -119,10 +119,10 @@ df.magma.out.full.join.category %>%
 
 
 genedef.ncbi.bestrefseq <- read.table("/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/from_hmagma_enhancer/0911/gene_NCBI.txt", 
-                           header = FALSE, 
-                           sep = "\t", 
-                           col.names = c("chr", "length", "genbank", "refseq", "start", "end", "strand", "gene_id", "index"),
-                           stringsAsFactors = FALSE)
+                                      header = FALSE, 
+                                      sep = "\t", 
+                                      col.names = c("chr", "length", "genbank", "refseq", "start", "end", "strand", "gene_id", "index"),
+                                      stringsAsFactors = FALSE)
 genedef.ncbi.bestrefseq
 
 df.magma.out.full.join.category.join.genedef.ncbi.bestrefseq <- left_join(df.magma.out.full.join.category, genedef.ncbi.bestrefseq, by = c("GENE" = "index" )) 
@@ -143,9 +143,9 @@ df.magma.out.full.join.category.join.genedef.ncbi.bestrefseq %>%
   dplyr::select(file, GENE, CHR_wo_hic, gene_id, NSNPS_wo_hic, NSNPS_w_hic) %>% 
   mutate(cnt = NSNPS_w_hic - NSNPS_wo_hic)
 # %>% 
-  # count(CHR_wo_hic, gene_id, cnt)
-  # count(CHR_wo_hic) %>% arrange(CHR_wo_hic)
-  # count(file)
+# count(CHR_wo_hic, gene_id, cnt)
+# count(CHR_wo_hic) %>% arrange(CHR_wo_hic)
+# count(file)
 
 #           CHR   n                                                   file   n                 
 # 1           1 165                        regressedlr_nicsa_day10_infusion  69                 
@@ -175,7 +175,7 @@ df.magma.out.full.join.category.join.genedef.ncbi.bestrefseq %>%
   dplyr::select(file, GENE, CHR_wo_hic, gene_id, NSNPS_wo_hic, NSNPS_w_hic) %>% 
   # count(CHR_wo_hic) %>% arrange(CHR_wo_hic)
   count(file)
-  # count(NSNPS_w_hic) # NA 458
+# count(NSNPS_w_hic) # NA 458
 
 #    CHR_wo_hic   n                                                            file  n  
 # 1           1  57                              regressedlr_nicsa_day10_infusion 17  
@@ -205,7 +205,7 @@ df.magma.out.full.join.category.join.genedef.ncbi.bestrefseq %>%
   dplyr::select(file, GENE, CHR_wo_hic, gene_id, NSNPS_wo_hic, NSNPS_w_hic) %>% 
   # count(CHR_wo_hic) %>% arrange(CHR_wo_hic)    ##################################### DEPENDING ON CHR
   count(file)
-  # count(NSNPS_w_hic) # NA 4942
+# count(NSNPS_w_hic) # NA 4942
 
 #    CHR_wo_hic    n.                                                          file   n
 # 1           1  429.          1                    regressedlr_nicsa_day10_infusion 283

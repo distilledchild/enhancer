@@ -1,43 +1,41 @@
 library("ComplexUpset")
 library("tidyverse")
 library("GenomicRanges")
-library("ggplot2")
-library("devtools")
-library("remotes")
-library("gridExtra")
+library(ggplot2)
+#library("devtools")
+#library("remotes")
+library(gridExtra)
 library("patchwork")
-library("cowplot")
-library("biomaRt")
-library("reshape2")
-library("ggvenn")
+#library("cowplot")
+#library(biomaRt)
+library(reshape2)
+library(ggvenn)
 
-options(scipen = 999)
-
-getwd()
+#getwd()
 
 # Windows
 # setwd('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\workshop\\2023_NIH_meeting\\loop_N_tss')
 # source(file.path('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\project_common_code', 'variables.R'))
 # source(file.path('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\project_common_code', 'funcs.R'))
 
-getwd()
+#getwd()
 
 # Linux
 #setwd('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\workshop\\2023_NIH_meeting\\loop_N_tss')
 # setwd('./Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss')
 # setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/enhancer_atlas2.0/all_species/neuron')
-setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan')
-setwd('/home/pkim/dropbox/Gateway_to_Hao/enhancer/r_files')
-source(file.path('/home/pkim/dropbox/Gateway_to_Hao/project_common_code/', 'variables.R'))
-source(file.path('/home/pkim/dropbox/Gateway_to_Hao/project_common_code/', 'funcs.R'))
+#setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan')
+#setwd('/home/pkim/dropbox/Gateway_to_Hao/enhancer/r_files')
+#source(file.path('/home/pkim/dropbox/Gateway_to_Hao/project_common_code/', 'variables.R'))
+#source(file.path('/home/pkim/dropbox/Gateway_to_Hao/project_common_code/', 'funcs.R'))
 
-getwd()
+#getwd()
 
 # Mac
-setwd('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files')
-getwd()
-source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/', 'variables.R'))
-source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/', 'funcs.R'))
+#setwd('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files')
+#getwd()
+#source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/', 'variables.R'))
+#source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/', 'funcs.R'))
 
 # source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/enhancer_synced_data_preparation.R'))
 # source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/data_analysis.R'))
@@ -50,14 +48,14 @@ source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/',
 # BEDPE file list (10 files)
 # Linux
 # loop.file.list = fs::dir_ls("/home/pkim/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/", regexp = ".bedpe$")
-loop.file.list = fs::dir_ls("/home/pkim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
-loop.file.list = fs::dir_ls("/home/pkim/dropbox/Gateway_to_Hao/enhancer/data/loops", regexp = ".bedpe$")
-loop.file.list
+#loop.file.list = fs::dir_ls("/home/pkim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
+#loop.file.list = fs::dir_ls("/home/pkim/dropbox/Gateway_to_Hao/enhancer/data/loops", regexp = ".bedpe$")
+#loop.file.list
 
 # Mac
-loop.file.list = fs::dir_ls("/Users/PanjunKim/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/", regexp = ".bedpe$")
-loop.file.list = fs::dir_ls("/Users/PanjunKim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
-loop.file.list = fs::dir_ls("/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/data/loops", regexp = ".bedpe$")
+#loop.file.list = fs::dir_ls("/Users/PanjunKim/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/", regexp = ".bedpe$")
+#loop.file.list = fs::dir_ls("/Users/PanjunKim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
+loop.file.list = fs::dir_ls("../data/loops", regexp = ".bedpe$")
 loop.file.list
 
 # BED fild for loops
@@ -98,20 +96,48 @@ df.loop.deep.sample.all <- df.init.loop.bed %>%
     TRUE ~ NA
   )) %>% 
   mutate(end.distance = x2 - x1) %>% 
+  mutate(loop.size= (y2+y1)/2 - (x2+x1)/2) |> 
   mutate(resolution = case_when(
     end.distance == 5000 ~ "5K",
     end.distance == 10000 ~ "10K",
     end.distance == 25000 ~ "25K",
     TRUE ~ NA
   )) %>% 
-  mutate(resolution = factor(resolution, levels = c("5K", "10K", "25K"))) %>%
+  mutate(Resolution = factor(resolution, levels = c("5K", "10K", "25K"))) %>%
   mutate(loop.id = str_c(X.chr1, '_', x1, '_', x2, '_', chr2, '_', y1, '_', y2, '_', end.distance)) %>% # loop.id
   mutate(sample.loop.id = str_c(strain, '_', loop.id)) #sample.loop.id
+
+names(df.loop.deep.sample.all)
+#  [1] "sample"         "X.chr1"         "x1"             "x2"            
+#  [5] "chr2"           "y1"             "y2"             "name"          
+#  [9] "score"          "strand1"        "strand2"        "color"         
+# [13] "observed"       "expectedBL"     "expectedDonut"  "expectedH"     
+# [17] "expectedV"      "fdrBL"          "fdrDonut"       "fdrH"          
+# [21] "fdrV"           "numCollapsed"   "centroid1"      "centroid2"     
+# [25] "radius"         "distance"       "strain"         "end.distance"  
+# [29] "loop.size"      "resolution"     "loop.id"        "sample.loop.id"
+
+plot_raw_loop_length_by_rez<-ggplot(data=df.loop.deep.sample.all, aes(x=loop.size/1000000, group=Resolution, fill=Resolution))+geom_density(alpha=.5)+scale_x_log10() + xlab("Mb")
+pdf(file="hao_loop_size_before_remove_duplicate_loops.pdf", width=10,height=6)
+plot_raw_loop_length_by_rez
+dev.off()
+
+## maybe create an upset to find shared vs unique 
+## max 10 (because we have 10 samples)
+df_count_loopid<- df.loop.deep.sample.all |> count(loop.id , resolution)
+head(df_count_loopid)
+plot_loopid_counts<-ggplot(df_count_loopid, aes(x=n, group=resolution, fill=resolution))+geom_histogram()
+#plot_loopid_counts
+n10_loopids<-subset(df_count_loopid, n==10)$loop.id
+subset(df.loop.deep.sample.all, loop.id %in% n10_loopids[1])
 
 df.loop.deep.sample.all %>% 
   head()
 df.loop.deep.sample.all %>% 
   count(strain)
+
+
+
 
 ########################
 # loop analysis
@@ -216,24 +242,14 @@ for(res in resolutions) {
 pdf("common_Loops_Heatmap_Percentage.pdf", width = 12, height = 12)
 grid.arrange(plots[["5K"]], plots[["10K"]], plots[["25K"]], nrow = 3)
 dev.off()
-
+  
 # loop.setting with GRanges: x1,x2 = the coordinates of the UPSTREAM | y1,y2 = the coordinates of the DOWNSTREAM
 
 ########### distinct loops
-
 df.loop.deep.sample.all %>% 
-  head()
-count() # 58992
-
-# common loops between samples picked only one
-# TODO more reliable loops should be filtered from stats of loop annotation data
-df.loop.deep.sample.all %>%
-  group_by(loop.id) %>%
-  filter(n() > 1) %>%
-  ungroup() %>% 
-  filter(loop.id == 'chr10_46800000_46825000_chr10_46950000_46975000_25000') %>% 
-  filter(sample == 'A2DB')
-dplyr::select(loop.id)
+  count() # 58992
+#  head()
+  
 
 df.DISTINCT.loop.deep.sample.all <- df.loop.deep.sample.all %>%
   dplyr::select(loop.id) %>%
@@ -253,19 +269,33 @@ df.DISTINCT.loop.deep.sample.all <- df.loop.deep.sample.all %>%
     end.distance == 25000 ~ "25K",
     TRUE ~ NA
   )) %>% 
-  mutate(resolution = factor(resolution, levels = c("5K", "10K", "25K"))) %>% 
+  mutate(Resolution = factor(resolution, levels = c("5K", "10K", "25K"))) %>% 
   mutate(padded.distance = 0) %>% 
   mutate(loop.id = str_c(loop.id, '_', padded.distance))
 
-df.DISTINCT.loop.deep.sample.all
+df.DISTINCT.loop.deep.sample.all$loop.id
 
 df.DISTINCT.loop.deep.sample.all %>% 
   count(resolution) # 31773/58992
-head()
+  head()
 # resolution     n
 # 1         5K  6680
 # 2        10K 12162
 # 3        25K 12931
+dim(df.DISTINCT.loop.deep.sample.all)
+# [1] 31773    11
+  
+
+df.DISTINCT.loop.deep.sample.all <- df.DISTINCT.loop.deep.sample.all |> 
+  mutate(loop.size= (y2+y1)/2 - (x2+x1)/2)  
+
+plot_distinct_loop_length_by_res<-ggplot(data=df.DISTINCT.loop.deep.sample.all, aes(x=loop.size/1000000, group=Resolution, fill=Resolution))+geom_density(alpha=.5)+scale_x_log10() + xlab("Mb")+ggtitle("Size of loops")+theme(legend.position="none")
+plot_num_loops_by_res<-ggplot(df.DISTINCT.loop.deep.sample.all, aes(x=Resolution, fill=Resolution))+geom_histogram(stat="count")+ggtitle("Number of loops")
+pdf(file="hao_loop_size_after_remove_duplicate_loops.pdf", width=8,height=4)
+plot_distinct_loop_length_by_res+plot_num_loops_by_res
+dev.off()
+
+
 
 ########### GRANGE with object from line 81 
 # loop.setting with GRanges - loop.deep.sample.all (whole, up, down)
@@ -282,6 +312,7 @@ df.DISTINCT.loop.deep.sample.all.whole.GR<-GRanges(seqnames=df.DISTINCT.loop.dee
 df.DISTINCT.loop.deep.sample.all.up.GR<-GRanges(seqnames=df.DISTINCT.loop.deep.sample.all$chr1, ranges=IRanges(start=(df.DISTINCT.loop.deep.sample.all$x1-t), end=(df.DISTINCT.loop.deep.sample.all$x2+t)), id=df.DISTINCT.loop.deep.sample.all$loop.id, end.distance = df.DISTINCT.loop.deep.sample.all$end.distance, resolution = df.DISTINCT.loop.deep.sample.all$resolution, distance = df.DISTINCT.loop.deep.sample.all$distance)
 df.DISTINCT.loop.deep.sample.all.down.GR<-GRanges(seqnames=df.DISTINCT.loop.deep.sample.all$chr1, ranges=IRanges(start=(df.DISTINCT.loop.deep.sample.all$y1-t), end=(df.DISTINCT.loop.deep.sample.all$y2+t)), id=df.DISTINCT.loop.deep.sample.all$loop.id, end.distance = df.DISTINCT.loop.deep.sample.all$end.distance, resolution = df.DISTINCT.loop.deep.sample.all$resolution, distance = df.DISTINCT.loop.deep.sample.all$distance)
 df.DISTINCT.loop.deep.sample.all.middle.GR<-GRanges(seqnames=df.DISTINCT.loop.deep.sample.all$chr1, ranges=IRanges(start=(df.DISTINCT.loop.deep.sample.all$x2-t), end=(df.DISTINCT.loop.deep.sample.all$y1+t)), id=df.DISTINCT.loop.deep.sample.all$loop.id, end.distance = df.DISTINCT.loop.deep.sample.all$end.distance, resolution = df.DISTINCT.loop.deep.sample.all$resolution, distance = df.DISTINCT.loop.deep.sample.all$distance)
+
 
 ########### NEW OBJECT for OVERALL DISTRIBUTION: new.df.loop.deep.sample.all, overall.df.DISTINCT.loop.deep.sample.all
 # new.loop.id, x0, y3, new_distance
@@ -321,13 +352,14 @@ overall.df.DISTINCT.loop.deep.sample.all.1.distance %>%
 ## 1. CTCF Processing
 
 # Linux
-df.init.ctcf<-read.table(file="/home/pkim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
-df.init.ctcf<-read.table(file="/home/pkim/dropbox/Gateway_to_Hao/enhancer/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
-df.init.ctcf %>% count() # 5767921
+#df.init.ctcf<-read.table(file="/home/pkim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
+#df.init.ctcf<-read.table(file="/home/pkim/dropbox/Gateway_to_Hao/enhancer/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
+#df.init.ctcf %>% count() # 5767921
 
 # Mac
 # ctcf<-read.table(file="/home/pkim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", sep="\t", col.names = c("chr", "start", "end", "strand", "length"), header = FALSE) %>% 
-df.init.ctcf<-read.table(file="/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
+#df.init.ctcf<-read.table(file="/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
+df.init.ctcf<-read.table(file="../data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
 df.init.ctcf %>% dim() # 5767921
 df.init.ctcf %>% head()
 
@@ -336,7 +368,7 @@ df.init.ctcf %>%                              # +: 2891072, -: 2876849 = 5767921
   count(strand)
 # removing dups including strand
 df.init.ctcf %>% 
-  distinct(chr, start, end, strand)           # 2701585/5767921
+  distinct(chr, start, end, strand)  |> count()         # 2701585/5767921
 # removing dups without strand
 df.init.ctcf %>% 
   distinct(chr, start, end)                   # 2544216/5767921
@@ -354,22 +386,31 @@ df.DISTINCT.fimo.2nd.trial.ctcf <- df.init.ctcf %>%
   mutate(id = str_c(chr, "_", start, "_", end, "_", strand, '_', length)) %>% 
   mutate(start = as.numeric(start)) %>% 
   mutate(end = as.numeric(end)) 
-
+dim(df.DISTINCT.fimo.2nd.trial.ctcf)
+# [1] 2701585       6
 df.DISTINCT.fimo.2nd.trial.ctcf # 2701585/5767921 : 0.4683811
 df.DISTINCT.fimo.2nd.trial.ctcf %>% head()  # id column done
 
+
+ctcf_chr4<-subset(df.DISTINCT.fimo.2nd.trial.ctcf, chr=="chr4")
+ctcf_chr19<-subset(df.DISTINCT.fimo.2nd.trial.ctcf, chr=="chr19")
+ctcf_chr5<-subset(df.DISTINCT.fimo.2nd.trial.ctcf, chr=="chr5")
+write.csv(file="chr4_ctcf.tab", ctcf_chr4, row.names=F)
+write.csv(file="chr19_ctcf.tab", ctcf_chr19, row.names=F)
+write.csv(file="chr5_ctcf.tab", ctcf_chr5, row.names=F)
+
+
+
+
 # GRANGE for ctcf from FIMO 2nd trial, 17849
 df.DISTINCT.ctcf.2nd.fimo.GR <- GRanges(seqnames=df.DISTINCT.fimo.2nd.trial.ctcf$chr, ranges=IRanges(start=df.DISTINCT.fimo.2nd.trial.ctcf$start, end=df.DISTINCT.fimo.2nd.trial.ctcf$end), id=df.DISTINCT.fimo.2nd.trial.ctcf$id, strand=df.DISTINCT.fimo.2nd.trial.ctcf$strand)
-df.DISTINCT.ctcf.2nd.fimo.GR
+#df.DISTINCT.ctcf.2nd.fimo.G5R
 
 ####################################################
 ##### 1. OVERALL on loops Overlapping CTCF & loops 
 ####################################################
 
-# adding 1/2 distance in each end (total distance becomes 2*distance)
 overall.df.DISTINCT.loop.deep.sample.all <- overall.df.DISTINCT.loop.deep.sample.all.5.distance
-# adding 1 distance in each end (total distance becomes 3*distance)
-overall.df.DISTINCT.loop.deep.sample.all <- overall.df.DISTINCT.loop.deep.sample.all.1.distance
 
 overall.df.DISTINCT.loop.deep.sample.all.GR <- GRanges(seqnames=overall.df.DISTINCT.loop.deep.sample.all$chr1, ranges=IRanges(start=overall.df.DISTINCT.loop.deep.sample.all$x0, end=overall.df.DISTINCT.loop.deep.sample.all$y3), id=overall.df.DISTINCT.loop.deep.sample.all$loop.id, new.loop.id=overall.df.DISTINCT.loop.deep.sample.all$new.loop.id)
 
@@ -380,8 +421,10 @@ overall.ctcf.on.loop.hits <- queryHits(index.distinct.ctcf.w.overall.whole.loop)
 
 df.ctcf.dist.result <- data.frame(
   loop.id = overall.df.DISTINCT.loop.deep.sample.all$new.loop.id[overall.loop.for.ctcf.hits],
-  loop.start = overall.df.DISTINCT.loop.deep.sample.all$x0[overall.loop.for.ctcf.hits],
-  loop.end = overall.df.DISTINCT.loop.deep.sample.all$y3[overall.loop.for.ctcf.hits],
+  loop.start0 = overall.df.DISTINCT.loop.deep.sample.all$x0[overall.loop.for.ctcf.hits], # modified by hao
+  loop.start12 = overall.df.DISTINCT.loop.deep.sample.all$x12[overall.loop.for.ctcf.hits], # modified by hao
+  loop.end3 = overall.df.DISTINCT.loop.deep.sample.all$y3[overall.loop.for.ctcf.hits], # modified by hao
+  loop.end12 = overall.df.DISTINCT.loop.deep.sample.all$y12[overall.loop.for.ctcf.hits], # modified by hao
   loop.res = overall.df.DISTINCT.loop.deep.sample.all$resolution[overall.loop.for.ctcf.hits],
   # loop.new.distance = overall.df.DISTINCT.loop.deep.sample.all$new_distance[overall.loop.for.ctcf.hits],
   ctcf.id = df.DISTINCT.fimo.2nd.trial.ctcf$id[overall.ctcf.on.loop.hits],
@@ -392,13 +435,19 @@ df.ctcf.dist.result <- data.frame(
 df.ctcf.dist.result %>% head()
 df.ctcf.dist.result %>% dim() # 40861258(both DISTINCT, 0.5 distance), 6/57612728(both DISTINCT, 1 distance)
 
+## Start By Hao
 relative.pos.df.ctcf.dist.result <- df.ctcf.dist.result %>%
   mutate(pos_coord = round((ctcf.start + ctcf.end) / 2)) %>%
-  mutate(loop_length = (loop.end - loop.start)) %>% # x0, y3
-  mutate(relative_pos = pos_coord - loop.start) %>% # relative position from loop start
-  # mutate(value = (relative_pos / (loop_length / 2)) - 1) %>% # for padding .5x distance
-  mutate(value = relative_pos/(loop_length/3)-1) %>% # for padding 1x distance
-  dplyr::select(loop.id, ctcf.id, value, loop.res)
+  mutate(loop_length03 = (loop.end3 - loop.start0)) %>% # x0, y3
+  mutate(loop_length = (loop.end12 - loop.start12)) %>% # x12, y12
+  mutate(relative_pos03 = pos_coord - loop.start0) %>% # relative position from loop start
+  mutate(relative_pos = pos_coord - loop.start12) %>% # relative position from loop start
+  mutate(value03 = (relative_pos03 / (loop_length03 / 2)) - 0.5) %>% # for padding .5x distance
+  mutate(value = relative_pos / loop_length - 0.5 ) %>% # for padding .5x distance
+  # mutate(value = relative_pos/(loop_length/3)-1) %>% # for padding 1x distance
+  dplyr::select(loop.id, ctcf.id, value, value03, loop.res)
+
+## End By Hao
 
 relative.pos.df.ctcf.dist.result %>% 
   head()
@@ -411,33 +460,33 @@ plot_ctcf_list <- list()
 
 for (chr in chromosomes) {
   tryCatch({
-    
-    message("START: Processing chromosome: ", chr)
-    
-    relative.pos.df.ctcf.dist.result.chr <- relative.pos.df.ctcf.dist.result %>% 
-      filter(str_detect(loop.id, paste0("_chr", chr, "_")))
-    
-    plot1.ctcf.dens <- relative.pos.df.ctcf.dist.result.chr %>% 
-      ggplot(aes(x = value)) +
-      geom_density(fill = "skyblue", color = "black", alpha = 0.7) +
-      ylim(c(0,1))+
-      labs(title = paste0("A. Density of CTCF found near Hi-C loops on chr", chr),
-           x = "Relative position to loop",
-           y = "Density"
-      )
-    
-    plot1.ctcf.hist <- relative.pos.df.ctcf.dist.result.chr %>% 
-      ggplot(aes(x = value)) +
-      geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
-      labs(title = paste0("A. Histogram of CTCF found near Hi-C loops on chr", chr),
-           x = "Relative position to loop",
-           y = "Counts"
-      )
-    
-    combined_plot <- plot1.ctcf.hist + plot1.ctcf.dens # + can be used instead of |
-    plot_ctcf_list[[chr]] <- combined_plot
-    
-    message("END: Processing chromosome: ", chr)
+  
+  message("START: Processing chromosome: ", chr)
+  
+  relative.pos.df.ctcf.dist.result.chr <- relative.pos.df.ctcf.dist.result %>% 
+    filter(str_detect(loop.id, paste0("_chr", chr, "_")))
+  
+  plot1.ctcf.dens <- relative.pos.df.ctcf.dist.result.chr %>% 
+    ggplot(aes(x = value)) +
+    geom_density(fill = "skyblue", color = "black", alpha = 0.7) +
+    ylim(c(0,1))+
+    labs(title = paste0("A. Density of CTCF found near Hi-C loops on chr", chr),
+         x = "Relative position to loop",
+         y = "Density"
+    )
+  
+  plot1.ctcf.hist <- relative.pos.df.ctcf.dist.result.chr %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
+    labs(title = paste0("A. Histogram of CTCF found near Hi-C loops on chr", chr),
+         x = "Relative position to loop",
+         y = "Counts"
+    )
+
+  combined_plot <- plot1.ctcf.hist + plot1.ctcf.dens # + can be used instead of |
+  plot_ctcf_list[[chr]] <- combined_plot
+
+  message("END: Processing chromosome: ", chr)
   }, error = function(e) {
     
     message("Error processing chromosome: ", chr)
@@ -446,7 +495,7 @@ for (chr in chromosomes) {
 }
 
 pdf("overall_distribution_of_CTCF_on_each_chr_.5_distance.pdf", width = 11, height = 8.5)
-pdf("./figures/0909/overall_distribution_of_CTCF_on_each_chr_1_distance.pdf", width = 11, height = 8.5)
+#pdf("overall_distribution_of_CTCF_on_each_chr_1_distance.pdf", width = 11, height = 8.5)
 
 num_plots <- length(plot_ctcf_list) # 22 chromosomes
 plots_per_page <- 4
@@ -462,7 +511,45 @@ for (i in seq(1, num_plots, by = plots_per_page)) {
 
 dev.off()
 
-relative.pos.df.ctcf.dist.result %>% head()
+relative.pos.df.ctcf.dist.result <- 
+relative.pos.df.ctcf.dist.result |> 
+  mutate(Resolution = factor(loop.res, levels=c("5K", "10K", "25K")))
+
+
+
+## Start By Hao: 
+plot.ctcf.hist_03 <- relative.pos.df.ctcf.dist.result %>% 
+  ggplot(aes(x = value03)) +
+  geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
+  labs(title = paste0("A. value03, Histogram of CTCF over Loops on ALL Chromosomes" ),
+       x = "Relative position to loop",
+       y = "Counts"
+  )
+
+plot.ctcf.hist_12 <- relative.pos.df.ctcf.dist.result %>% 
+  ggplot(aes(x = value)) +
+  geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
+  labs(title = paste0("A. value12, Histogram of CTCF over Loops on ALL Chromosomes" ),
+       x = "Relative position to loop",
+       y = "Counts"
+  )
+                  names(relative.pos.df.ctcf.dist.result)
+# [1] "loop.id"  "ctcf.id"  "value03"  "value12" 
+# [5] "loop.res"
+plot.ctcf.density_12 <- relative.pos.df.ctcf.dist.result %>% 
+  ggplot(aes(x = value , group=Resolution, fill=Resolution)) +
+  geom_density(alpha = 0.5) +
+  labs(title = paste0("Density of CTCF over Loops on ALL Chromosomes" ),
+       x = "Relative position to loop",
+       y = "Counts"
+  )
+plot.ctcf.hist_12
+pdf(file="hao.ctcf.hist.03.vs12.pdf", width=12, height=8) 
+plot.ctcf.hist_03+plot.ctcf.hist_12
+plot.ctcf.hist_12+facet_wrap(~loop.res)
+dev.off()
+## End By Hao 
+
 
 ## PDF file for ALL CHROMOSOMES by resolution
 create_ctcf_plots <- function(data, res) {
@@ -471,14 +558,14 @@ create_ctcf_plots <- function(data, res) {
   } else { 
     df.plot<- data %>% filter(loop.res==res)
   }
-  
+
   plot.ctcf.hist <- df.plot %>% 
-    ggplot(aes(x = value)) +
-    geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
-    labs(title = paste0("A. Histogram of CTCF over Loops on ALL Chromosomes (", res, ")"),
-         x = "Relative position to loop",
-         y = "Counts"
-    )
+  ggplot(aes(x = value)) +
+  geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
+  labs(title = paste0("A. Histogram of CTCF over Loops on ALL Chromosomes (", res, ")"),
+       x = "Relative position to loop",
+       y = "Counts"
+  )
   
   plot.ctcf.dens <- df.plot %>% 
     ggplot(aes(x = value)) +
@@ -488,16 +575,16 @@ create_ctcf_plots <- function(data, res) {
          x = "Relative position to loop",
          y = "Density"
     )
-  
-  return(plot.ctcf.hist + plot.ctcf.dens)
+
+    return(plot.ctcf.hist + plot.ctcf.dens)
 }
 
 plot_ctcf_all_res <- create_ctcf_plots(relative.pos.df.ctcf.dist.result, "All")
 plot_ctcf_5K <- create_ctcf_plots(relative.pos.df.ctcf.dist.result, "5K")
 plot_ctcf_10K <- create_ctcf_plots(relative.pos.df.ctcf.dist.result, "10K")
 plot_ctcf_25K <- create_ctcf_plots(relative.pos.df.ctcf.dist.result, "25K")
-# pdf("overall_distribution_ctcf_on_all_chromosomes_.5_distance.pdf", width = 11, height = 8.5) # pdf for .5 distance as a padding
-pdf("figures/0909/overall_distribution_ctcf_on_all_chromosomes_1_distance.pdf", width = 11, height = 8.5) # pdf for a distance as a padding
+pdf("overall_distribution_ctcf_on_all_chromosomes_.5_distance.pdf", width = 11, height = 8.5) # pdf for .5 distance as a padding
+# pdf("overall_distribution_ctcf_on_all_chromosomes_1_distance.pdf", width = 11, height = 8.5) # pdf for a distance as a padding
 (plot_ctcf_all_res/plot_ctcf_5K)
 (plot_ctcf_10K / plot_ctcf_25K)
 dev.off()
@@ -559,7 +646,7 @@ df_50_padded <- apply_padding(df.DISTINCT.loop.deep.sample.all, padding_factor =
 # 100% padding
 df_100_padded <- apply_padding(df.DISTINCT.loop.deep.sample.all, padding_factor = 1.0)
 
-pdf("./figures/0909/inner_distance_boxplots.pdf", width = 16, height = 8)
+pdf("./figures/inner_distance_boxplots.pdf", width = 16, height = 8)
 par(mfrow = c(1, 2))  
 
 # 50% padding boxplot
@@ -590,6 +677,7 @@ index.distinct.ctcf.w.up.loop <- findOverlaps(df.DISTINCT.ctcf.2nd.fimo.GR, df.D
 index.distinct.ctcf.w.up.loop
 end.loop.up.ctcf.hits <- subjectHits(index.distinct.ctcf.w.up.loop)
 end.ctcf.up.hits <- queryHits(index.distinct.ctcf.w.up.loop)
+end.loop.up.ctcf.hits
 
 df.DISTINCT.loop.deep.sample.all %>% 
   head()
@@ -681,17 +769,23 @@ df.overlapping.CTCF.w.BOTH.result.boxplot <- df.overlapping.CTCF.w.BOTH.result %
   # group_by(loop.id, WHERE, resolution) %>%
   # group_by(chr, loop.id, resolution) %>%
   summarise(ctcf_count_by_loop_id = n_distinct(ctcf.id), .groups = 'drop')
-
 df.overlapping.CTCF.w.BOTH.result.boxplot
 
 # for Q1
 df.overlapping.CTCF.w.BOTH.result %>% head()
 
+# no chr, the rest is the same
 df.ctcf.counts <- df.overlapping.CTCF.w.BOTH.result %>%
   group_by(loop.id, WHERE, resolution) %>%
   summarise(ctcf_count = n_distinct(ctcf.id), .groups = 'drop')
 
-df.ctcf.counts
+#subset(df.ctcf.counts, loop.id=="chr1_101070000_101080000_chr1_101560000_101570000_10000_0")
+# # A tibble: 2 × 4
+#   loop.id                                                   WHERE resolution ctcf_count
+#   <chr>                                                     <fct> <fct>           <int>
+# 1 chr1_101070000_101080000_chr1_101560000_101570000_10000_0 UP    10K                23
+# 2 chr1_101070000_101080000_chr1_101560000_101570000_10000_0 DOWN  10K                50
+
 
 ctcf_stats_by_resolution <- df.ctcf.counts %>%
   group_by(resolution) %>%
@@ -706,6 +800,12 @@ ctcf_stats_by_resolution <- df.ctcf.counts %>%
   )
 
 ctcf_stats_by_resolution
+
+# with resolution
+# resolution    Q1 Median    Q3  Mean    SD
+# 1 5K            22     40    76  55.2  50.0
+# 2 10K           23     43    78  56.7  50.3
+# 3 25K           26     49    92  66.5  60.7
 
 # resolution    Q1 Median    Q3  Mean    SD
 # <fct>      <dbl>  <dbl> <dbl> <dbl> <dbl>
@@ -736,23 +836,28 @@ df.overlapping.CTCF.w.BOTH.result.boxplot %>% head(4)
 # figure by chr & res
 boxplot.w.CTCF.by.chr.and.res <- df.overlapping.CTCF.w.BOTH.result.boxplot %>% 
   ggplot(aes(x = chr, y = ctcf_count_by_loop_id, fill = resolution)) +
-  geom_boxplot() +
-  stat_summary(fun = median, geom = "text", aes(label = round(after_stat(y), 1)), position = position_dodge(width = 0.75), vjust = -0.5, size = 2) + 
-  stat_summary(fun.data = function(y) {
-    data.frame(y = median(y), label = paste0("Q1: ", round(quantile(y, 0.25), 1)))
-  }, geom = "text", aes(label = after_stat(label)), position = position_dodge(width = 0.75), vjust = 6.5, size = 1.5) +
-  theme_minimal() + 
-  theme(plot.title = element_text(hjust = 0.5)) +
-  scale_fill_manual(values = c("5K" = "skyblue", "10K" = "lightcoral", "25K" = "springgreen"), breaks = c("5K", "10K", "25K")) +
-  scale_y_continuous(breaks = seq(min(df.overlapping.CTCF.w.BOTH.result.boxplot$ctcf_count_by_loop_id), max(df.overlapping.CTCF.w.BOTH.result.boxplot$ctcf_count_by_loop_id), by = 10)) +
-  labs(title = "Boxplot for Number of CTCF by Chromosome and Resolution", x = "Chromosomes", y = "Number of CTCF in a loop")
+    geom_boxplot() +
+    stat_summary(fun = median, geom = "text", aes(label = round(after_stat(y), 1)), position = position_dodge(width = 0.75), vjust = -0.5, size = 2) + 
+    stat_summary(fun.data = function(y) {
+      data.frame(y = median(y), label = paste0("Q1: ", round(quantile(y, 0.25), 1)))
+    }, geom = "text", aes(label = after_stat(label)), position = position_dodge(width = 0.75), vjust = 6.5, size = 1.5) +
+    theme_minimal() + 
+    theme(plot.title = element_text(hjust = 0.5)) +
+    scale_fill_manual(values = c("5K" = "skyblue", "10K" = "lightcoral", "25K" = "springgreen"), breaks = c("5K", "10K", "25K")) +
+    scale_y_continuous(breaks = seq(min(df.overlapping.CTCF.w.BOTH.result.boxplot$ctcf_count_by_loop_id), max(df.overlapping.CTCF.w.BOTH.result.boxplot$ctcf_count_by_loop_id), by = 10)) +
+    labs(title = "Boxplot for Number of CTCF by Chromosome and Resolution", x = "Chromosomes", y = "Number of CTCF in a loop")
 
 boxplot.w.CTCF.by.chr.and.res
 
-pdf("figures/0909/end_boxplot_num_ctcf_by_chr_res.pdf", width = 16.5, height = 23.5)
+pdf("end_boxplot_num_ctcf_by_chr_res.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.CTCF.by.chr.and.res, ncol = 1)
 dev.off()
+pdf("hao_end_boxplot_num_ctcf_by_chr_res.pdf", width=12, height=8)
+boxplot.w.CTCF.by.chr.and.res+ylim(c(0,200))
+dev.off()
 
+
+# this is only for one end
 boxplot.w.CTCF.by.res <- df.overlapping.CTCF.w.BOTH.result.boxplot %>% 
   ggplot(aes(x = resolution, y = ctcf_count_by_loop_id, fill = resolution)) +
   geom_boxplot() +
@@ -764,71 +869,59 @@ boxplot.w.CTCF.by.res <- df.overlapping.CTCF.w.BOTH.result.boxplot %>%
   theme(plot.title = element_text(hjust = 0.5)) +
   scale_fill_manual(values = c("5K" = "skyblue", "10K" = "lightcoral", "25K" = "springgreen"), breaks = c("5K", "10K", "25K")) +
   scale_y_continuous(breaks = seq(min(df.overlapping.CTCF.w.BOTH.result.boxplot$ctcf_count_by_loop_id), max(df.overlapping.CTCF.w.BOTH.result.boxplot$ctcf_count_by_loop_id), by = 10)) +
-  labs(title = "Boxplot for Number of CTCF by Resolution", x = "Resolution", y = "Number of CTCF in a loop")
+  labs(title = "", x = "Resolution", y = "Number of CTCF in a loop")
 
 boxplot.w.CTCF.by.res
 
-pdf("./figures/0909/end_boxplot_num_ctcf_by_res.pdf", width = 16.5, height = 23.5)
-grid.arrange(boxplot.w.CTCF.by.res, ncol = 1)
+pdf("hao_end_boxplot_num_ctcf_by_res.pdf", width = 8, height = 6)
+grid.arrange(boxplot.w.CTCF.by.res+ylim(c(0,200)), ncol = 1)
 dev.off()
 
-# two figures above in one pdf (boxplot.w.CTCF.by.chr.and.res, boxplot.w.CTCF.by.res)
-pdf("./figures/0909/end_boxplot_num_ctcf_combined.pdf", width = 16.5, height = 23.5)
+pdf("end_boxplot_num_ctcf_combined.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.CTCF.by.chr.and.res, boxplot.w.CTCF.by.res, ncol = 1)
 dev.off()
 
-# deta processing
-df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr <- df.overlapping.CTCF.w.BOTH.result %>% 
-  group_by(loop.id, WHERE, resolution) %>%
-  summarise(ctcf_count_by_loop_id = n_distinct(ctcf.id), .groups = 'drop')
-
-df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr
 
 # figure by end
 boxplot.w.CTCF.ALL.chr <- ggplot(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr, aes(x = WHERE, y = ctcf_count_by_loop_id, fill = WHERE)) +
-  geom_boxplot(position = position_dodge(width = 0.75), outlier.shape = NA) +  # 이상값 숨기기
+  geom_boxplot(position = position_dodge(width = 0.75)) +
   stat_summary(fun = median, geom = "text", aes(label = round(after_stat(y), 1)), 
                position = position_dodge(width = 0.75), vjust = -0.5, size = 2.5) +
   stat_summary(fun.data = function(y) {
     data.frame(y = median(y), label = paste0("Q1: ", round(quantile(y, 0.25), 1), "\nQ3: ", round(quantile(y, 0.75), 1)))
-  }, geom = "text", aes(label = after_stat(label)), position = position_dodge(width = 0.75), vjust = 1.5, size = 2.5) +
+  }, geom = "text", aes(label = after_stat(label)), position = position_dodge(width = 0.75), vjust = 1.5, size = 2.5) +  # font-size
   theme_minimal() + 
   theme(
     plot.title = element_text(hjust = 0.5),  # title center
     legend.position = "none"
   ) +
   scale_fill_manual(values = c("UP" = "yellow", "DOWN" = "purple")) +
-  scale_y_continuous(breaks = seq(min(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id), max(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id), by = 5)) +  # y축 눈금 5단위
-  coord_cartesian(ylim = c(quantile(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id, 0.05), 
-                           quantile(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id, 0.95))) +  # y-axis range
-  labs(title = "Boxplot by UP/DOWNSTREAM End", x = "Upstream and Downstream End", y = "Number of CTCF inside each end in a loop")
+  scale_y_continuous(breaks = seq(min(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id), max(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id), by = 5)) +
+  labs(title = "Boxplot by UP/DOWNSTREAM End", x = "Upstream and Downstream End", y = "Number of CTCF inside each ends in a loop")
 
 boxplot.w.CTCF.ALL.chr
 
 # figure by end & res
 boxplot.w.CTCF.ALL.chr.by.res <- ggplot(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr, aes(x = WHERE, y = ctcf_count_by_loop_id, fill = resolution)) +
-  geom_boxplot(position = position_dodge(width = 0.75), outlier.shape = NA) +  # removing outliers
+  geom_boxplot(position = position_dodge(width = 0.75)) +
   stat_summary(fun = median, geom = "text", aes(label = round(after_stat(y), 1)), 
                position = position_dodge(width = 0.75), vjust = -0.5, size = 2.5) +
   stat_summary(fun.data = function(y) {
     data.frame(y = median(y), label = paste0("Q1: ", round(quantile(y, 0.25), 1), "\nQ3: ", round(quantile(y, 0.75), 1)))
-  }, geom = "text", aes(label = after_stat(label)), position = position_dodge(width = 0.75), vjust = 1.5, size = 2.5) +
+  }, geom = "text", aes(label = after_stat(label)), position = position_dodge(width = 0.75), vjust = 1.5, size = 2.5) +  # font-size
   theme_minimal() + 
   theme(
     plot.title = element_text(hjust = 0.5),  # title center
-    legend.position = "none"  # removing legend
+    legend.position = "none"
   ) +
   scale_fill_manual(values = c("5K" = "skyblue", "10K" = "lightcoral", "25K" = "springgreen"), breaks = c("5K", "10K", "25K")) +
-  scale_y_continuous(breaks = seq(min(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id), 
-                                  max(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id), by = 5)) +  # y-axis tip
-  coord_cartesian(ylim = c(quantile(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id, 0.05), 
-                           quantile(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id, 0.95))) + 
+  scale_y_continuous(breaks = seq(min(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id), max(df.overlapping.CTCF.w.BOTH.result.boxplot.ALL.chr$ctcf_count_by_loop_id), by = 5)) +
   labs(title = "Boxplot for Number of CTCF in UP/DOWNSTREAM End by Resolution", x = "Upstream and Downstream End", y = "Number of CTCF", fill = "Resolution")
-
+  # facet_wrap(~ resolution, scales = "free_y")
 
 boxplot.w.CTCF.ALL.chr.by.res
 
-pdf("./figures/0909/end_boxplot_no.ctcf_by_end_res.pdf", width = 16.5, height = 23.5)
+pdf("end_boxplot_no.ctcf_by_end_res.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.CTCF.ALL.chr, boxplot.w.CTCF.ALL.chr.by.res, ncol = 1)
 dev.off()
 
@@ -838,18 +931,18 @@ dev.off()
 
 df.DISTINCT.loop.deep.sample.all.50.padded <- df_50_padded %>% 
   mutate(padded.distance = 50) %>% 
-  mutate(x1 = x0, x2 = x3, y1 = y0, y2 = y3) %>% 
-  mutate(loop.id = str_c(loop.id, '_', 50))
+  mutate(x1 = x0, x2 = x3, y1 = y0, y2 = y3) #%>% 
+#  mutate(loop.id = str_c(loop.id, '_', 50))
 
 df.DISTINCT.loop.deep.sample.all.100.padded <- df_100_padded %>% 
   mutate(padded.distance = 100) %>% 
-  mutate(x1 = x0, x2 = x3, y1 = y0, y2 = y3) %>% 
-  mutate(loop.id = str_c(loop.id, '_', 100))
+  mutate(x1 = x0, x2 = x3, y1 = y0, y2 = y3)# %>% 
+#  mutate(loop.id = str_c(loop.id, '_', 100))
 
 # analysis func
 perform_analysis <- function(loop_data, ctcf_data, padding_label) {
   
-  # 1. GRanges object
+  # 1. GRanges objec
   loop_whole_GR <- GRanges(seqnames=loop_data$chr1, 
                            ranges=IRanges(start=(loop_data$x1), end=(loop_data$y2)), 
                            id=loop_data$loop.id, 
@@ -982,6 +1075,13 @@ draw_boxplots <- function(df_boxplot, padding_label, min_value, max_value) {
 df_ctcf_boxplot_none <- perform_analysis(df.DISTINCT.loop.deep.sample.all, df.DISTINCT.ctcf.2nd.fimo.GR, "No")
 df_ctcf_boxplot_50   <- perform_analysis(df.DISTINCT.loop.deep.sample.all.50.padded, df.DISTINCT.ctcf.2nd.fimo.GR, "50%")
 df_ctcf_boxplot_100  <- perform_analysis(df.DISTINCT.loop.deep.sample.all.100.padded, df.DISTINCT.ctcf.2nd.fimo.GR, "100%")
+head(df_ctcf_boxplot_100)$loop.id
+# [1] "chr1_101070000_101080000_chr1_101560000_101570000_10000_0"
+# [2] "chr1_101070000_101080000_chr1_101560000_101570000_10000_0"
+# [3] "chr1_101075000_101100000_chr1_101550000_101575000_25000_0"
+# [4] "chr1_101075000_101100000_chr1_101550000_101575000_25000_0"
+# [5] "chr1_101200000_101210000_chr1_101390000_101400000_10000_0"
+# [6] "chr1_101200000_101210000_chr1_101390000_101400000_10000_0"
 
 # df_boxplot_none min/max 
 min_value_ctcf_none <- min(df_ctcf_boxplot_none$ctcf_count_by_loop_id, na.rm = TRUE)
@@ -1001,19 +1101,19 @@ ctcf_boxplots_50 <- draw_boxplots(df_ctcf_boxplot_50, "50%", min_value_ctcf_50, 
 ctcf_boxplots_100 <- draw_boxplots(df_ctcf_boxplot_100, "100%", min_value_ctcf_100, max_value_ctcf_100)
 
 # 3. PDF
-pdf("./figures/0909/end_boxplot_num_ctcf_combined_no_padding.pdf", width = 16.5, height = 23.5)
+pdf("./figures/end_boxplot_num_ctcf_combined_no_padding.pdf", width = 16.5, height = 23.5)
 grid.arrange(ctcf_boxplots_none$boxplot_by_chr_res, ctcf_boxplots_none$boxplot_by_res, ncol = 1)
 dev.off()
 
-pdf("./figures/0909/end_boxplot_num_ctcf_combined_50_padding.pdf", width = 16.5, height = 23.5)
+pdf("./figures/end_boxplot_num_ctcf_combined_50_padding.pdf", width = 16.5, height = 23.5)
 grid.arrange(ctcf_boxplots_50$boxplot_by_chr_res, ctcf_boxplots_50$boxplot_by_res, ncol = 1)
 dev.off()
 
-pdf("./figures/0909/end_boxplot_num_ctcf_combined_100_padding.pdf", width = 16.5, height = 23.5)
+pdf("./figures/end_boxplot_num_ctcf_combined_100_padding.pdf", width = 16.5, height = 23.5)
 grid.arrange(ctcf_boxplots_100$boxplot_by_chr_res, ctcf_boxplots_100$boxplot_by_res, ncol = 1)
 dev.off()
 
-pdf("./figures/0909/end_boxplot_num_ctcf_combined_all.pdf", width = 16.5, height = 23.5)
+pdf("./figures/end_boxplot_num_ctcf_combined_all.pdf", width = 16.5, height = 23.5)
 grid.arrange(ctcf_boxplots_none$boxplot_by_chr_res, ctcf_boxplots_none$boxplot_by_res, 
              ctcf_boxplots_50$boxplot_by_chr_res, ctcf_boxplots_50$boxplot_by_res,
              ctcf_boxplots_100$boxplot_by_chr_res, ctcf_boxplots_100$boxplot_by_res,
@@ -1075,6 +1175,7 @@ file.tss.list
 tss<-read.table(file="/home/pkim/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_start_codon.txt", sep="\t", head=F)
 # Mac
 tss<-read.table(file="/Users/PanjunKim/UTHSC GGI Dropbox/K P/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_start_codon.txt", sep="\t", head=F)
+tss<-read.table(file="../../workshop/2023_NIH_meeting/loop_N_tss/ucsc_start_codon.txt", sep="\t", head=F)
 tss
 head(tss)[,c(1,4,5,7,9)]
 tss.select<-tss[,c(1,4,5,7,9)] # onlty take the relevant columns
@@ -1094,6 +1195,20 @@ df.tss.ucsc %>% head()
 df.tss.ucsc %>% count() # 17849
 
 df.tss.ucsc.GR <-GRanges(seqnames=df.tss.ucsc$chr, ranges=IRanges(start=as.numeric(df.tss.ucsc$start), end=as.numeric(df.tss.ucsc$end)), strand=df.tss.ucsc$strand, gene_id=df.tss.ucsc$gene_id, transcript_id=df.tss.ucsc$transcript_id, tss.id = df.tss.ucsc$tss.id)
+
+###### legacy - start
+# filter(gene_id != gene_name)
+
+# tss$geneid<-gsub(".+transcript_id ", "", tss$geneid)
+# tss$geneid<-gsub(";.+", "", tss$geneid)
+tss.uniq<-unique(tss)
+ucsc <-tss.uniq
+
+ucsc %>% count() # 17849
+ucsc %>% head()
+ucsc %>% count(geneid)
+# ucsc %>% filter(str_detect(geneid, "NW")) %>% view()
+###### legacy -end
 
 ##### tss with nuacc, 96563
 # nuacc <- read.csv("/home/pkim/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/csRNA.NuAcc.tss.txt", header = T, sep = '\t') %>% 
@@ -1121,6 +1236,16 @@ pfc <- read.csv("/Users/PanjunKim/UTHSC GGI Dropbox/K P/Gateway_to_Hao/workshop/
 df.tss.nuacc.pfc <- bind_rows(nuacc, pfc) %>% 
   view()
 
+# legacy - start
+# genomic range for tss from UCSC, 17849
+# sapply(df.tss.ucsc, length)
+# sum(is.na(df.tss.ucsc))
+# df.tss.ucsc %>% dim()
+# df.tss.ucsc %>% count(strand)
+# str(df.tss.ucsc)
+# colnames(df.tss.ucsc)
+# legacy - end
+
 # genomic range for tss from nuacc, 96563
 df.tss.nuacc.GR <-GRanges(seqnames=nuacc$Chr, ranges=IRanges(start=nuacc$Start, end=nuacc$End), loc=nuacc$Anno1, geneid=nuacc$Anno2)
 df.tss.nuacc.GR
@@ -1138,9 +1263,8 @@ data.frame(df.tss.ucsc.GR) %>%
 # chrUn_NW_023637854v1
 # chrY_NW_023637718v1_random
 
-############################################
-##### Overlapping TSS and loop processing
-############################################
+### original
+
 overall.df.DISTINCT.loop.deep.sample.all.1.distance
 
 overall.df.DISTINCT.loop.deep.sample.all.1.distance.GR <- GRanges(seqnames=overall.df.DISTINCT.loop.deep.sample.all.1.distance$chr1, ranges=IRanges(start=overall.df.DISTINCT.loop.deep.sample.all.1.distance$x0, end=overall.df.DISTINCT.loop.deep.sample.all.1.distance$y3), id=overall.df.DISTINCT.loop.deep.sample.all.1.distance$loop.id, new.loop.id=overall.df.DISTINCT.loop.deep.sample.all.1.distance$new.loop.id)
@@ -1154,6 +1278,8 @@ df.tss.dist.result <- data.frame(
   loop.id = overall.df.DISTINCT.loop.deep.sample.all.1.distance$new.loop.id[overall.loop.for.tss.hits],
   loop.start = overall.df.DISTINCT.loop.deep.sample.all.1.distance$x0[overall.loop.for.tss.hits],
   loop.end = overall.df.DISTINCT.loop.deep.sample.all.1.distance$y3[overall.loop.for.tss.hits],
+   loop.start.x12 = overall.df.DISTINCT.loop.deep.sample.all.1.distance$x12[overall.loop.for.tss.hits], ## Hao
+  loop.end.y12 = overall.df.DISTINCT.loop.deep.sample.all.1.distance$y12[overall.loop.for.tss.hits],  ##
   loop.res=overall.df.DISTINCT.loop.deep.sample.all.1.distance$resolution[overall.loop.for.tss.hits],
   tss_chr = seqnames(df.tss.ucsc.GR)[overall.tss.on.loop.hits],
   tss_start = start(df.tss.ucsc.GR)[overall.tss.on.loop.hits],
@@ -1167,10 +1293,10 @@ df.tss.dist.result %>% head()
 
 relative.pos.df.tss.dist.result <- df.tss.dist.result %>%
   mutate(pos_coord = (tss_start + tss_end) / 2) %>% # coordinate for midpoint
-  mutate(loop_length = (loop.end - loop.start)) %>% # overall length of the loop
-  mutate(relative_pos = pos_coord - loop.start) %>% # relative pos
-  # mutate(value = (relative_pos/(loop_length / 2)) - 1) %>% for .5 distance
-  mutate(value = (relative_pos/(loop_length / 3)) - 1) %>% # 1 distance
+  mutate(loop_length = loop.end.y12 - loop.start.x12) %>% # overall length of the loop
+  mutate(relative_pos = pos_coord - loop.start.x12) %>% # relative pos
+  # mutate(value = (relative_pos/(loop_length / 2)) - 1) %>% .5 distance
+  mutate(value = (relative_pos/loop_length ) - 1) %>% # 1 distance
   mutate(resolution = case_when(
     loop.res == 5000 ~ "5K",
     loop.res  == 10000 ~ "10K",
@@ -1180,6 +1306,126 @@ relative.pos.df.tss.dist.result <- df.tss.dist.result %>%
   dplyr::select(loop.id, tss_geneid, value, loop.res)
 
 relative.pos.df.tss.dist.result %>% head()
+
+## PDF file for ALL CHROMOSOMES by resolution
+create_tss_plots <- function(data, res) {
+  if (res == "All" ) {
+    df.plot<-data
+  } else { 
+    df.plot<- data %>% filter(loop.res==res)
+  }
+# create_tss_plots <- function(data, res) {
+  plot.tss.hist <- df.plot %>% 
+    ggplot(aes(x = value)) +
+    geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
+    labs(title = paste0("A. Histogram of TSS over Loops on ALL Chromosomes (", res, ")"),
+         x = "Relative position to loop",
+         y = "Counts"
+    )
+  
+  plot.tss.dens <- df.plot %>% 
+    ggplot(aes(x = value)) +
+    geom_density(fill = "skyblue", color = "black", alpha = 0.7) +
+    ylim(c(0,1))+
+    labs(title = paste0("A. Density of TSS over Loops on ALL chromosomes (", res, ")"),
+         x = "Relative position to loop",
+         y = "Density"
+    )
+  
+  return(plot.tss.hist + plot.tss.dens)
+}
+
+plot_tss_all_res <- create_tss_plots(relative.pos.df.tss.dist.result, "All")
+plot_tss_5K <- create_tss_plots(relative.pos.df.tss.dist.result, "5K")
+plot_tss_10K <- create_tss_plots(relative.pos.df.tss.dist.result, "10K")
+plot_tss_25K <- create_tss_plots(relative.pos.df.tss.dist.result, "25K")
+pdf("./figures/overall_distribution_tss_on_all_chromosomes_1_distance.pdf", width = 11, height = 8.5)
+# pdf("./figures/overall_distribution_tss_on_all_chromosomes_.5_distance.pdf", width = 11, height = 8.5)
+(plot_tss_all_res/plot_tss_5K)
+(plot_tss_10K / plot_tss_25K)
+dev.off()
+
+############################################
+##### Overlapping TSS and loop processing
+############################################
+overall.df.DISTINCT.loop.deep.sample.all.1.distance
+
+overall.df.DISTINCT.loop.deep.sample.all.1.distance.GR <- GRanges(seqnames=overall.df.DISTINCT.loop.deep.sample.all.1.distance$chr1, ranges=IRanges(start=overall.df.DISTINCT.loop.deep.sample.all.1.distance$x0, end=overall.df.DISTINCT.loop.deep.sample.all.1.distance$y3), id=overall.df.DISTINCT.loop.deep.sample.all.1.distance$loop.id, new.loop.id=overall.df.DISTINCT.loop.deep.sample.all.1.distance$new.loop.id )
+
+index.distinct.tss.w.whole.loop.1.distance <- findOverlaps(df.tss.ucsc.GR, overall.df.DISTINCT.loop.deep.sample.all.1.distance.GR)
+
+overall.loop.for.tss.hits <- subjectHits(index.distinct.tss.w.whole.loop.1.distance)
+overall.tss.on.loop.hits <- queryHits(index.distinct.tss.w.whole.loop.1.distance)
+head(overall.loop.for.tss.hits)
+head(overall.tss.on.loop.hits)
+head(index.distinct.tss.w.whole.loop.1.distance)
+df.tss.ucsc.GR[1,]
+overall.df.DISTINCT.loop.deep.sample.all.1.distance.GR[c(1822,1823,1824),]
+
+
+df.tss.dist.result <- data.frame(
+  loop.id = overall.df.DISTINCT.loop.deep.sample.all.1.distance$new.loop.id[overall.loop.for.tss.hits],
+  loop.start = overall.df.DISTINCT.loop.deep.sample.all.1.distance$x0[overall.loop.for.tss.hits], ## Hao
+  loop.end = overall.df.DISTINCT.loop.deep.sample.all.1.distance$y3[overall.loop.for.tss.hits], ## Hao
+  loop.x12 = overall.df.DISTINCT.loop.deep.sample.all.1.distance$x12[overall.loop.for.tss.hits], ## Hao
+  loop.y12 = overall.df.DISTINCT.loop.deep.sample.all.1.distance$y12[overall.loop.for.tss.hits],  ## Hao
+  loop.res=overall.df.DISTINCT.loop.deep.sample.all.1.distance$resolution[overall.loop.for.tss.hits],
+  tss_chr = seqnames(df.tss.ucsc.GR)[overall.tss.on.loop.hits],
+  tss_start = start(df.tss.ucsc.GR)[overall.tss.on.loop.hits],
+  tss_end = end(df.tss.ucsc.GR)[overall.tss.on.loop.hits],
+  tss_geneid = mcols(df.tss.ucsc.GR)$gene_id[overall.tss.on.loop.hits],
+  tss_strand = strand(df.tss.ucsc.GR)[overall.tss.on.loop.hits]
+)
+
+df.tss.dist.result %>% dim() # 375567      9
+df.tss.dist.result %>% head()
+df.tss.dist.result[,c("loop.x12")]
+names(df.tss.dist.result)
+relative.pos.df.tss.dist.result <- df.tss.dist.result %>%
+  mutate(pos_coord = (tss_start + tss_end) / 2) %>% # coordinate for midpoint
+  mutate(loop_length = (loop.y12 - loop.x12)*3) %>% # overall length of the loop # Hao
+  mutate(relative_pos = pos_coord - loop.x12) %>% # relative pos 
+  mutate(value = (relative_pos/(loop_length/3 )-1)) %>% # 1 distance
+  mutate(Resolution=fct_relevel(loop.res, c("5K", "10K", "25K"))) |> 
+  dplyr::select(loop.id, tss_geneid, value, Resolution, loop_length, relative_pos)
+
+relative.pos.df.tss.dist.result %>% head()
+unique(relative.pos.df.tss.dist.result$Resolution)
+
+
+
+names(df.tss.dist.result)
+## Start by Hao 
+names(df.tss.dist.result)
+absolute.pos.df.tss.dist.on.loop.result <- df.tss.dist.result %>%
+  mutate(pos_coord = (tss_start + tss_end) / 2) %>% # coordinate for midpoint
+  mutate(dist_to_x = pos_coord-loop.x12) %>% # overall length of the loop
+  mutate(dist_to_y = pos_coord-loop.y12) %>% # overall length of the loop
+  mutate(Resolution=fct_relevel(loop.res, c("5K", "10K", "25K")))|>
+  mutate(dist_to_loop = ifelse( abs(dist_to_x) < abs(dist_to_y), dist_to_x, -1 * dist_to_y)) |> 
+  mutate(loop.length=loop.y12-loop.x12) |>
+  mutate(resolution = case_when(
+    loop.res == 5000 ~ "5K",
+    loop.res  == 10000 ~ "10K",
+    loop.res  == 25000 ~ "25K",
+  )) %>%
+  dplyr::select(loop.id, tss_geneid, dist_to_loop, Resolution, loop.length)
+
+head(absolute.pos.df.tss.dist.on.loop.result)
+
+plot.absolute.distance.density.tss<-ggplot(absolute.pos.df.tss.dist.on.loop.result, aes(x=dist_to_loop/1000, group=Resolution, fill=Resolution))+geom_density(alpha=.5)+xlim(c(-1e3, 1e3))+xlab("Absolute distance, kb")
+
+plot.relative.distance.hist.tss<-ggplot(relative.pos.df.tss.dist.result, aes(x=value, group=Resolution, fill=Resolution))+geom_histogram(bins=100) +xlab("Relative distance to loops")+theme(legend.position="none")
+
+names(absolute.pos.df.tss.dist.on.loop.result)
+plot.absolute.distance.hist.tss<- ggplot(absolute.pos.df.tss.dist.on.loop.result, aes(x=dist_to_loop/1000, group=Resolution, fill=Resolution))+geom_histogram(binwidth=250)+coord_cartesian(ylim=c(0,5000))+xlab("Absolute distance, kb")
+
+
+pdf(file="hao_absolute_position_of_tss_to_loop.pdf", width=10, height=5)
+plot.relative.distance.hist.tss+plot.absolute.distance.density.tss
+dev.off()
+
+## End By Hao
 
 ## PDF file by CHROMOSOME
 
@@ -1223,8 +1469,8 @@ for (chr in chromosomes) {
   })
 }
 
-pdf("./figures/0909/overall_distribution_of_TSS_on_each_chr_.5_distance.pdf", width = 11, height = 8.5)
-pdf("./figures/0909/overall_distribution_of_TSS_on_each_chr_1_distance.pdf", width = 11, height = 8.5)
+pdf("./figures/overall_distribution_of_TSS_on_each_chr_.5_distance.pdf", width = 11, height = 8.5)
+pdf("./figures/overall_distribution_of_TSS_on_each_chr_1_distance.pdf", width = 11, height = 8.5)
 
 tss_num_plots <- length(plot_tss_list) # 22 chromosomes
 tss_plots_per_page <- 4
@@ -1247,7 +1493,7 @@ create_tss_plots <- function(data, res) {
   } else { 
     df.plot<- data %>% filter(loop.res==res)
   }
-  # create_tss_plots <- function(data, res) {
+# create_tss_plots <- function(data, res) {
   plot.tss.hist <- df.plot %>% 
     ggplot(aes(x = value)) +
     geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
@@ -1272,7 +1518,7 @@ plot_tss_all_res <- create_tss_plots(relative.pos.df.tss.dist.result, "All")
 plot_tss_5K <- create_tss_plots(relative.pos.df.tss.dist.result, "5K")
 plot_tss_10K <- create_tss_plots(relative.pos.df.tss.dist.result, "10K")
 plot_tss_25K <- create_tss_plots(relative.pos.df.tss.dist.result, "25K")
-pdf("./figures/0909/overall_distribution_tss_on_all_chromosomes_1_distance.pdf", width = 11, height = 8.5)
+pdf("./figures/overall_distribution_tss_on_all_chromosomes_1_distance.pdf", width = 11, height = 8.5)
 # pdf("./figures/overall_distribution_tss_on_all_chromosomes_.5_distance.pdf", width = 11, height = 8.5)
 (plot_tss_all_res/plot_tss_5K)
 (plot_tss_10K / plot_tss_25K)
@@ -1286,6 +1532,8 @@ dev.off()
 ################################################################
 # df.DISTINCT.loop.deep.sample.all
 # 2-1. adding padding at each end, x12 & y12
+  
+df.DISTINCT.loop.deep.sample.all
 
 df.DISTINCT.loop.deep.sample.all.padded.for.TSS <- df.DISTINCT.loop.deep.sample.all %>% 
   mutate(x12 = (x1 + x2)/2, y12 = (y1 + y2)/2) %>% # middle point of each end
@@ -1313,6 +1561,7 @@ end.tss.up.hits <- queryHits(index.distinct.tss.w.up.loop.each.end)
 df.tss.ucsc.GR %>% 
   head()
 
+
 df.overlapping.TSS.w.UPSTREAM.result.each.end <- data.frame(
   up.loop.id = mcols(df.DISTINCT.loop.deep.sample.all.padded.for.TSS.UP.GR)$loop.id[end.loop.up.tss.hits],
   end.up.distance = mcols(df.DISTINCT.loop.deep.sample.all.padded.for.TSS.UP.GR)$end.distance[end.loop.up.tss.hits],
@@ -1336,12 +1585,12 @@ df.overlapping.TSS.w.UPSTREAM.result.each.end %>%
 
 # 2. TSS + DOWNSTREAM
 df.DISTINCT.loop.deep.sample.all.padded.for.TSS.DOWN.GR<- GRanges(seqnames=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$chr1, 
-                                                                  ranges=IRanges(start=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$y12, 
-                                                                                 end=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$y3), 
-                                                                  loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$loop.id, 
-                                                                  end.distance=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$end.distance,
-                                                                  resolution=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$resolution,
-                                                                  new.loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$new.loop.id)
+                                                                ranges=IRanges(start=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$y12, 
+                                                                               end=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$y3), 
+                                                                loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$loop.id, 
+                                                                end.distance=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$end.distance,
+                                                                resolution=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$resolution,
+                                                                new.loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.TSS$new.loop.id)
 
 # 1. TSS + DOWNSTREAM (df.DISTINCT.loop.deep.sample.all.padded.for.TSS.DOWN.GR, df.tss.ucsc.GR)
 index.distinct.tss.w.down.loop.each.end <- findOverlaps(df.tss.ucsc.GR, df.DISTINCT.loop.deep.sample.all.padded.for.TSS.DOWN.GR, type = "within")
@@ -1375,13 +1624,13 @@ df.overlapping.TSS.w.DOWNSTREAM.result.each.end %>%
 df.overlapping.TSS.w.UPSTREAM.result.each.end %>% head()
 ########## bind_rows(UPSTREAM & DOWNSTREAM) -> BOTH
 df.overlapping.TSS.w.BOTH.result <- bind_rows(df.overlapping.TSS.w.UPSTREAM.result.each.end %>% 
-                                                mutate(loop.id = up.loop.id, end.distance = end.up.distance) %>% 
-                                                mutate(case.id = tss.loop.up.id) %>% 
-                                                dplyr::select(-c(up.loop.id, end.up.distance, tss.loop.up.id)), 
-                                              df.overlapping.TSS.w.DOWNSTREAM.result.each.end %>% 
-                                                mutate(loop.id = down.loop.id, end.distance = end.down.distance) %>% 
-                                                mutate(case.id = tss.loop.down.id) %>% 
-                                                dplyr::select(-c(down.loop.id, end.down.distance, tss.loop.down.id))) %>% 
+                                                 mutate(loop.id = up.loop.id, end.distance = end.up.distance) %>% 
+                                                 mutate(case.id = tss.loop.up.id) %>% 
+                                                 dplyr::select(-c(up.loop.id, end.up.distance, tss.loop.up.id)), 
+                                                 df.overlapping.TSS.w.DOWNSTREAM.result.each.end %>% 
+                                                 mutate(loop.id = down.loop.id, end.distance = end.down.distance) %>% 
+                                                 mutate(case.id = tss.loop.down.id) %>% 
+                                                 dplyr::select(-c(down.loop.id, end.down.distance, tss.loop.down.id))) %>% 
   mutate(chr = ifelse(WHERE == "UP", str_split_n(loop.id, '_', 1), str_split_n(loop.id, '_', 4))) %>% 
   mutate(chr = factor(chr, levels = c(paste0("chr", 1:20), "chrX", "chrY"))) %>%
   mutate(WHERE = fct_relevel(WHERE, "UP", "DOWN")) %>% 
@@ -1396,6 +1645,7 @@ df.overlapping.TSS.w.BOTH.result <- bind_rows(df.overlapping.TSS.w.UPSTREAM.resu
 df.overlapping.TSS.w.BOTH.result %>% dim() # 207165
 df.overlapping.TSS.w.BOTH.result %>% head()
 df.overlapping.TSS.w.BOTH.result %>% count(resolution)
+head(df.overlapping.TSS.w.BOTH.result)$loop.id
 
 # resolution      n
 # 1         5K 21393 + 25473 =  46866
@@ -1505,7 +1755,7 @@ boxplot.w.TSS.by.chr.and.res.each.end <- df.overlapping.TSS.w.BOTH.result.boxplo
 boxplot.w.TSS.by.chr.and.res.each.end
 
 
-pdf("./figures/0909/end_boxplot_num_tss_by_chr_res.pdf", width = 16.5, height = 23.5)
+pdf("end_boxplot_num_tss_by_chr_res.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.TSS.by.chr.and.res.each.end, ncol = 1)
 dev.off()
 
@@ -1543,12 +1793,11 @@ boxplot.w.TSS.by.res <- df.overlapping.TSS.w.BOTH.result.boxplot %>%
 
 boxplot.w.TSS.by.res
 
-pdf("./figures/0909/end_boxplot_num_tss_by_res.pdf", width = 16.5, height = 23.5)
+pdf("end_boxplot_num_tss_by_res.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.TSS.by.res, ncol = 1)
 dev.off()
 
-# two figures above in a single pdf
-pdf("./figures/0909/end_boxplot_num_tss_combined.pdf", width = 16.5, height = 23.5)
+pdf("end_boxplot_num_tss_combined.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.TSS.by.chr.and.res.each.end, boxplot.w.TSS.by.res, ncol = 1)
 dev.off()
 tss.stats.by.resolution.each.end %>% head()
@@ -1567,7 +1816,7 @@ boxplot.w.TSS.ALL.chr <- ggplot(df.overlapping.TSS.w.BOTH.result.boxplot, aes(x 
     legend.position = "none"
   ) +
   scale_fill_manual(values = c("UP" = "yellow", "DOWN" = "purple")) +
-  scale_y_continuous(limits = c(0, 2 * q3_tss_count_each_end),  # y-range = 3 times of Q3
+  scale_y_continuous(limits = c(0, 2 * q3_tss_count_each_end),  # y축을 Q3의 두 배로 제한
                      breaks = seq(0, 2 * q3_tss_count_each_end, by = 5)) +
   labs(title = "Boxplot by UP/DOWNSTREAM End", x = "Upstream and Downstream End", y = "Number of CTCF inside each ends in a loop")
 
@@ -1596,7 +1845,7 @@ boxplot.w.TSS.ALL.chr.by.res <- ggplot(df.overlapping.TSS.w.BOTH.result.boxplot,
 
 boxplot.w.TSS.ALL.chr.by.res
 
-pdf("./figures/0909/end_boxplot_no.tss_by_end_res.pdf", width = 16.5, height = 23.5)
+pdf("end_boxplot_no.tss_by_end_res.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.TSS.ALL.chr, boxplot.w.TSS.ALL.chr.by.res, ncol = 1)
 dev.off()
 
@@ -1675,7 +1924,6 @@ tss.count.by.sum %>% head()
 
 one.sided.loop.histogram.data.final <- right_join(histogram.data, tss.count.by.sum, by = c("total_tss" = "total_tss_sum")) %>%
   mutate(ratio = one_sided_tss_loop_count / loop_count)
-
 one.sided.loop.histogram.data.final %>% head()
 
 # legacy
@@ -1704,7 +1952,7 @@ one.sided.loop.histogram <- ggplot(one.sided.loop.histogram.data.final, aes(x = 
 one.sided.loop.histogram
 one.sided.loop.histogram.data.final %>% view()
 
-pdf("./figures/0909/tss_count_per_loop_histogram.pdf", width = 16.5, height = 23.5)
+pdf("./figures/tss_count_per_loop_histogram.pdf", width = 16.5, height = 23.5)
 
 grid.arrange(tss.count.per.loop.histogram, one.sided.loop.histogram, ncol = 1)
 dev.off()
@@ -1719,6 +1967,7 @@ dev.off()
 
 file_path <- "/Users/PanjunKim/UTHSC GGI Dropbox/K P/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn7.bed"
 file_path <- "/Users/PanjunKim/UTHSC GGI Dropbox/K P/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn7_1.bed"
+file_path <- "../data/epdnew/001/Rn_EPDnew_001_rn7_1.bed"
 df.promoter.rn7.raw <- read_tsv(file_path, col_names = c("chr", "start", "end", "gene", "score"))
 df.promoter.rn7.raw %>% head()
 
@@ -1763,6 +2012,8 @@ df.promoter.dist.result <- data.frame(
   loop.start = overall.df.DISTINCT.loop.deep.sample.all$x0[loop.for.promoter.hits],
   loop.end = overall.df.DISTINCT.loop.deep.sample.all$y3[loop.for.promoter.hits],
   loop.res = overall.df.DISTINCT.loop.deep.sample.all$resolution[loop.for.promoter.hits],
+  loop.x12 = overall.df.DISTINCT.loop.deep.sample.all$x12[loop.for.promoter.hits],
+  loop.y12 = overall.df.DISTINCT.loop.deep.sample.all$y12[loop.for.promoter.hits],
   # loop.new.distance = overall.df.DISTINCT.loop.deep.sample.all$new_distance[loop.for.promoter.hits],
   promoter.id = df.promoter.rn7$promoter.id[promoter.on.loop.hits],
   promoter.start = df.promoter.rn7$start[promoter.on.loop.hits],
@@ -1774,15 +2025,41 @@ df.promoter.dist.result %>% dim() # 265565      7(1 distance)
 
 relative.pos.df.promoter.dist.result <- df.promoter.dist.result %>%
   mutate(pos_coord = round((promoter.start + promoter.end) / 2)) %>%
-  mutate(loop_length = (loop.end - loop.start)) %>% # x0, y3
-  mutate(relative_pos = pos_coord - loop.start) %>% # relative position from loop start
-  # mutate(value = (relative_pos / (loop_length / 2)) - 1) %>% # for padding .5x distance
+  mutate(loop_length = (loop.y12 - loop.x12)*3) %>% # x0, y3
+  mutate(relative_pos = pos_coord - loop.x12) %>% # relative position from loop start
+  mutate(Resolution=fct_relevel(loop.res, c("5K", "10K", "25K"))) |>
   mutate(value = relative_pos/(loop_length/3)-1) %>% # for padding 1x distance
-  dplyr::select(loop.id, promoter.id, value, loop.res)
+  dplyr::select(loop.id, promoter.id, value, Resolution)
 
 relative.pos.df.promoter.dist.result %>% 
   dim() # 265565      4
-head()
+  head()
+
+  
+absolute.pos.df.promoter.dist.result <- df.promoter.dist.result %>%
+  mutate(pos_coord = (promoter.start + promoter.end) / 2) %>% # coordinate for midpoint
+  mutate(dist_to_x = pos_coord-loop.x12) %>% # overall length of the loop
+  mutate(dist_to_y = pos_coord-loop.y12) %>% # overall length of the loop
+  mutate(Resolution=fct_relevel(loop.res, c("5K", "10K", "25K")))|>
+  mutate(dist_to_loop = ifelse( abs(dist_to_x) < abs(dist_to_y), dist_to_x, -1 * dist_to_y)) |> 
+  mutate(loop.length=loop.y12-loop.x12) |>
+  dplyr::select(loop.id, dist_to_loop, Resolution, loop.length)
+
+plot.absolute.distance.density.promoter<-ggplot(absolute.pos.df.promoter.dist.result, aes(x=dist_to_loop/1000, group=Resolution, fill=Resolution))+geom_density(alpha=0.5)+xlim(c(-1e3, 1e3))+xlab("Absolute distance, kb")
+
+plot.relative.distance.hist.promoter<-ggplot(relative.pos.df.promoter.dist.result, aes(x=value, group=Resolution, fill=Resolution))+geom_histogram(bins=100) +xlab("Relative distance to loops")+theme(legend.position="none")
+#plot.relative.distance.hist.promoter
+
+names(absolute.pos.df.promoter.dist.on.loop.result)
+plot.absolute.distance.hist.promoter<- ggplot(absolute.pos.df.promoter.dist.result, aes(x=dist_to_loop/1000, group=Resolution, fill=Resolution))+geom_histogram(binwidth=250)+coord_cartesian(ylim=c(0,5000))+xlab("Absolute distance, kb")
+
+
+pdf(file="hao_position_of_promoter_to_loop.pdf", width=10, height=5)
+plot.relative.distance.hist.promoter+plot.absolute.distance.density.promoter
+dev.off()
+
+
+
 
 ## PDF file by CHROMOSOME
 
@@ -1827,7 +2104,7 @@ for (chr in chromosomes) {
 }
 
 # pdf("./figures/overall_distribution_of_Promoter_on_each_chr_.5_distance.pdf", width = 11, height = 8.5)
-pdf("./figures/0909/overall_distribution_of_Promoter_on_each_chr_1_distance.pdf", width = 11, height = 8.5)
+pdf("./figures/overall_distribution_of_Promoter_on_each_chr_1_distance.pdf", width = 11, height = 8.5)
 
 num_plots_promoter <- length(plot_promoter_list) # 22 chromosomes
 plots_per_page_promoter <- 4
@@ -1878,7 +2155,7 @@ plot_promoter_5K <- create_promoter_plots(relative.pos.df.promoter.dist.result, 
 plot_promoter_10K <- create_promoter_plots(relative.pos.df.promoter.dist.result, "10K")
 plot_promoter_25K <- create_promoter_plots(relative.pos.df.promoter.dist.result, "25K")
 # pdf("overall_distribution_promoter_on_all_chromosomes_.5_distance.pdf", width = 11, height = 8.5) # pdf for .5 distance as a padding
-pdf("./figures/0909/overall_distribution_promoter_on_all_chromosomes_1_distance.pdf", width = 11, height = 8.5) # pdf for a distance as a padding
+pdf("./figure/overall_distribution_promoter_on_all_chromosomes_1_distance.pdf", width = 11, height = 8.5) # pdf for a distance as a padding
 (plot_promoter_all_res/plot_promoter_5K)
 (plot_promoter_10K / plot_promoter_25K)
 dev.off()
@@ -1902,12 +2179,12 @@ df.DISTINCT.loop.deep.sample.all.padded.for.promoter <- df.DISTINCT.loop.deep.sa
 df.DISTINCT.loop.deep.sample.all.padded.for.promoter %>% head()
 
 df.DISTINCT.loop.deep.sample.all.padded.for.promoter.UP.GR<- GRanges(seqnames=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$chr1, 
-                                                                     ranges=IRanges(start=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$x0, 
-                                                                                    end=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$x12), 
-                                                                     loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$loop.id, 
-                                                                     end.distance=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$end.distance,
-                                                                     resolution=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$resolution,
-                                                                     new.loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$new.loop.id)
+                                                                ranges=IRanges(start=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$x0, 
+                                                                               end=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$x12), 
+                                                                loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$loop.id, 
+                                                                end.distance=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$end.distance,
+                                                                resolution=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$resolution,
+                                                                new.loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$new.loop.id)
 
 # 1. Promoter + UPSTREAM (df.DISTINCT.loop.deep.sample.all.padded.for.promoter.UP.GR, df.promoter.rn7.GR)
 index.distinct.promoter.w.up.loop.each.end <- findOverlaps(df.promoter.rn7.GR, df.DISTINCT.loop.deep.sample.all.padded.for.promoter.UP.GR, type = "within")
@@ -1941,12 +2218,12 @@ df.overlapping.promoter.w.UPSTREAM.result.each.end %>%
 
 # 2. Promoter + DOWNSTREAM
 df.DISTINCT.loop.deep.sample.all.padded.for.promoter.DOWN.GR<- GRanges(seqnames=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$chr1, 
-                                                                       ranges=IRanges(start=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$y12, 
-                                                                                      end=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$y3), 
-                                                                       loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$loop.id, 
-                                                                       end.distance=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$end.distance,
-                                                                       resolution=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$resolution,
-                                                                       new.loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$new.loop.id)
+                                                                  ranges=IRanges(start=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$y12, 
+                                                                                 end=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$y3), 
+                                                                  loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$loop.id, 
+                                                                  end.distance=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$end.distance,
+                                                                  resolution=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$resolution,
+                                                                  new.loop.id=df.DISTINCT.loop.deep.sample.all.padded.for.promoter$new.loop.id)
 
 # 1. promoter + DOWNSTREAM (df.DISTINCT.loop.deep.sample.all.padded.for.promoter.DOWN.GR, df.promoter.rn7.GR)
 index.distinct.promoter.w.down.loop.each.end <- findOverlaps(df.promoter.rn7.GR, df.DISTINCT.loop.deep.sample.all.padded.for.promoter.DOWN.GR, type = "within")
@@ -1982,13 +2259,13 @@ df.overlapping.promoter.w.UPSTREAM.result.each.end %>% head()
 
 ########## bind_rows(UPSTREAM & DOWNSTREAM) -> BOTH
 df.overlapping.promoter.w.BOTH.result <- bind_rows(df.overlapping.promoter.w.UPSTREAM.result.each.end %>% 
-                                                     mutate(loop.id = up.loop.id, end.distance = end.up.distance) %>% 
-                                                     mutate(case.id = promoter.loop.up.id) %>% 
-                                                     dplyr::select(-c(up.loop.id, end.up.distance, promoter.loop.up.id)), 
-                                                   df.overlapping.promoter.w.DOWNSTREAM.result.each.end %>% 
-                                                     mutate(loop.id = down.loop.id, end.distance = end.down.distance) %>% 
-                                                     mutate(case.id = promoter.loop.down.id) %>% 
-                                                     dplyr::select(-c(down.loop.id, end.down.distance, promoter.loop.down.id))) %>% 
+                                                         mutate(loop.id = up.loop.id, end.distance = end.up.distance) %>% 
+                                                         mutate(case.id = promoter.loop.up.id) %>% 
+                                                         dplyr::select(-c(up.loop.id, end.up.distance, promoter.loop.up.id)), 
+                                                       df.overlapping.promoter.w.DOWNSTREAM.result.each.end %>% 
+                                                         mutate(loop.id = down.loop.id, end.distance = end.down.distance) %>% 
+                                                         mutate(case.id = promoter.loop.down.id) %>% 
+                                                         dplyr::select(-c(down.loop.id, end.down.distance, promoter.loop.down.id))) %>% 
   mutate(chr = ifelse(WHERE == "UP", str_split_n(loop.id, '_', 1), str_split_n(loop.id, '_', 4))) %>% 
   mutate(chr = factor(chr, levels = c(paste0("chr", 1:20), "chrX", "chrY"))) %>%
   mutate(WHERE = fct_relevel(WHERE, "UP", "DOWN")) %>% 
@@ -2104,7 +2381,7 @@ boxplot.w.promoter.by.chr.and.res.each.end <- df.overlapping.promoter.w.BOTH.res
 boxplot.w.promoter.by.chr.and.res.each.end
 
 
-pdf("./figures/0909/end_boxplot_num_promoter_by_chr_res.pdf", width = 16.5, height = 23.5)
+pdf("./figures/end_boxplot_num_promoter_by_chr_res.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.promoter.by.chr.and.res.each.end, ncol = 1)
 dev.off()
 
@@ -2142,12 +2419,11 @@ boxplot.w.promoter.by.res <- df.overlapping.promoter.w.BOTH.result.boxplot %>%
 
 boxplot.w.promoter.by.res
 
-pdf("./figures/0909/end_boxplot_num_promoter_by_res.pdf", width = 16.5, height = 23.5)
+pdf("./figures/end_boxplot_num_promoter_by_res.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.promoter.by.res, ncol = 1)
 dev.off()
 
-# figures above in a PDF
-pdf("./figures/0909/end_boxplot_num_promoter_combined.pdf", width = 16.5, height = 23.5)
+pdf("end_boxplot_num_promoter_combined.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.promoter.by.chr.and.res.each.end, boxplot.w.promoter.by.res, ncol = 1)
 dev.off()
 promoter.stats.by.resolution.each.end %>% head()
@@ -2195,7 +2471,7 @@ boxplot.w.promoter.ALL.chr.by.res <- ggplot(df.overlapping.promoter.w.BOTH.resul
 
 boxplot.w.promoter.ALL.chr.by.res
 
-pdf("./figures/0909/end_boxplot_no.promoter_by_end_res.pdf", width = 16.5, height = 23.5)
+pdf("./figures/end_boxplot_no.promoter_by_end_res.pdf", width = 16.5, height = 23.5)
 grid.arrange(boxplot.w.promoter.ALL.chr, boxplot.w.promoter.ALL.chr.by.res, ncol = 1)
 dev.off()
 
@@ -2277,6 +2553,18 @@ one.sided.loop.histogram.data.promoter.final <- right_join(histogram.data, promo
   mutate(ratio = one_sided_promoter_loop_count / loop_count)
 one.sided.loop.histogram.data.promoter.final %>% head()
 
+# legacy
+# one.sided.loop.histogram <- ggplot(one.sided.loop.histogram.data.promoter.final, aes(x = total_promoter, y = one_sided_promoter_loop_count)) +
+#   geom_bar(stat = "identity", fill = "skyblue", color = "black") +
+#   scale_x_continuous(limits = c(0, 6.5), breaks = seq(0, 6, by = 1)) +
+#   labs(title = "Histogram of Loops with Promoter Concentrated in UP or DOWN",
+#        x = "Total Promoter Count per Loop",
+#        y = "Number of Loops") +
+#   theme_minimal() +
+#   theme(plot.title = element_text(hjust = 0.5)) +
+#   geom_text(aes(label = paste0(one_sided_promoter_loop_count, "/", loop_count, " (", round(ratio * 100, 1), "%)")),
+#             position = position_stack(vjust = 1.017), size = 3, color = "black")
+
 one.sided.loop.histogram <- ggplot(one.sided.loop.histogram.data.promoter.final, aes(x = total_promoter, y = one_sided_promoter_loop_count)) +
   geom_bar(stat = "identity", fill = "skyblue", color = "black") +
   scale_x_continuous(limits = c(0, 6.5), breaks = seq(0, 6, by = 1)) +
@@ -2291,7 +2579,7 @@ one.sided.loop.histogram <- ggplot(one.sided.loop.histogram.data.promoter.final,
 one.sided.loop.histogram
 one.sided.loop.histogram.data.promoter.final %>% view()
 
-pdf("./figures/0909/promoter_count_per_loop_histogram.pdf", width = 16.5, height = 23.5)
+pdf("./figures/promoter_count_per_loop_histogram.pdf", width = 16.5, height = 23.5)
 
 grid.arrange(promoter.count.per.loop.histogram, one.sided.loop.histogram, ncol = 1)
 dev.off()
@@ -2309,18 +2597,14 @@ ctcf_stats_none
 ctcf_stats_50  
 ctcf_stats_100 
 
-#      ctcf_stats_none                        ctcf_stats_50                   ctcf_stats_100
-# resolution      Q1 Median    Q3  |  resolution    Q1 Median    Q3  | resolution    Q1 Median    Q3
-# 1 5K             7     26    35  |  5K            19     34    53  |  5K            27     43    66
-# 2 10K           12     30    46  |  10K           28     45    72  |  10K           37     61    94
-# 3 25K           25     43    71  |  25K           47     78   120  |  25K           67    108   164
-
 # 4-1. CTCF
 # important object
 df.overlapping.CTCF.w.BOTH.result %>% 
+  head()
   dim() # 2420002
-head()
 df.ctcf.counts
+
+head(df_ctcf_boxplot_50)$loop.id
 
 process_final_loops <- function(df_ctcf_counts, ctcf_stats) {
   q1_values_by_resolution <- ctcf_stats %>%
@@ -2329,18 +2613,18 @@ process_final_loops <- function(df_ctcf_counts, ctcf_stats) {
   # 1 5K             7
   # 2 10K           12
   # 3 25K           25
-  
+ # 
   loops_with_ctcf_above_q1 <- df_ctcf_counts %>%
     left_join(q1_values_by_resolution, by = "resolution") %>%
     filter(ctcf_count_by_loop_id >= Q1)
   loops_with_ctcf_above_q1 # 46,851
-  
+ # 
   loops.with.ctcf.both.ends <- loops_with_ctcf_above_q1 %>%
     group_by(loop.id) %>%
     filter(all(c("UP", "DOWN") %in% WHERE)) %>%
     ungroup()
   loops.with.ctcf.both.ends # 36,664 + 10
-  
+ # 
   final.loops.from.ctcf.step <- loops.with.ctcf.both.ends %>% 
     distinct(loop.id) %>% 
     mutate(end.distance = as.numeric(str_split_n(loop.id, '_', 7))) %>% 
@@ -2350,8 +2634,8 @@ process_final_loops <- function(df_ctcf_counts, ctcf_stats) {
       end.distance == 25000 ~ "25K",
       TRUE ~ NA
     ))
-  # %>%  
-  #   mutate(loop.id = str_remove(loop.id, "_[^_]+$"))
+# %>%  
+#   mutate(loop.id = str_remove(loop.id, "_[^_]+$"))
   return(final.loops.from.ctcf.step)
 }
 
@@ -2362,6 +2646,8 @@ ctcf_final_loops_100 <- process_final_loops(df_ctcf_boxplot_100, ctcf_stats_100)
 ctcf_final_loops_none # 18337                  // initial loops: 31773
 ctcf_final_loops_50   # 19298 ( + 961)         // initial loops: 31773
 ctcf_final_loops_100  # 19392 (+ 1055 / + 94 ) // initial loops: 31773
+head(ctcf_final_loops_100)$loop.id
+head(ctcf_final_loops_none)$loop.id
 
 ############################
 # loop analysis by number of ctcf
@@ -2377,9 +2663,9 @@ distribution_of_loops_without_ctcf_bindings <- missing_loops %>%
   count(str_split_n(loop.id, '_', 1)) %>%
   dplyr::rename(chr = `str_split_n(loop.id, "_", 1)`, count = n) %>% 
   mutate(chr = factor(chr, levels = c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", 
-                                      "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", 
-                                      "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", 
-                                      "chr20", "chrX", "chrY"))) %>% 
+                                                    "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", 
+                                                    "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", 
+                                                    "chr20", "chrX", "chrY"))) %>% 
   ggplot(aes(x = chr, y = count)) +
   geom_bar(stat = "identity", fill = "skyblue") +
   theme_minimal() +
@@ -2387,7 +2673,7 @@ distribution_of_loops_without_ctcf_bindings <- missing_loops %>%
   theme(
     plot.title = element_text(hjust = 0.5)
   )
-ggsave(filename = "./figures/0909/distribution_of_loops_without_ctcf_bindings.pdf", plot = distribution_of_loops_without_ctcf_bindings, width = 8, height = 6)
+ggsave(filename = "./figures/distribution_of_loops_without_ctcf_bindings.pdf", plot = distribution_of_loops_without_ctcf_bindings, width = 8, height = 6)
 missing_loops
 
 distribution_of_loops_without_ctcf_bindings_per_resolution <- missing_loops %>%
@@ -2419,7 +2705,7 @@ distribution_of_loops_without_ctcf_bindings_per_resolution <- missing_loops %>%
     plot.title = element_text(hjust = 0.5),
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
-ggsave(filename = "./figures/0909/distribution_of_loops_without_ctcf_bindings_per_resolution.pdf", plot = distribution_of_loops_without_ctcf_bindings_per_resolution, width = 8, height = 6)
+ggsave(filename = "./figures/distribution_of_loops_without_ctcf_bindings_per_resolution.pdf", plot = distribution_of_loops_without_ctcf_bindings_per_resolution, width = 8, height = 6)
 
 ####### Analysis 2: These 1437 loops means they DO NOT have CTCF in their 'ONE ENDs ONLY': 63150 - 61713 = 1437 #######
 df.ctcf.counts.paired.completed <- df.ctcf.counts %>%
@@ -2433,6 +2719,29 @@ df.ctcf.counts.paired.completed <- df.ctcf.counts %>%
 
 df.ctcf.counts.paired.completed # 63150 <- 61713
 # 63546 - 63150 = 396 (198 loops) (no ctcf in both ends) - identical result to Analaysis 1: PASS
+
+loops_only_one_end <- df.ctcf.counts %>%
+  group_by(loop.id) %>%
+  filter(n_distinct(WHERE) < 2) %>%
+  ungroup() %>% 
+  count(str_split_n(loop.id, '_', 1)) %>%
+  dplyr::rename(chr = `str_split_n(loop.id, "_", 1)`, count = n) %>% 
+  mutate(chr = factor(chr, levels = c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", 
+                                      "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", 
+                                      "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", 
+                                      "chr20", "chrX", "chrY"))) 
+
+
+  ggplot(aes(x = chr, y = count)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  theme_minimal() +
+  labs(title = "Distribution of Loops with CTCF Bindings in only One End per Chrnomosome", x = "Chromosome", y = "Count") +
+  theme(
+    plot.title = element_text(hjust = 0.5)
+  )
+ggsave(filename = "./figures/loops_with_ctcf_only_one_end.pdf", plot = loops_only_one_end, width = 8, height = 6)
+
+loops_only_one_end
 
 loops_only_one_end_per_resolution <- df.ctcf.counts %>%
   group_by(loop.id) %>%
@@ -2457,7 +2766,7 @@ loops_only_one_end_per_resolution <- df.ctcf.counts %>%
     plot.title = element_text(hjust = 0.5),
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
-ggsave(filename = "./figures/0909/loops_with_ctcf_only_one_end_per_resolution.pdf", plot = loops_only_one_end_per_resolution, width = 8, height = 6)
+ggsave(filename = "./figures/loops_with_ctcf_only_one_end_per_resolution.pdf", plot = loops_only_one_end_per_resolution, width = 8, height = 6)
 
 ####### Analysis 3: loops less than Q1
 df.ctcf.counts # 61,713
@@ -2469,14 +2778,7 @@ df.loops.with.ctcf.pairing.filtered <- df.ctcf.counts %>%
 df.loops.with.ctcf.pairing.filtered # 60276
 # 61713 - 60276 = 1437 : PASS
 
-ctcf_stats_none
-ctcf_stats_50
-ctcf_stats_100
-
-q1_values_by_resolution <- ctcf_stats_none %>%
-  dplyr::select(resolution, Q1)
-
-q1_values_by_resolution # EMPTY
+q1_values_by_resolution
 
 loops.with.ctcf.above.q1.complement <- df.loops.with.ctcf.pairing.filtered %>% 
   left_join(q1_values_by_resolution, by = "resolution") %>%
@@ -2496,7 +2798,6 @@ loops.with.less.ctcf.than.q1.on.only.one.end <- loops.with.ctcf.above.q1.complem
   filter(n_distinct(WHERE) < 2) %>%
   mutate(ends = "ONE_END") %>% 
   ungroup()
-
 loops.with.ctcf.on.only.one.end # 9412 (the other ends have CTCF more than q1)
 
 # PASS: 4778 + 9412 = 14190
@@ -2522,10 +2823,10 @@ df.loops.with.less.ctcf.than.q1.hist <- ggplot(df.loops.with.less.ctcf.than.q1, 
 
 df.loops.with.less.ctcf.than.q1 %>% distinct(resolution, Q1)
 
-ggsave(filename = "./figures/0909/distribution_of_loops_with_less_ctcf_than_q1_hist.pdf", plot = df.loops.with.less.ctcf.than.q1.hist, width = 8, height = 6)
+ggsave(filename = "./figures/distribution_of_loops_with_less_ctcf_than_q1_hist.pdf", plot = df.loops.with.less.ctcf.than.q1.hist, width = 8, height = 6)
 
 # Save all three plots to a single PDF file
-pdf("./figures/0909/plot_loops_with_ctcf_above_q1_complement_paired_by_resolution.pdf", height = 12, width = 8.5)
+pdf("./figures/plot_loops_with_ctcf_above_q1_complement_paired_by_resolution.pdf", height = 12, width = 8.5)
 grid.arrange(plot.5k.loops.with.ctcf.above.q1.complement.paired, 
              plot.10k.loops.with.ctcf.above.q1.complement.paired, 
              plot.25k.loops.with.ctcf.above.q1.complement.paired, ncol = 1)
@@ -2535,18 +2836,19 @@ dev.off()
 df.overlapping.TSS.w.BOTH.result %>% head()
 df.tss.counts.each.end # 44,553 + 10
 tss.stats.by.resolution.each.end
+head(df.tss.counts.each.end)
 
 loops.with.tss.above.q1 <- df.tss.counts.each.end %>% 
   left_join(tss.stats.by.resolution.each.end %>% 
               dplyr::select(resolution, Q1), by = "resolution") %>% 
-  filter(tss_count_each_end >= Q1)
+  filter(tss_count_each_end >= 1)
 
 loops.with.tss.both.ends <- loops.with.tss.above.q1 %>%
   group_by(loop.id) %>%
   filter(all(c("UP", "DOWN") %in% WHERE)) %>%
   ungroup()
-
-final.loops.from.tss.step <- loops.with.tss.both.ends %>% 
+loops.with.tss.both.ends
+final.loops.from.tss.step <- loops.with.tss.above.q1 %>% 
   distinct(loop.id) %>% 
   mutate(end.distance = str_split_n(loop.id, '_', 7)) %>% 
   mutate(resolution = case_when(
@@ -2568,14 +2870,22 @@ promoter.stats.by.resolution.each.end
 loops.with.promoter.above.q1 <- df.promoter.counts.each.end %>% 
   left_join(promoter.stats.by.resolution.each.end %>% 
               dplyr::select(resolution, Q1), by = "resolution") %>% 
-  filter(promoter_count_each_end >= Q1)
+  filter(promoter_count_each_end >= 1)
 
 loops.with.promoter.both.ends <- loops.with.promoter.above.q1 %>% # 38,152 + 10
   group_by(loop.id) %>%
   filter(all(c("UP", "DOWN") %in% WHERE)) %>%
   ungroup()
+dim(loops.with.promoter.both.ends) 
 
-final.loops.from.promoter.step <- loops.with.promoter.both.ends %>% 
+names(df.promoter.counts.each.end)
+# [1] "loop.id"                
+# [2] "WHERE"                  
+# [3] "resolution"             
+# [4] "promoter_count_each_end"
+dim(df.promoter.counts.each.end)
+
+final.loops.from.promoter.step <- df.promoter.counts.each.end %>% 
   distinct(loop.id) %>% 
   mutate(end.distance = str_split_n(loop.id, '_', 7)) %>% 
   mutate(resolution = case_when(
@@ -2591,6 +2901,111 @@ final.loops.from.promoter.step # 13,003 + 10
 ##############
 # Venn Diagram
 ##############
+dim(final.loops.from.promoter.step)
+# [1] 25149     3
+dim(final.loops.from.tss.step)
+# [1] 27517     3
+final.loops.from.ctcf.step<-ctcf_final_loops_100
+dim(final.loops.from.ctcf.step)
+# [1] 19392     3
+head(final.loops.from.ctcf.step)[1,1]
+# 1 chr1_101075000_101100000_chr1_101550000_101575000_25000_0
+head(final.loops.from.promoter.step)[1,1]
+# 1 chr10_1000000_1025000_chr10_1200000_1225000_25000_0
+head(final.loops.from.tss.step)[1,1]
+# 1 chr10_100320000_100330000_chr10_100390000_100400000_10000_0
+
+loop.data.for.venn <- list(
+  Promoter = final.loops.from.promoter.step$loop.id,
+  TSS = final.loops.from.tss.step$loop.id,
+  CTCF = final.loops.from.ctcf.step$loop.id
+)
+
+overall.loops.common.venn.plot <- ggvenn(
+  loop.data.for.venn, 
+  fill_color = c("#E41A1C", "#377EB8", "#4DAF4A")
+) + ggtitle("Overall Loop Overlap") +
+  theme(
+    plot.title = element_text(hjust = 0.5),       
+    legend.title = element_text(size = 0.3)         
+  )
+
+pdf("./figures/loops_common_venn_diagram.pdf")
+pdf("hao_loops_common_venn_diagram.pdf", width=6, height=6)
+print(overall.loops.common.venn.plot)
+dev.off()
+
+
+
+list_of_loops<-unique(c(final.loops.from.ctcf.step$loop.id, final.loops.from.tss.step$loop.id, final.loops.from.promoter.step$loop.id))
+length(list_of_loops)
+idx.ctcf<-list_of_loops %in%  final.loops.from.ctcf.step$loop.id  
+idx.tss<-list_of_loops %in%  final.loops.from.tss.step$loop.id
+idx.promoter<-list_of_loops %in%  final.loops.from.promoter.step$loop.id  
+sum(idx.ctcf)
+idx.final<- idx.ctcf & (idx.promoter | idx.tss) 
+final.loops<-data.frame(loop.id=list_of_loops[idx.final])
+dim(final.loops)
+# [1] 18216
+
+# Split the strings and separate into columns using separate() from tidyr
+final.loops.df <- final.loops %>%
+  separate(loop.id, 
+           into = c("chr1", "start1", "end1", "chr2", "start2", "end2", "resolution", "none"), 
+           sep = "_")
+head(final.loops.df)
+write.table(file="hao_final_loops.tab", row.names=F, final.loops.df)
+
+# by resolution
+loop.data.by.resolution <- list(
+  `25K` = c(final.loops.from.promoter.step$loop.id[final.loops.from.promoter.step$end.distance == "25000"],
+            final.loops.from.tss.step$loop.id[final.loops.from.tss.step$end.distance == "25000"],
+            final.loops.from.ctcf.step$loop.id[final.loops.from.ctcf.step$end.distance == "25000"]),
+  `10K` = c(final.loops.from.promoter.step$loop.id[final.loops.from.promoter.step$end.distance == "10000"],
+            final.loops.from.tss.step$loop.id[final.loops.from.tss.step$end.distance == "10000"],
+            final.loops.from.ctcf.step$loop.id[final.loops.from.ctcf.step$end.distance == "10000"]),
+  `5K` = c(final.loops.from.promoter.step$loop.id[final.loops.from.promoter.step$end.distance == "5000"],
+           final.loops.from.tss.step$loop.id[final.loops.from.tss.step$end.distance == "5000"],
+           final.loops.from.ctcf.step$loop.id[final.loops.from.ctcf.step$end.distance == "5000"])
+)
+
+loop.data.for.venn.by.resolution <- list()
+for (resolution in c("5K", "10K", "25K")) {
+  loop.data.for.venn.by.resolution[[resolution]] <- ggvenn(
+    list(
+      Promoter = final.loops.from.promoter.step$loop.id[final.loops.from.promoter.step$resolution == resolution],
+      TSS = final.loops.from.tss.step$loop.id[final.loops.from.tss.step$resolution == resolution],
+      CTCF = final.loops.from.ctcf.step$loop.id[final.loops.from.ctcf.step$resolution == resolution]
+    ),
+    fill_color = c("#E41A1C", "#377EB8", "#4DAF4A")
+  ) + ggtitle(paste("Resolution Overlap", "(", resolution, ")" )) +
+    theme(
+      plot.title = element_text(hjust = 0.5),       
+      legend.title = element_text(size =0.3)       
+    )
+}
+
+pdf("./figures/venn_diagrams_by_resolution.pdf")
+for (plot in loop.data.for.venn.by.resolution) {
+  print(plot)
+}
+dev.off()
+
+pdf("./figures/combined_venn_diagrams.pdf")
+grid.arrange(
+  overall.loops.common.venn.plot, 
+  loop.data.for.venn.by.resolution[["5K"]], 
+  loop.data.for.venn.by.resolution[["10K"]], 
+  loop.data.for.venn.by.resolution[["25K"]], 
+  ncol = 2, nrow = 2
+)
+dev.off()
+
+
+
+###############
+# refactoring
+###############
 
 ctcf_final_loops_none
 ctcf_final_loops_50  
@@ -2660,59 +3075,573 @@ create_ctcf_venn_diagrams(
   ctcf_final_loops_100 = ctcf_final_loops_100,
   final_loops_from_promoter_step = final.loops.from.promoter.step,
   final_loops_from_tss_step = final.loops.from.tss.step,
-  output_path = "./figures/0909/ctcf_vs_promoter_tss_venn_diagrams.pdf"
+  output_path = "./figures/0829/ctcf_vs_promoter_tss_venn_diagrams.pdf"
 )
 
-##################
-# loop extraction
-##################
 
-# func for common loop extraction
-extract_overlapping_loops <- function(ctcf_data, promoter_data, tss_data) {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##########################################################################################
+##########################################################################################
+## TSS VS promoter check
+##########################################################################################
+##########################################################################################
+
+# grep -E '^(ID|DR|SE)' Rn_EPDnew_001_rn6.dat | awk '{if ($1 == "ID") $2 = "ID; " $2; else if ($1 == "SE") $2 = "Seq; " $2; print}' | awk '{$1=""; sub(/^ /, ""); print}' | awk -F";" '{print $1, substr($0, index($0, $2))}' OFS="\t" | sed 's/Gene Symbol/GeneSymbol/g' | awk '{first_col=$1; $1=""; sub(/^ /, ""); gsub(/[\t ]+/, ":", $0); print first_col, $0}' OFS="\t" | sed 's/[;.]//g'| sed 's/:\([^:]*\)/\1/' > Rn_EPDnew_001_rn6_2col.ts
+
+# making df from data file: input for liftover
+file_path <- "/Users/PanjunKim/UTHSC GGI Dropbox/K P/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6_2col.tsv"
+df.promoter.rn6.data <- read_tsv(file_path, col_names = c("Key", "Value")) 
+
+list.promoter.rn6.data <- split(df.promoter.rn6.data, cumsum(df.promoter.rn6.data$Key == "ID"))
+
+df.promoter.rn6.data # 98,536 + 10
+
+required_keys <- c("ID", "UCSC", "Ensembl", "RefSeq", "GeneSymbol", "Seq")
+
+processed.list.promoter.rn6.data <- map(list.promoter.rn6.data, function(df) {
   
-  ctcf_loops <- unique(str_extract(ctcf_data$loop.id, "^(?:[^_]+_){6}[^_]+"))
-  promoter_loops <- unique(str_extract(promoter_data$loop.id, "^(?:[^_]+_){6}[^_]+"))
-  tss_loops <- unique(str_extract(tss_data$loop.id, "^(?:[^_]+_){6}[^_]+"))
+  df <- df %>% 
+    complete(Key = required_keys, fill = list(Value = NA))
   
-  # 1. CTCF .vs Promoter (NONE TSS)
-  ctcf_promoter_overlap <- intersect(ctcf_loops, promoter_loops)
-  ctcf_promoter_only <- setdiff(ctcf_promoter_overlap, tss_loops)
+  df <- df %>%
+    group_by(Key) %>%
+    summarise(Value = paste(na.omit(Value), collapse = "|"), .groups = 'drop')
   
-  # 2. CTCF .vs TSS (NONE Promoter)
-  ctcf_tss_overlap <- intersect(ctcf_loops, tss_loops)
-  ctcf_tss_only <- setdiff(ctcf_tss_overlap, promoter_loops)
+  return(df)
+})
+
+df.processed.list.promoter.rn6.data <- map_dfr(processed.list.promoter.rn6.data, function(df) {
+  df_wide <- df %>%
+    pivot_wider(names_from = Key, values_from = Value) %>%
+    dplyr::select(ID, UCSC, Ensembl, RefSeq, GeneSymbol, Seq) %>% 
+    mutate(UCSC = str_c(UCSC, ':', (as.numeric(str_split_n(UCSC, ':', 4)) + str_length(Seq) -1))) 
+  return(df_wide)
+})
+
+df.processed.list.promoter.rn6.data # 12601
+df.processed.list.promoter.rn6.data.liftover.input <- df.processed.list.promoter.rn6.data %>%
+  mutate(chr = str_split_n(UCSC, ':', 2), strand = str_split_n(UCSC, ':', 3), start = as.numeric(str_split_n(UCSC, ':', 4)), end = as.numeric(str_split_n(UCSC, ':', 5))) %>% 
+  mutate(start = as.numeric(start),
+         end = as.numeric(end)) %>% 
+  mutate(new.loop.id = str_c(str_split_n(ID, ':', 1), ':', Ensembl, ':', RefSeq, ':', GeneSymbol)) %>% 
+  dplyr::select(chr, start, end, new.loop.id)
   
-  # 3. CTCF, Promoter, TSS
-  ctcf_promoter_tss_overlap <- Reduce(intersect, list(ctcf_loops, promoter_loops, tss_loops))
+write.table(df.processed.list.promoter.rn6.data.liftover.input, "Rn_EPDnew_001_rn6_liftover_input_1.bed", sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+
+df.promoter.rn7 # 12463
+df.promoter.rn7.GR 
+
+df.tss.ucsc # 17849 
+# chr,start,end,strand,gene_id,transcript_id,exon_number,exon_id,gene_name
+
+###################################
+# MATCHING with gene id & RefSeq
+###################################
+df.promoter.rn7.join <- df.promoter.rn7 %>%
+  separate(gene, into = c("gene_id_part", "Ensembl", "RefSeq", "GeneSymbol"), sep = ":", extra = "merge", remove = FALSE)
+df.promoter.rn7.join 
+
+matched_by_gene_refseq <- df.tss.ucsc %>%
+  inner_join(df.promoter.rn7.join, by = c("gene_id" = "GeneSymbol", "transcript_id" = "RefSeq"), relationship = "many-to-many")
+
+# chr,start,end,gene,gene_id_part,Ensembl,RefSeq,GeneSymbol,score
+
+matched_by_gene_refseq.distance <- matched_by_gene_refseq %>% # 8714 + 62
+  mutate(distance = ifelse(chr.x == chr.y, ifelse((start.x + 1 >= end.y), abs(start.x - end.y), ifelse((start.x + 1 <= start.y), start.x - start.y, 0)), NA)) %>% 
+  filter(between(distance, -distance_threshold, distance_threshold))
+# matched_by_gene_refseq.distance %>% filter(is.na(distance)) # 12 NA
+#   count(distance)
+# chr.x, start.x, end.x, strand, gene_id, transcript_id, exon_number, exon_id, gene_name, chr.y, start.y, end.y, gene, gene_id_part, Ensembl, score
+
+matched_by_gene_refseq.distance.boxplot <- ggplot(matched_by_gene_refseq.distance %>% filter(!is.na(distance)) %>% count(distance), aes(y = distance)) +
+  geom_boxplot(fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Boxplot of of Distance between TSS & promoter by gene & refseq",
+       y = "Distance",
+       x = "") +
+  theme_minimal()
+
+# PDF
+ggsave("matched_by_gene_refseq.distance.boxplot.pdf", plot = matched_by_gene_refseq.distance.boxplot, width = 8, height = 6, units = "in")
+
+
+matched_by_gene_refseq_distance_hist <- 
+  ggplot(matched_by_gene_refseq.distance %>% filter(!is.na(distance)), aes(x = distance)) +
+  geom_histogram(binwidth = 1000, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Distance between TSS & promoter by gene & refseq",
+       x = "Distance",
+       y = "Count") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggsave("matched_by_gene_refseq_distance_hist.pdf", plot = matched_by_gene_refseq.distance.hist, 
+       width = 8, height = 6, units = "in")
+
+############################
+# MATCHING with coordinates
+############################
+distance_threshold <- 2000
+
+df.tss.ucsc <- df.tss.ucsc %>%
+  mutate(start = as.numeric(start), end = as.numeric(end))
+
+df.promoter.rn7 <- df.promoter.rn7 %>%
+  mutate(start = as.numeric(start), end = as.numeric(end))
+
+df.promoter.rn7
+df.tss.ucsc
+
+df.tss.ucsc.match.GR <- GRanges(
+  seqnames = df.tss.ucsc$chr,
+  ranges = IRanges(start = df.tss.ucsc$start, end = df.tss.ucsc$end),
+  # strand = df.tss.ucsc$strand,
+  gene_id = df.tss.ucsc$gene_id,
+  transcript_id = df.tss.ucsc$transcript_id
+)
+
+df.promoter.rn7.threshold.match.GR <- GRanges(
+  seqnames = df.promoter.rn7$chr,
+  ranges = IRanges(start = df.promoter.rn7$start - distance_threshold, end = df.promoter.rn7$end + distance_threshold),
+  # strand = df.promoter.rn7$strand,
+  gene = df.promoter.rn7$gene
+)
+
+# same level of chromosomes
+common_seqlevels_match <- intersect(seqlevels(df.tss.ucsc.match.GR), seqlevels(df.promoter.rn7.threshold.match.GR))
+
+df.tss.ucsc.common.match.GR <- keepSeqlevels(df.tss.ucsc.match.GR, common_seqlevels_match, pruning.mode="coarse")
+df.promoter.rn7.common.threshold.match.GR <- keepSeqlevels(df.promoter.rn7.threshold.match.GR, common_seqlevels_match, pruning.mode="coarse")
+
+tss.promoter.match.hits <- findOverlaps(df.tss.ucsc.common.match.GR, df.promoter.rn7.common.threshold.match.GR)
+
+df.tss.ucsc.common.match.GR$idx <- 1:length(df.tss.ucsc.common.match.GR)
+df.promoter.rn7.common.threshold.match.GR$idx <- 1:length(df.promoter.rn7.common.threshold.match.GR)
+
+matched_tss_promoter <- as.data.frame(tss.promoter.match.hits) %>%
+  mutate(
+    tss_idx = queryHits(tss.promoter.match.hits),
+    promoter_idx = subjectHits(tss.promoter.match.hits)
+  ) %>%
+  inner_join(as.data.frame(df.tss.ucsc.common.match.GR), by = c("tss_idx" = "idx")) %>%
+  inner_join(as.data.frame(df.promoter.rn7.common.threshold.match.GR), by = c("promoter_idx" = "idx")) %>%
+  # view()
+  # x: tss, y: promoter
+  # mutate(distance = abs(start.y - start.x)) %>%
+  mutate(distance = ifelse(seqnames.x == seqnames.y, ifelse((start.x + 1 >= (end.y - distance_threshold)), start.x - (end.y - distance_threshold), ifelse((start.x + 1 <= (start.y + distance_threshold)), start.x - (start.y + distance_threshold), 0)), NA))
+  dplyr::select(
+    chr = seqnames.x, 
+    start = start.x, 
+    end = end.x, 
+    gene_id, 
+    tss_start = start.y, 
+    tss_end = end.y, 
+    tss_geneid = gene_id, 
+    tss_transcript_id = transcript_id,
+    distance
+  )
+
+print(matched_tss_promoter)
+
+matched_tss_promoter %>% count(distance)
+
+total_n <- nrow(matched_tss_promoter)
+
+matched_tss_promoter_distance_hist <- ggplot(matched_tss_promoter, aes(x = distance)) +
+  geom_histogram(binwidth = 100, fill = "skyblue", color = "black", alpha = 0.7) +
+  geom_text(stat = 'bin', aes(label = after_stat(count)), vjust = -0.5, binwidth = 100, color = "black", size = 3.5) +
+  labs(title = "Histogram of Distance between TSS & Promoter by Coordinates",
+       x = "Distance",
+       y = "Count") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
   
-  return(list(
-    ctcf_promoter_only = ctcf_promoter_only,
-    ctcf_tss_only = ctcf_tss_only,
-    ctcf_promoter_tss_overlap = ctcf_promoter_tss_overlap
+  annotate("text", x = Inf, y = Inf, label = paste("Total n =", total_n), 
+           hjust = 1.1, vjust = 2, size = 5, color = "black")
+
+ggsave("matched_tss_promoter_distance_histogram.pdf", plot = matched_tss_promoter_distance_hist, width = 8, height = 6, units = "in")
+
+######################################
+# tss vs loops overlapping
+######################################
+
+# to filter valid loop, when checking a loop, I will check the number of CTCF at an END in a loop
+# for example Q1  = 22 in 5k, a loop has 21 in upstream, 23 in downstream
+# it would be classified invalid loop
+
+# step 1: deciding to padding through distribution of tss
+# step 1-1: checking distribution of loop lengths
+#########################################
+# LENTH of loops distribution: Start
+#########################################
+
+loop.length.stat.summary.table <- overall.df.DISTINCT.loop.deep.sample.all %>%
+  mutate(loop.length = y12 - x12) %>%
+  filter(!is.na(loop.length) & is.finite(loop.length)) %>%
+  group_by(resolution) %>%
+  summarise(
+    Min = min(loop.length),
+    Q1 = quantile(loop.length, 0.25),
+    Median = median(loop.length),
+    Q3 = quantile(loop.length, 0.75),
+    Max = max(loop.length)
+  )
+
+print(loop.length.stat.summary.table)
+35000 - 5000*2 = 25000
+# loop length stats
+# resolution      Min     Q1 Median     Q3       Max
+# 1 5K          35000  65000 125000 260000 211685000
+# 2 10K         50000  90000 170000 330000 219090000
+# 3 25K        100000 150000 275000 525000 211675000
+
+
+# loops
+# loops with TSS only: in one only, in both ends
+# loops with promoter only: in one only, in both ends
+# loops with both: in one only, in both ends
+
+q3_values <- overall.df.DISTINCT.loop.deep.sample.all %>%
+  mutate(loop.length = y12 - x12) %>%
+  group_by(resolution) %>%
+  summarise(Q3 = quantile(loop.length, 0.75))
+
+y_max <- max(q3_values$Q3) * 3
+
+loop_length_distribution_by_resolution <- overall.df.DISTINCT.loop.deep.sample.all %>%
+  mutate(loop.length = y12 - x12) %>%
+  # filter(is.na(loop.length)) %>% 
+  # view()
+  ggplot(aes(x = resolution, y = loop.length)) +
+  geom_boxplot() +
+  stat_summary(fun = median, geom = "point", shape = 20, size = 3, color = "red") +
+  stat_summary(fun.data = function(y) {
+    return(data.frame(y = quantile(y, probs = c(0.25, 0.5, 0.75))))
+  }, geom = "text", aes(label = round(..y.., 1)), position = position_nudge(x = 0.2)) +
+  labs(title = "Loop Length Distribution by Resolution",
+       x = "Resolution",
+       y = "Loop Length") +
+  theme_minimal() +
+  ylim(NA, y_max) +  
+  theme(plot.title = element_text(hjust = 0.5))
+
+loop_length_distribution_by_resolution
+ggsave("loop_length_distribution.pdf", plot = loop_length_distribution_by_resolution, width = 8, height = 6)
+
+#########################################
+# LENTH of loops distribution: step 1-1 End
+#########################################
+# step 1-2: deciding each end
+# inner: distance*1/4
+# outer: distance*1/2
+
+# step 2: 
+
+df.ctcf.counts
+ctcf_stats_by_resolution
+
+# valid loop
+df.filtered.loops.by.ctcf <- df.ctcf.counts %>%
+  inner_join(ctcf_stats_by_resolution, by = c("resolution", "WHERE")) %>% 
+  filter(ctcf_count >= Q1) %>%
+  group_by(loop.id) %>%
+  filter(n_distinct(WHERE) == 2) %>%
+  ungroup()
+
+df.filtered.loops.by.ctcf %>% head()
+
+df.filtered.loops.by.ctcf %>% dim()
+
+# checking overlapping with TSS
+df.filtered.loops.by.ctcf.processed <- df.filtered.loops.by.ctcf %>% 
+  distinct(loop.id) %>% 
+  separate(loop.id, into = c("chr1", "x1", "x2", "chr2", "y1", "y2", "end.distance"), sep = "_", remove = FALSE) %>% 
+  mutate(x1 = as.numeric(x1), x2 = as.numeric(x2), y1 = as.numeric(y1), y2 = as.numeric(y2), end.distance = as.numeric(end.distance)) %>% 
+  mutate(x12 = (x1 + x2)/2, y12 = (y1 + y2)/2) %>% # middle point of each end
+  mutate(distance = y12 - x12) %>% 
+  mutate(x0 = ifelse(x12 - (distance / 2) < 0, 0, x12 - (distance / 2)), y3 = y12 + (distance/2)) %>% # 1/2 distance for OUTER PADDING
+  mutate(x12 = (x12 + (distance / 4)), y12 = ifelse((y12 - (distance/4)) < 0, 0, y12 - (distance/4))) %>% # 1/4 distance for INNER PADDING
+  mutate(resolution = case_when(
+    end.distance == 5000 ~ "5K",
+    end.distance  == 10000 ~ "10K",
+    end.distance  == 25000 ~ "25K",
+    TRUE ~ NA
   ))
-}
 
-ctcf_final_loops_100
-final.loops.from.promoter.step
-final.loops.from.tss.step
+df.filtered.loops.by.ctcf.processed %>%
+  head()
+  count() #18270
+  # dplyr::select(loop.id)
+# loop.id                                                   chr1         x1        x2 chr2         y1        y2 end.distance resolution
 
-overlapping_loops <- extract_overlapping_loops(
-  ctcf_data = ctcf_final_loops_100,
-  promoter_data = final.loops.from.promoter.step,
-  tss_data = final.loops.from.tss.step
+# TSS with UP
+df.filtered.UP.loops.by.ctcf.processed.GR <- GRanges(seqnames=df.filtered.loops.by.ctcf.processed$chr1, ranges=IRanges(start=(df.filtered.loops.by.ctcf.processed$x0), end=(df.filtered.loops.by.ctcf.processed$x12)), loop.id=df.filtered.loops.by.ctcf.processed$loop.id, end.distance = df.filtered.loops.by.ctcf.processed$end.distance, resolution = df.filtered.loops.by.ctcf.processed$resolution)
+
+index.valid.UP.loop.with.tss.and.ctcf <- findOverlaps(df.tss.ucsc.GR, df.filtered.UP.loops.by.ctcf.processed.GR, type = "within")
+
+loop.valid.UP.hits <- subjectHits(index.valid.UP.loop.with.tss.and.ctcf)
+tss.on.loop.UP.hits <- queryHits(index.valid.UP.loop.with.tss.and.ctcf)
+
+
+df.loop.UPTREAM.with.tss.result <- data.frame(
+  up.loop.id = mcols(df.filtered.UP.loops.by.ctcf.processed.GR)$loop.id[loop.valid.UP.hits],
+  end.up.distance = mcols(df.filtered.UP.loops.by.ctcf.processed.GR)$end.distance[loop.valid.UP.hits],
+  resolution = mcols(df.filtered.UP.loops.by.ctcf.processed.GR)$resolution[loop.valid.UP.hits],
+  tss.id = mcols(df.tss.ucsc.GR)$tss.id[tss.on.loop.UP.hits],
+  WHERE = "UP"
+) %>% 
+  mutate(case.tss.up.id = str_c(up.loop.id, '|', tss.id))
+
+df.loop.UPTREAM.with.tss.result %>% dim() # 45168
+df.loop.UPTREAM.with.tss.result %>% 
+  count(resolution)
+# resolution     n
+# 1        10K 14737
+# 2        25K 23894
+# 3         5K  6537
+
+# total: 45168
+
+df.loop.UPTREAM.with.tss.result %>% 
+  head()
+  count()
+
+df.filtered.DOWN.loops.by.ctcf.processed.GR <- GRanges(seqnames=df.filtered.loops.by.ctcf.processed$chr1, ranges=IRanges(start=(df.filtered.loops.by.ctcf.processed$y12), end=(df.filtered.loops.by.ctcf.processed$y3)), loop.id=df.filtered.loops.by.ctcf.processed$loop.id, end.distance = df.filtered.loops.by.ctcf.processed$end.distance, resolution = df.filtered.loops.by.ctcf.processed$resolution)
+
+index.valid.DOWN.loop.with.tss.and.ctcf <- findOverlaps(df.tss.ucsc.GR, df.filtered.DOWN.loops.by.ctcf.processed.GR, type = "within")
+
+loop.valid.DOWN.hits <- subjectHits(index.valid.DOWN.loop.with.tss.and.ctcf)
+tss.on.loop.DOWN.hits <- queryHits(index.valid.DOWN.loop.with.tss.and.ctcf)
+
+
+df.loop.DOWNTREAM.with.tss.result <- data.frame(
+  down.loop.id = mcols(df.filtered.DOWN.loops.by.ctcf.processed.GR)$loop.id[loop.valid.DOWN.hits],
+  end.down.distance = mcols(df.filtered.DOWN.loops.by.ctcf.processed.GR)$end.distance[loop.valid.DOWN.hits],
+  resolution = mcols(df.filtered.DOWN.loops.by.ctcf.processed.GR)$resolution[loop.valid.DOWN.hits],
+  tss.id = mcols(df.tss.ucsc.GR)$tss.id[tss.on.loop.DOWN.hits],
+  WHERE = "DOWN"
+) %>% 
+  mutate(case.tss.down.id = str_c(down.loop.id, '|', tss.id))
+
+df.loop.DOWNTREAM.with.tss.result %>% dim() # 45639
+df.loop.DOWNTREAM.with.tss.result %>% 
+  count(resolution)
+# resolution     n
+# 1        10K 14388
+# 2        25K 24957
+# 3         5K  6294
+
+########## bind_rows(UPSTREAM & DOWNSTREAM) -> BOTH
+df.overlapping.TSS.w.BOTH.for.valid.loop.result <- bind_rows(df.loop.UPTREAM.with.tss.result %>% 
+                                                 mutate(loop.id = up.loop.id, end.distance = end.up.distance) %>% 
+                                                 mutate(case.id = case.tss.up.id) %>% 
+                                                 dplyr::select(-c(up.loop.id, end.up.distance, case.tss.up.id)), 
+                                               df.loop.DOWNTREAM.with.tss.result %>% 
+                                                 mutate(loop.id = down.loop.id, end.distance = end.down.distance) %>% 
+                                                 mutate(case.id = case.tss.down.id) %>% 
+                                                 dplyr::select(-c(down.loop.id, end.down.distance, case.tss.down.id))) %>% 
+  mutate(chr = ifelse(WHERE == "UP", str_split_n(loop.id, '_', 1), str_split_n(loop.id, '_', 4))) %>% 
+  mutate(chr = factor(chr, levels = c(paste0("chr", 1:20), "chrX", "chrY"))) %>%
+  mutate(WHERE = fct_relevel(WHERE, "UP", "DOWN")) %>% 
+  mutate(resolution = case_when(
+    end.distance == 5000 ~ "5K",
+    end.distance == 10000 ~ "10K",
+    end.distance == 25000 ~ "25K",
+    TRUE ~ NA
+  )) %>% 
+  mutate(resolution = fct_relevel(resolution, "5K", "10K", "25K"))
+
+df.overlapping.TSS.w.BOTH.for.valid.loop.result %>% dim() # 90807
+df.overlapping.TSS.w.BOTH.for.valid.loop.result %>% head()
+df.overlapping.TSS.w.BOTH.for.valid.loop.result %>% count(resolution)
+
+# resolution     n
+# 1         5K 12831
+# 2        10K 29125
+# 3        25K 48851
+
+# loop.counts.by.chromosome.and.resolution <- 
+  
+  
+  df.overlapping.TSS.w.BOTH.for.valid.loop.result %>% 
+    head()
+  # distinct(loop.id) %>% 
+  separate(loop.id, into = c("chr1", "x1", "x2", "chr2", "y1", "y2", "end.distance"), sep = "_") %>% 
+  mutate(resolution = case_when(
+    end.distance == 5000 ~ "5K",
+    end.distance == 10000 ~ "10K",
+    end.distance == 25000 ~ "25K",
+    TRUE ~ NA
+  )) %>% 
+  count(chr1, resolution)
+
+  # count(loop.id) # 16637
+valid.loop <- ggplot(loop.counts.by.chromosome.and.resolution, aes(x = chr1, y = n, fill = resolution)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_x_discrete(limits = paste0("chr", c(1:20, "X", "Y"))) + 
+  labs(title = "Number of Loops by Chromosome and Resolution",
+       x = "Chromosome",
+       y = "Number of Loops") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+valid.loop
+
+ggsave("valid_loop_by_chromosome_and_resolution.pdf", plot = valid.loop, width = 10, height = 6)
+
+
+
+
+
+########################################################################################################################
+# Found from slack that I sent this to you back in Nov 2022. 
+# Please modify the code in two places, 
+# 1. change the ensembl annotation to refseq annotation, 
+# 2. make sure the bed file contains loop data from all four samples
+
+library("GenomicRanges")
+library("ggplot2")
+
+# get the TSS location into a GenomicRange object
+tss<-read.table(file="./ensembl_mRatBN7.2_TSS.gtf", sep="\t", head=F)
+tss<-tss[,c(1,4,5)]
+names(tss)<-c("chr", "start", "end")
+tss$chr<-paste0("chr", tss$chr)
+head(tss)
+
+#genomic range for tss
+grTSS<-GRanges(seqnames=tss$chr, ranges=IRanges(start=tss$start, end=tss$end))
+head(grTSS)
+
+# get the loop coordinates into a GR
+loop<-read.table(file="./merged_loops.bedpe")
+head(loop)
+grLoop<-GRanges(seqnames=loop$V1, ranges=IRanges(start=loop$V2, end=loop$V3))
+head(grLoop)
+
+## find the nearest location
+idxnear<-nearest(grLoop, grTSS)
+# reorder grTSS to follow the nearest grLoop
+reorderedTSS<-grTSS[idxnear,]
+
+# put the loops and their nearest TSS together
+out<-data.frame(grLoop, reorderedTSS)
+names(out)<-c("chr","loopStart", "loopEnd", "loopWidth", "loopStrand", "chrTSS", "TSSStart", "TSSEnd", "TSSWidth", "TSSStrand")
+# calcualte the middle of the Loop and TSS
+out$loopMid<-(out$loopEnd-out$loopStart)/2+out$loopStart
+# distance between Loop and TSS
+head(out)
+out$loopToTSS<-out$loopMid-out$TSSStart
+head(out)
+
+
+pdf(file="Distance_between_loop_and_TSS.pdf", width=6, height=5)
+ggplot(data=out, aes(x=loopToTSS))+geom_histogram(fill="darkblue", color="grey")+xlim(c(-30000,30000))+xlab("Distance between loop and nearest TSS, bp")
+dev.off()
+########################################################################################################################
+
+
+
+
+########################################################################################################################
+# get the TSS location into a GenomicRange object, note gene name is added, also there are some duplicated lines, so use uniq
+tss<-read.table(file="./ucsc_start_codon.txt", sep="\t", head=F)
+head(tss)[,c(1,4,5,9)]
+tss<-tss[,c(1,4,5,9)] # onlty take the relevant columns
+names(tss)<-c("chr", "start", "end", "geneid")
+tss$geneid<-gsub(".+transcript_id ", "", tss$geneid)
+tss$geneid<-gsub(";.+", "", tss$geneid)
+tss.uniq<-unique(tss)
+tss<-tss.uniq
+tss
+#genomic range for tss
+grTSS<-GRanges(seqnames=tss$chr, ranges=IRanges(start=tss$start, end=tss$end), geneid=tss$geneid)
+
+# combines loop with their closest TSS.
+out<-data.frame(grLoop, reorderedTSS)
+# take only two columns from the dataframe above, 
+dfoverlap<-out[,c("Gene_ID", "strain")]
+# create a pseudo column so that I can change it to wide format
+dfoverlap$val<-1 
+# change to wide
+dfoverlapWide<-spread(unique(dfoverlap), strain, val )
+
+##############################
+# setup for upset plot
+##############################
+strains<-names(dfoverlapWide)[-1]
+upsetplot<-upset(dfoverlapWide,strains)
+upsetplot
+########################################################################################################################
+# the data is not correct but the figure shows what it will look like.
+########################################################################################################################
+
+
+findOverlaps.loop.SHR.OlaIpcv.neuron.EAtlas2.GR <- findOverlaps(loop.SHR.OlaIpcv.GR, df.enhancer.neuron.EAtlas2.GR)
+findOverlaps.loop.HXB10.BB.neuron.EAtlas2.GR <- findOverlaps(loop.HXB10.BB.GR, df.enhancer.neuron.EAtlas2.GR)
+findOverlaps.loop.HXB10.CC.neuron.EAtlas2.GR <- findOverlaps(loop.HXB10.CC.GR, df.enhancer.neuron.EAtlas2.GR)
+findOverlaps.loop.F344.Stm.neuron.EAtlas2.GR <- findOverlaps(loop.F344.Stm.GR, df.enhancer.neuron.EAtlas2.GR)
+findOverlaps.loop.LE.Stm.neuron.EAtlas2.GR <- findOverlaps(loop.LE.Stm.GR, df.enhancer.neuron.EAtlas2.GR)
+findOverlaps.loop.BXH6.neuron.EAtlas2.GR <- findOverlaps(loop.BXH6.GR, df.enhancer.neuron.EAtlas2.GR)
+findOverlaps.loop.Bn.Lx.neuron.EAtlas2.GR <- findOverlaps(loop.Bn.Lx.GR, df.enhancer.neuron.EAtlas2.GR)
+
+hits.SHR.OlaIpcv <- findOverlaps.loop.SHR.OlaIpcv.neuron.EAtlas2.GR
+hits.HXB10.BB <- findOverlaps.loop.HXB10.BB.neuron.EAtlas2.GR
+hits.HXB10.CC <- findOverlaps.loop.HXB10.CC.neuron.EAtlas2.GR
+hits.F344.Stm <- findOverlaps.loop.F344.Stm.neuron.EAtlas2.GR
+hits.LE.Stm <- findOverlaps.loop.LE.Stm.neuron.EAtlas2.GR
+hits.BXH6 <- findOverlaps.loop.BXH6.neuron.EAtlas2.GR
+hits.Bn.Lx <- findOverlaps.loop.Bn.Lx.neuron.EAtlas2.GR
+
+idx.SHR.OlaIpcv <- unique(subjectHits(hits.SHR.OlaIpcv))
+idx.SHR.OlaIpcv
+
+# sugg1: unique number loop UPSET (barchart - like multiple vendiagram)
+# sugg2: At the end, one + the other end in a loop (each samples -> combine to find unique)
+# sugg3: indivisual as it is. we can give weight on loops over multiple samples.
+
+
+
+data <- data.frame(
+  A = c(1, 1, 0, 1, 0, 1, 0, 1, 1, 0),
+  B = c(1, 0, 1, 0, 1, 1, 0, 0, 1, 0),
+  C = c(1, 0, 1, 0, 0, 0, 1, 0, 1, 1)
 )
 
-overlapping_loops$ctcf_promoter_only # 730 :PASS
-overlapping_loops$ctcf_tss_only # 3266 :PASS
-overlapping_loops$ctcf_promoter_tss_overlap # 8537 :PASS
+upset(data, order.by = "freq", sets.bar.color = "#56B4E9", keep.order = TRUE, main.bar.color = "#D55E00")
 
-df.ctcf.promoter.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_only, category = "CP", stringsAsFactors = FALSE)
-df.ctcf.tss.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_tss_only, category = "CT", stringsAsFactors = FALSE)
-df.ctcf.promoter.tss.overlap.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_tss_overlap, category = "CPT", stringsAsFactors = FALSE)
+################################################################ hold for figure ####################################################
+## figure1
+vec <- c(421468530,	338261639, 333215722,	236756631,	241132264)
+fig.1$seq_RP <- vec
 
-df.final.loop <- bind_rows(df.ctcf.promoter.only.loop, df.ctcf.tss.only.loop, df.ctcf.promoter.tss.overlap.loop)
+fig.1 %>% 
+  mutate(loop = n) %>% 
+  select(sample, loop, seq_RP ) %>% 
+  view()
 
-df.final.loop # 12493/31773(0.3931955) /58992
-save(df.final.loop, file="/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/figures/0909/df_final_loop.rda")
+fig.1 %>% 
+  ggplot(aes(x=seq_RP, y=n, color=sample)) +
+  labs(x = "number of sequenced read pairs", y = "number of loops") +
+  geom_point(size = 3)
+################################################################ hold for figure #####################################################
+
 
 

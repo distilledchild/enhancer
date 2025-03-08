@@ -47,9 +47,9 @@ print(datasets) # rnorvegicus_gene_ensembl Rat genes (mRatBN7.2) mRatBN7.2
 # exon data from Biomart
 mart <- useMart("ensembl", dataset = "rnorvegicus_gene_ensembl")
 exon.from.biomart <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name', 
-                                  'ensembl_exon_id', 'ensembl_transcript_id', 'transcript_biotype',
-                                  'chromosome_name', 'exon_chrom_start', 'exon_chrom_end', 'strand'),
-                   mart = mart) %>% 
+                                          'ensembl_exon_id', 'ensembl_transcript_id', 'transcript_biotype',
+                                          'chromosome_name', 'exon_chrom_start', 'exon_chrom_end', 'strand'),
+                           mart = mart) %>% 
   filter(transcript_biotype == 'protein_coding') %>% 
   filter(chromosome_name %in% c(1:20, "X"))
 
@@ -58,8 +58,8 @@ exon.from.biomart %>% distinct(ensembl_gene_id) # 23019 protein-coding genes onl
 
 # promoter data from Biomart (transcript)
 promoter.from.biomart <- getBM(attributes = c('ensembl_gene_id', 'external_gene_name', 
-                                                'ensembl_transcript_id', 'chromosome_name', 'transcript_start', 'transcript_end', 'strand', 'transcript_biotype'),
-                         mart = mart) %>% 
+                                              'ensembl_transcript_id', 'chromosome_name', 'transcript_start', 'transcript_end', 'strand', 'transcript_biotype'),
+                               mart = mart) %>% 
   filter(chromosome_name %in% c(1:20, "X")) %>% 
   filter(transcript_biotype == 'protein_coding') %>% 
   mutate(promoter_start = ifelse(strand == 1, transcript_start - 2000, transcript_end - 500),
@@ -295,15 +295,15 @@ snpagg
 # 4-2. gene definition file from Biomart
 # mart <- useMart("ensembl", dataset = "rnorvegicus_gene_ensembl")
 genedef <- getBM(attributes = c('chromosome_name', 'start_position', 'end_position', 'strand', 'ensembl_gene_id'), # external_gene_name
-                              filters = 'ensembl_gene_id',
-                              values = common.genes.list.from.biomart.exon.promoter,
-                              mart = mart) %>% 
+                 filters = 'ensembl_gene_id',
+                 values = common.genes.list.from.biomart.exon.promoter,
+                 mart = mart) %>% 
   dplyr::rename(chr = chromosome_name, start = start_position, end = end_position, ensg = ensembl_gene_id) %>% 
   mutate(index = str_c(chr, start, end, sep=":")) %>% 
   mutate(strand = ifelse(strand == 1, "+", ifelse(strand == -1, "-", strand))) %>% 
   dplyr::select(index, everything()) %>% 
   dplyr::select(-ensg, everything(), ensg)
-  
+
 genedef # 23019 (values = common.genes.list.from.biomart.exon.promoter) protein-coding genes only / 30387
 # index chr     start       end strand               ensg
 # 1   3:100064979:100083289   3 100064979 100083289      + ENSRNOG00000000009
@@ -325,7 +325,7 @@ genedef <- read.delim("/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/
 genedef # 23019 / 30387
 
 # genedef %>% filter(index %in% c('4:146386956:146429990', '4:146510246:146521590', '4:146511607:146511797'))
-'4:146511607:146511797' : non-protein-coding snp
+#'4:146511607:146511797' : non-protein-coding snp
 
 # 4-3. attaching the index column from Step 24 to the variant-gene annotation file (snpagg).
 snpagg$index <- genedef[match(snpagg$ensg, genedef$ensg), "index"]
@@ -336,7 +336,7 @@ snpagg # 21442 protein-coding genes only / 27922
 snpaggconv <- snpagg %>% 
   filter(!is.na(index)) %>% 
   dplyr::select(ensg, index, rsid)
-  # mutate(ensg = index) %>% 
+# mutate(ensg = index) %>% 
 snpaggconv # 21442 protein-coding genes only / 27922
 # > snpaggconv
 # # A tibble: 27,922 × 3

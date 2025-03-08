@@ -68,10 +68,10 @@ file_path <- "/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/data/gene_data/nc
 # file_path2 <- "/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/data/gene_data/ncbi_dataset/hao/hao_refSeq_BestRefSeq.tsv"
 
 df.genomic.BestRefSeq <- read_delim(file_path, 
-                 delim = "\t", 
-                 col_names = c("seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attributes"),
-                 quote = "",
-                 trim_ws = TRUE)
+                                    delim = "\t", 
+                                    col_names = c("seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attributes"),
+                                    quote = "",
+                                    trim_ws = TRUE)
 df.genomic.BestRefSeq %>% count(feature)
 # from GCF_015227675.2
 #1 CDS         192169
@@ -96,7 +96,7 @@ df.genomic.BestRefSeq.extended <- df.genomic.BestRefSeq %>%
               values_fn = list(value = function(x) paste(unique(x), collapse = "|")),
               values_fill = list(value = NA)) %>%
   dplyr::select(seqname, source, feature, start, end, score, strand, frame, db_xref, 
-         exon_number, gbkey, gene, gene_id, protein_id, tag, transcript_id)
+                exon_number, gbkey, gene, gene_id, protein_id, tag, transcript_id)
 
 save(df.genomic.BestRefSeq.extended, file="./from_hmagma_enhancer/0911/df_genomic_BestRefSeq_extended.rda")
 
@@ -381,7 +381,7 @@ genedef <- right_join(chromosome.length, df.gene.genomic.BestRefSeq.extended, by
   mutate(index = str_c(chr, ":", start, ":", end)) %>% 
   mutate(start = as.numeric(start),
          end = as.numeric(end))
-  # dplyr::select(ID, chr, start, end, strand, gene_id) %>%
+# dplyr::select(ID, chr, start, end, strand, gene_id) %>%
 genedef
 write.table(genedef, file="/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/from_hmagma_enhancer/0911/gene_NCBI.txt", quote=F, row.names=F, col.names=F, sep="\t")
 
