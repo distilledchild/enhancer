@@ -11,8 +11,6 @@ library("biomaRt")
 library("reshape2")
 library("ggvenn")
 
-options(scipen = 999)
-
 getwd()
 
 # Windows
@@ -23,7 +21,7 @@ getwd()
 getwd()
 
 # Linux
-#setwd('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\workshop\\2023_NIH_meeting\\loop_N_tss')
+# setwd('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\workshop\\2023_NIH_meeting\\loop_N_tss')
 # setwd('./Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss')
 # setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/enhancer_atlas2.0/all_species/neuron')
 setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan')
@@ -50,7 +48,7 @@ source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/',
 # BEDPE file list (10 files)
 # Linux
 # loop.file.list = fs::dir_ls("/home/pkim/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/", regexp = ".bedpe$")
-loop.file.list = fs::dir_ls("/home/pkim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
+# loop.file.list = fs::dir_ls("/home/pkim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
 loop.file.list = fs::dir_ls("/home/pkim/dropbox/Gateway_to_Hao/enhancer/data/loops", regexp = ".bedpe$")
 loop.file.list
 
@@ -106,7 +104,9 @@ df.loop.deep.sample.all <- df.init.loop.bed %>%
   )) %>% 
   mutate(resolution = factor(resolution, levels = c("5K", "10K", "25K"))) %>%
   mutate(loop.id = str_c(X.chr1, '_', x1, '_', x2, '_', chr2, '_', y1, '_', y2, '_', end.distance)) %>% # loop.id
-  mutate(sample.loop.id = str_c(strain, '_', loop.id)) #sample.loop.id
+  mutate(sample.loop.id = str_c(strain, '_', loop.id)) %>% #sample.loop.id
+  dplyr::select(sample, strain, X.chr1, x1, x2, chr2, y1, y2, distance, end.distance, resolution, loop.id, sample.loop.id) %>% 
+  dplyr::rename(chr1 = X.chr1)
 
 df.loop.deep.sample.all %>% 
   head()
@@ -114,53 +114,14 @@ df.loop.deep.sample.all %>%
   count(strain)
 
 ########################
-# loop analysis
+# 1. Loop
+# 1-1. Exploratory Data analysis (EDA) 
 ########################
-# TODO HOLDING
-# 1. loop qualification for filtering by observed/expected
-df.loop.deep.sample.all <- df.loop.deep.sample.all %>%
-  mutate(Q1_value = quantile(observed, 0.25, na.rm = TRUE)) %>%
-  group_by(strain, end.distance) %>%
-  ungroup()
-df.loop.deep.sample.all %>% count(end.distance)
-
-# create the boxplot with grouping by strain and end.distance
-plot_resolution_only <- ggplot(df.loop.deep.sample.all, aes(x = resolution, y = observed, fill = resolution)) +
-  geom_boxplot(outlier.shape = NA) +  # Remove outliers
-  stat_summary(fun.data = function(y) { 
-    data.frame(y = quantile(y, 0.25), label = paste0("Q1: ", round(quantile(y, 0.25), 1)))
-  }, geom = "text", aes(label = after_stat(label)), vjust = 2.5, size = 3) +  # Add Q1 value as text
-  theme_minimal() +
-  theme(plot.title = element_text(hjus <- .5)) +
-  labs(title = "Observed Values by Resolution", y = "Frequency", x = "Resolution") +
-  scale_y_continuous(limits = c(0, 250)) +  # Set y-axis limit to 250
-  scale_fill_brewer(palette = "Set3")  # Choose color palette for resolutions
-
-# create the boxplot with grouping by strain and end.distance
-plot_resolution_and_strain <- ggplot(df.loop.deep.sample.all, aes(x = interaction(strain, end.distance), y = observed, fill = strain, linetype = resolution)) +
-  geom_boxplot(outlier.shape = NA, aes(group = interaction(strain, end.distance))) +  # Remove outliers and differentiate with linetype
-  stat_summary(fun.data = function(y) { 
-    data.frame(y = quantile(y, 0.25), label = paste0("Q1: ", round(quantile(y, 0.25), 1)))
-  }, geom = "text", aes(label = after_stat(label)), vjust = 2.5, size = 1.5) +  # Add Q1 value as text
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  labs(title = "Observed Values by Strain and Resolution", y = "Frequency", fill = "Strain", linetype = "Resolution") +
-  scale_y_continuous(limits = c(0, 250)) +  # Set y-axis limit to 250
-  scale_fill_brewer(palette = "Set3") +  # Choose color palette for strains
-  theme(
-    axis.text.x = element_blank(),  # Remove x-axis labels
-    axis.ticks.x = element_blank(),  # Remove x-axis ticks
-    strip.text = element_blank(),  # Remove facet labels
-    strip.background = element_blank(),
-    legend.position = "right"  # Place legend on the right
-  ) +
-  facet_grid(~ strain + end.distance, scales = "free_x", space = "free_x") +  # Group by strain and end.distance
-  theme(axis.title.x = element_blank())  # Remove x-axis title
-
-pdf("loop_quality_control.pdf", width = 10, height = 14)  # Set the PDF output file
-grid.arrange(plot_resolution_only, plot_resolution_and_strain, ncol = 1)  # Arrange plots vertically
-dev.off()  # Close the PDF device
-########################################### ongoing
+# 1. checking duplication loops in a strain
+df.loop.deep.sample.all %>% 
+  #count(strain, loop.id) %>% # NO dups in a strain
+  count(strain, resolution, loop.id) %>% # NO dup in the same resolution in a strain
+  filter(n > 1) 
 
 # 2. checking how much common loops are in samples
 resolutions <- c("5K", "10K", "25K")
@@ -179,9 +140,6 @@ for(res in resolutions) {
   for(i in 1:length(location_list)) {
     for(j in 1:length(location_list)) {
       common <- length(intersect(location_list[[i]], location_list[[j]]))
-      # way1 - percent: common loops / ave of two samples
-      # percentage <- (common / mean(c(length(location_list[[i]]), length(location_list[[j]])))) * 100
-      # way2 - percent: common loops / sample loop in X-axis 
       percentage <- (common / length(location_list[[i]])) * 100
       common_counts[i, j] <- percentage
     }
@@ -199,7 +157,7 @@ for(res in resolutions) {
     theme_minimal() +
     labs(x = "Strain", y = "Strain", title = paste("Heatmap of Common Loops Percentage -", res, "Resolution")) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          plot.title = element_text(hjust = 0.5))  # 제목을 가운데 정렬
+          plot.title = element_text(hjust = 0.5))  # align title in the center
   
   # total loops
   loop_counts_table <- loop_counts %>% 
@@ -213,39 +171,24 @@ for(res in resolutions) {
 }
 
 # all figures by resolution into one figure
-pdf("common_Loops_Heatmap_Percentage.pdf", width = 12, height = 12)
+pdf("figures/submission/common_loops_heatmap_percentage_bw_strains.pdf", width = 12, height = 12)
 grid.arrange(plots[["5K"]], plots[["10K"]], plots[["25K"]], nrow = 3)
 dev.off()
 
-# loop.setting with GRanges: x1,x2 = the coordinates of the UPSTREAM | y1,y2 = the coordinates of the DOWNSTREAM
-
-########### distinct loops
+########################
+# 1. Loop
+# 1-2. Loop data preprocessing: distinct loops
+########################
 
 df.loop.deep.sample.all %>% 
-  head()
+#  head()
 count() # 58992
 
-# common loops between samples picked only one
-# TODO more reliable loops should be filtered from stats of loop annotation data
-df.loop.deep.sample.all %>%
-  group_by(loop.id) %>%
-  filter(n() > 1) %>%
-  ungroup() %>% 
-  filter(loop.id == 'chr10_46800000_46825000_chr10_46950000_46975000_25000') %>% 
-  filter(sample == 'A2DB')
-dplyr::select(loop.id)
-
+# common loops between samples picked only one: df.DISTINCT.loop.deep.sample.all
 df.DISTINCT.loop.deep.sample.all <- df.loop.deep.sample.all %>%
   dplyr::select(loop.id) %>%
   distinct() %>% 
-  separate(loop.id, into = c("chr1", "x1", "x2", "chr2", "y1", "y2", "end.distance"), sep = "_", remove = FALSE) %>% 
-  mutate(
-    x1 = as.numeric(x1),
-    x2 = as.numeric(x2),
-    y1 = as.numeric(y1),
-    y2 = as.numeric(y2),
-    end.distance = as.numeric(end.distance)
-  ) %>% 
+  separate(loop.id, into = c("chr1", "x1", "x2", "chr2", "y1", "y2", "end.distance"), sep = "_", remove = FALSE, convert = TRUE) %>% 
   mutate(distance = y2 - x2) %>%
   mutate(resolution = case_when(
     end.distance == 5000 ~ "5K",
@@ -267,44 +210,66 @@ head()
 # 2        10K 12162
 # 3        25K 12931
 
-########### GRANGE with object from line 81 
-# loop.setting with GRanges - loop.deep.sample.all (whole, up, down)
-df.loop.deep.sample.all %>% head(2)
+########################
+# 1. Loop
+# 1-3. Loop data preprocessing: Creating GRange Obj. from df.DISTINCT.loop.deep.sample.all (whole, up, down)
+########################
 t = 0
-loop.deep.sample.all.whole.GR<-GRanges(seqnames=df.loop.deep.sample.all$X.chr1, ranges=IRanges(start=(df.loop.deep.sample.all$x1-t), end=(df.loop.deep.sample.all$y2+t)), id=df.loop.deep.sample.all$loop.id)
-loop.deep.sample.all.up.GR<-GRanges(seqnames=df.loop.deep.sample.all$X.chr1, ranges=IRanges(start=(df.loop.deep.sample.all$x1-t), end=(df.loop.deep.sample.all$x2+t)), id=df.loop.deep.sample.all$loop.id)
-loop.deep.sample.all.down.GR<-GRanges(seqnames=df.loop.deep.sample.all$X.chr1, ranges=IRanges(start=(df.loop.deep.sample.all$y1-t), end=(df.loop.deep.sample.all$y2+t)), id=df.loop.deep.sample.all$loop.id)
-loop.deep.sample.all.middle.GR<-GRanges(seqnames=df.loop.deep.sample.all$X.chr1, ranges=IRanges(start=(df.loop.deep.sample.all$x2-t), end=(df.loop.deep.sample.all$y1+t)), id=df.loop.deep.sample.all$loop.id)
+# function for creating GRange Obj.
+create_granges <- function(start, end) {
+  GRanges(
+    seqnames = as.character(df.DISTINCT.loop.deep.sample.all$chr1),  
+    ranges = IRanges(start = start, end = end),  
+    id = df.DISTINCT.loop.deep.sample.all$loop.id,  
+    end.distance = df.DISTINCT.loop.deep.sample.all$end.distance,
+    resolution = df.DISTINCT.loop.deep.sample.all$resolution,
+    distance = df.DISTINCT.loop.deep.sample.all$distance
+  )
+}
 
-# DISTINCT
-t = 0
-df.DISTINCT.loop.deep.sample.all.whole.GR<-GRanges(seqnames=df.DISTINCT.loop.deep.sample.all$chr1, ranges=IRanges(start=(df.DISTINCT.loop.deep.sample.all$x1-t), end=(df.DISTINCT.loop.deep.sample.all$y2+t)), id=df.DISTINCT.loop.deep.sample.all$loop.id, end.distance = df.DISTINCT.loop.deep.sample.all$end.distance, resolution = df.DISTINCT.loop.deep.sample.all$resolution, distance = df.DISTINCT.loop.deep.sample.all$distance)
-df.DISTINCT.loop.deep.sample.all.up.GR<-GRanges(seqnames=df.DISTINCT.loop.deep.sample.all$chr1, ranges=IRanges(start=(df.DISTINCT.loop.deep.sample.all$x1-t), end=(df.DISTINCT.loop.deep.sample.all$x2+t)), id=df.DISTINCT.loop.deep.sample.all$loop.id, end.distance = df.DISTINCT.loop.deep.sample.all$end.distance, resolution = df.DISTINCT.loop.deep.sample.all$resolution, distance = df.DISTINCT.loop.deep.sample.all$distance)
-df.DISTINCT.loop.deep.sample.all.down.GR<-GRanges(seqnames=df.DISTINCT.loop.deep.sample.all$chr1, ranges=IRanges(start=(df.DISTINCT.loop.deep.sample.all$y1-t), end=(df.DISTINCT.loop.deep.sample.all$y2+t)), id=df.DISTINCT.loop.deep.sample.all$loop.id, end.distance = df.DISTINCT.loop.deep.sample.all$end.distance, resolution = df.DISTINCT.loop.deep.sample.all$resolution, distance = df.DISTINCT.loop.deep.sample.all$distance)
-df.DISTINCT.loop.deep.sample.all.middle.GR<-GRanges(seqnames=df.DISTINCT.loop.deep.sample.all$chr1, ranges=IRanges(start=(df.DISTINCT.loop.deep.sample.all$x2-t), end=(df.DISTINCT.loop.deep.sample.all$y1+t)), id=df.DISTINCT.loop.deep.sample.all$loop.id, end.distance = df.DISTINCT.loop.deep.sample.all$end.distance, resolution = df.DISTINCT.loop.deep.sample.all$resolution, distance = df.DISTINCT.loop.deep.sample.all$distance)
+# whole (x1 - y2) 
+df.DISTINCT.loop.deep.sample.all.whole.GR <- create_granges(
+  start = df.DISTINCT.loop.deep.sample.all$x1 - t,
+  end = df.DISTINCT.loop.deep.sample.all$y2 + t
+)
+# up (x1 - x2)
+df.DISTINCT.loop.deep.sample.all.up.GR <- create_granges(
+  start = df.DISTINCT.loop.deep.sample.all$x1 - t,
+  end = df.DISTINCT.loop.deep.sample.all$x2 + t
+)
+# down (y1 - y2)
+df.DISTINCT.loop.deep.sample.all.down.GR <- create_granges(
+  start = df.DISTINCT.loop.deep.sample.all$y1 - t,
+  end = df.DISTINCT.loop.deep.sample.all$y2 + t
+)
+# middle 
+df.DISTINCT.loop.deep.sample.all.middle.GR <- create_granges(
+  start = df.DISTINCT.loop.deep.sample.all$x2 - t,
+  end = df.DISTINCT.loop.deep.sample.all$y1 + t
+)
 
-########### NEW OBJECT for OVERALL DISTRIBUTION: new.df.loop.deep.sample.all, overall.df.DISTINCT.loop.deep.sample.all
-# new.loop.id, x0, y3, new_distance
-# new.df.loop.deep.sample.all <- df.loop.deep.sample.all %>% 
+########################
+# 1. Loop
+# 1-4. Loop data preprocessing: padding on loops (1 distance, .5 distance) -> overall.df.DISTINCT.loop.deep.sample.all : OBJECT to be used for the distribution of sth over loops
+# x0, y3, new_distance, new.loop.id
+########################
 overall.df.DISTINCT.loop.deep.sample.all.5.distance <- df.DISTINCT.loop.deep.sample.all %>% 
   mutate(x12 = (x1 + x2)/2, y12 = (y1 + y2)/2) %>% # middle point of each end
-  # mutate(x0 = ifelse(x12 - (distance) < 0, 0, x12 - (distance)), y3 = y12 + (distance)) %>% # a distance for padding
   mutate(x0 = ifelse(x12 - (distance / 2) < 0, 0, x12 - (distance / 2)), y3 = y12 + (distance/2)) %>% # 1/2 distance for padding
   # mutate(new_distance = abs(y3 - x0)) %>% 
   mutate(new.loop.id = str_c(loop.id, '|', x0, '_', y3))
 
 overall.df.DISTINCT.loop.deep.sample.all.1.distance <- df.DISTINCT.loop.deep.sample.all %>% 
   mutate(x12 = (x1 + x2)/2, y12 = (y1 + y2)/2) %>% # middle point of each end
-  mutate(x0 = ifelse(x12 - (distance) < 0, 0, x12 - (distance)), y3 = y12 + (distance)) %>% # a distance for padding
-  # mutate(x0 = ifelse(x12 - (distance / 2) < 0, 0, x12 - (distance / 2)), y3 = y12 + (distance/2)) %>% # 1/2 distance for padding
+  mutate(x0 = ifelse(x12 - (distance) < 0, 0, x12 - (distance)), y3 = y12 + (distance)) %>% # 1 distance for padding
   # mutate(new_distance = abs(y3 - x0)) %>% 
   mutate(new.loop.id = str_c(loop.id, '|', x0, '_', y3))
 
 # new.df.loop.deep.sample.all %>%
 # overall.df.DISTINCT.loop.deep.sample.all.5.distance %>% 
-overall.df.DISTINCT.loop.deep.sample.all.1.distance %>% 
+# overall.df.DISTINCT.loop.deep.sample.all.1.distance %>% 
   # filter(x0 < 0) %>%   
-  head()
+#  head()
 
 # data integrity: PASS
 # overall.df.DISTINCT.loop.deep.sample.all %>% mutate(test = ifelse(y3-x0 == 2*distance, TRUE, FALSE)) %>% 
@@ -312,14 +277,10 @@ overall.df.DISTINCT.loop.deep.sample.all.1.distance %>%
 #   count(x0)
 # count(test)
 
-#### overall.df.DISTINCT.loop.deep.sample.all : OBJECT to be used for the distribution of sth over loops
-
-####################################################
-## DISTRIBUTION: CTCF distribution
-####################################################
-
-## 1. CTCF Processing
-
+########################
+# 2. CTCF
+# 2-1. Exploratory Data analysis (EDA) : CTCF
+########################
 # Linux
 df.init.ctcf<-read.table(file="/home/pkim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
 df.init.ctcf<-read.table(file="/home/pkim/dropbox/Gateway_to_Hao/enhancer/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
@@ -331,7 +292,7 @@ df.init.ctcf<-read.table(file="/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/
 df.init.ctcf %>% dim() # 5767921
 df.init.ctcf %>% head()
 
-# data exploration: CTCF
+# strand checking
 df.init.ctcf %>%                              # +: 2891072, -: 2876849 = 5767921
   count(strand)
 # removing dups including strand
@@ -348,6 +309,10 @@ df.init.ctcf %>%
   mutate(test = ifelse((end - start) == length, TRUE, FALSE)) %>% 
   count(test)
 
+########################
+# 2. CTCF
+# 2-2. CTCF data preprocessing: id and dedup GRange Obj. (df.DISTINCT.fimo.2nd.trial.ctcf/ df.DISTINCT.ctcf.2nd.fimo.GR)
+########################
 # generating id column (long running time)
 df.DISTINCT.fimo.2nd.trial.ctcf <- df.init.ctcf %>%
   distinct() %>% 
@@ -358,27 +323,55 @@ df.DISTINCT.fimo.2nd.trial.ctcf <- df.init.ctcf %>%
 df.DISTINCT.fimo.2nd.trial.ctcf # 2701585/5767921 : 0.4683811
 df.DISTINCT.fimo.2nd.trial.ctcf %>% head()  # id column done
 
-# GRANGE for ctcf from FIMO 2nd trial, 17849
-df.DISTINCT.ctcf.2nd.fimo.GR <- GRanges(seqnames=df.DISTINCT.fimo.2nd.trial.ctcf$chr, ranges=IRanges(start=df.DISTINCT.fimo.2nd.trial.ctcf$start, end=df.DISTINCT.fimo.2nd.trial.ctcf$end), id=df.DISTINCT.fimo.2nd.trial.ctcf$id, strand=df.DISTINCT.fimo.2nd.trial.ctcf$strand)
+# GRanges Obj.: df.DISTINCT.ctcf.2nd.fimo.GR
+df.DISTINCT.ctcf.2nd.fimo.GR <- GRanges(
+  seqnames = as.character(df.DISTINCT.fimo.2nd.trial.ctcf$chr),
+  ranges = IRanges(start = df.DISTINCT.fimo.2nd.trial.ctcf$start, 
+                   end = df.DISTINCT.fimo.2nd.trial.ctcf$end),
+  strand = df.DISTINCT.fimo.2nd.trial.ctcf$strand  # strand 
+)
+
+# metadata: id
+mcols(df.DISTINCT.ctcf.2nd.fimo.GR)$id <- df.DISTINCT.fimo.2nd.trial.ctcf$id
+
 df.DISTINCT.ctcf.2nd.fimo.GR
 
-####################################################
-##### 1. OVERALL on loops Overlapping CTCF & loops 
-####################################################
+########################
+# 2. CTCF
+# 2-3. overall distribution of CTCF on loops
+########################
 
 # adding 1/2 distance in each end (total distance becomes 2*distance)
-overall.df.DISTINCT.loop.deep.sample.all <- overall.df.DISTINCT.loop.deep.sample.all.5.distance
+# overall.df.DISTINCT.loop.deep.sample.all <- overall.df.DISTINCT.loop.deep.sample.all.5.distance
 # adding 1 distance in each end (total distance becomes 3*distance)
 overall.df.DISTINCT.loop.deep.sample.all <- overall.df.DISTINCT.loop.deep.sample.all.1.distance
 
-overall.df.DISTINCT.loop.deep.sample.all.GR <- GRanges(seqnames=overall.df.DISTINCT.loop.deep.sample.all$chr1, ranges=IRanges(start=overall.df.DISTINCT.loop.deep.sample.all$x0, end=overall.df.DISTINCT.loop.deep.sample.all$y3), id=overall.df.DISTINCT.loop.deep.sample.all$loop.id, new.loop.id=overall.df.DISTINCT.loop.deep.sample.all$new.loop.id)
+overall.df.DISTINCT.loop.deep.sample.all.GR <- GRanges(
+  seqnames = as.character(overall.df.DISTINCT.loop.deep.sample.all$chr1),  
+  ranges = IRanges(
+    start = overall.df.DISTINCT.loop.deep.sample.all$x0, 
+    end = overall.df.DISTINCT.loop.deep.sample.all$y3
+  )
+)
 
-index.distinct.ctcf.w.overall.whole.loop <- findOverlaps(df.DISTINCT.ctcf.2nd.fimo.GR, overall.df.DISTINCT.loop.deep.sample.all.GR, type = "within")
+# metadata: id
+mcols(overall.df.DISTINCT.loop.deep.sample.all.GR) <- data.frame(
+  id = overall.df.DISTINCT.loop.deep.sample.all$loop.id,
+  new.loop.id = overall.df.DISTINCT.loop.deep.sample.all$new.loop.id,
+  mcols(overall.df.DISTINCT.loop.deep.sample.all.GR)$resolution <- overall.df.DISTINCT.loop.deep.sample.all$resolution
+)
+
+index.distinct.ctcf.w.overall.whole.loop <- findOverlaps(
+  df.DISTINCT.ctcf.2nd.fimo.GR, 
+  overall.df.DISTINCT.loop.deep.sample.all.GR, 
+  type = "within",
+  select = "all"
+)
 
 overall.loop.for.ctcf.hits <- subjectHits(index.distinct.ctcf.w.overall.whole.loop)
 overall.ctcf.on.loop.hits <- queryHits(index.distinct.ctcf.w.overall.whole.loop)
 
-df.ctcf.dist.result <- data.frame(
+df.ctcf.dist.result <- tibble(
   loop.id = overall.df.DISTINCT.loop.deep.sample.all$new.loop.id[overall.loop.for.ctcf.hits],
   loop.start = overall.df.DISTINCT.loop.deep.sample.all$x0[overall.loop.for.ctcf.hits],
   loop.end = overall.df.DISTINCT.loop.deep.sample.all$y3[overall.loop.for.ctcf.hits],
@@ -387,23 +380,55 @@ df.ctcf.dist.result <- data.frame(
   ctcf.id = df.DISTINCT.fimo.2nd.trial.ctcf$id[overall.ctcf.on.loop.hits],
   ctcf.start = df.DISTINCT.fimo.2nd.trial.ctcf$start[overall.ctcf.on.loop.hits],
   ctcf.end = df.DISTINCT.fimo.2nd.trial.ctcf$end[overall.ctcf.on.loop.hits]
-) 
+) %>% 
+  mutate(across(where(is.numeric), ~ format(., scientific = FALSE)))
+
+####################### MEMORY
+library(data.table)
+setDT(overall.df.DISTINCT.loop.deep.sample.all)
+setDT(df.DISTINCT.fimo.2nd.trial.ctcf)
+
+# `slice()`를 사용하여 데이터 추출 최적화
+df.ctcf.dist.result <- data.table(
+  loop.id = overall.df.DISTINCT.loop.deep.sample.all[overall.loop.for.ctcf.hits, new.loop.id],
+  loop.start = overall.df.DISTINCT.loop.deep.sample.all[overall.loop.for.ctcf.hits, x0],
+  loop.end = overall.df.DISTINCT.loop.deep.sample.all[overall.loop.for.ctcf.hits, y3],
+  loop.res = overall.df.DISTINCT.loop.deep.sample.all[overall.loop.for.ctcf.hits, resolution],
+  ctcf.id = df.DISTINCT.fimo.2nd.trial.ctcf[overall.ctcf.on.loop.hits, id],
+  ctcf.start = df.DISTINCT.fimo.2nd.trial.ctcf[overall.ctcf.on.loop.hits, start],
+  ctcf.end = df.DISTINCT.fimo.2nd.trial.ctcf[overall.ctcf.on.loop.hits, end]
+)
+
+# `format()`을 특정 컬럼에만 적용
+df.ctcf.dist.result[, c("loop.start", "loop.end", "ctcf.start", "ctcf.end") := 
+                      lapply(.SD, format, scientific = FALSE), 
+                    .SDcols = c("loop.start", "loop.end", "ctcf.start", "ctcf.end")]
+####################### MEMORY
 
 df.ctcf.dist.result %>% head()
-df.ctcf.dist.result %>% dim() # 40861258(both DISTINCT, 0.5 distance), 6/57612728(both DISTINCT, 1 distance)
+df.ctcf.dist.result %>% dim() # 40861258/57612728(0.5 distance/1 distance)
 
 relative.pos.df.ctcf.dist.result <- df.ctcf.dist.result %>%
-  mutate(pos_coord = round((ctcf.start + ctcf.end) / 2)) %>%
-  mutate(loop_length = (loop.end - loop.start)) %>% # x0, y3
-  mutate(relative_pos = pos_coord - loop.start) %>% # relative position from loop start
+  mutate(ctcf.start = as.numeric(ctcf.start),
+         ctcf.end = as.numeric(ctcf.end),
+         loop.start = as.numeric(loop.start),
+         loop.end = as.numeric(loop.end),
+         pos_coord = round((ctcf.start + ctcf.end) / 2),
+         loop_length = (loop.end - loop.start),
+         relative_pos = pos_coord - loop.start,
+         value = relative_pos / (loop_length / 3) - 1
+  ) %>%
   # mutate(value = (relative_pos / (loop_length / 2)) - 1) %>% # for padding .5x distance
-  mutate(value = relative_pos/(loop_length/3)-1) %>% # for padding 1x distance
   dplyr::select(loop.id, ctcf.id, value, loop.res)
 
 relative.pos.df.ctcf.dist.result %>% 
   head()
 
-## PDF file by CHROMOSOME
+########################
+# 2. CTCF
+# 2-3. overall distribution of CTCF on loops: figures
+# 2-3-1. by CHROMOSOME
+########################
 
 chromosomes <- c(1:20, "X", "Y")
 

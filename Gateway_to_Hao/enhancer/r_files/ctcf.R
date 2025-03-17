@@ -10,11 +10,18 @@ library("AnnotationHub")
 library("plyranges")
 library("tracktables")
 library("universalmotif")
-BiocManager::install("universalmotif")
 
-setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan')
-source(file.path('/home/panjun/Desktop/temp/enhancer/dropbox_enhancer_doosan/', 'variables.R'))
-source(file.path('/home/panjun/Desktop/temp/enhancer/dropbox_enhancer_doosan/', 'funcs.R'))
+# Linux
+# setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan')
+setwd('/home/pkim/dropbox/Gateway_to_Hao/enhancer/r_files')
+setwd('/home/pkim/playground/research_uthsc/enhancer/Gateway_to_Hao/enhancer/r_files')
+source(file.path('/home/pkim/Dropbox/Gateway_to_Hao/project_common_code/', 'variables.R'))
+source(file.path('/home/pkim/Dropbox/Gateway_to_Hao/project_common_code/', 'funcs.R'))
+
+# Mac
+setwd('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/')
+source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/', 'variables.R'))
+source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/', 'funcs.R'))
 
 getwd()
 
