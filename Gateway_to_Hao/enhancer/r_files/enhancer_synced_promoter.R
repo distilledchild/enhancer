@@ -40,6 +40,7 @@ source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/',
 # source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/enhancer_synced_data_preparation.R'))
 # source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/data_analysis.R'))
 # source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/data_analysis.R'))
+<<<<<<< HEAD
 
 ########################
 # 4. promoter
@@ -657,3 +658,5 @@ pdf("./figures/0909/promoter_count_per_loop_histogram.pdf", width = 16.5, height
 
 grid.arrange(promoter.count.per.loop.histogram, one.sided.loop.histogram, ncol = 1)
 dev.off()
+=======
+>>>>>>> d754844 (changing variables, generating figures for submission, splitting file of enhancer_synced.R into three.)
