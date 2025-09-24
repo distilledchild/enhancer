@@ -148,7 +148,7 @@ df.init.loop.bed <- init.bedpe.df(loop.file.list, 'loops') %>%
 #   view()
 
 df.init.loop.bed %>% 
-  count(sample)
+  count()
 
 # sample    n        strain    n
 # 1   592BB 5263   SHR/OlaIpcv 5263
