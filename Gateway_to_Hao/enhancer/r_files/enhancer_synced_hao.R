@@ -1330,6 +1330,7 @@ df.tss.ucsc.tss.id %>% distinct(chr, start, end, gene_id) %>% dim() # 17139
 df.tss.ucsc.tss.id %>% distinct(chr, start, end, strand, gene_id) # 17139
 df.tss.ucsc.tss.id %>% distinct(chr, start, end, strand, gene_id, gene_name) # 17139
 
+# TODO: Hnrnpc check
 ###################
 # exploring data of TSS
 ###################
@@ -1828,7 +1829,7 @@ index.distinct.tss.w.up.loop.each.end <- findOverlaps(
   select = "all"
 )
 
-index.distinct.tss.w.up.loop.each.end # any: 91559// 1st trial: 8074| 6case: 9290| 7case: 12050| 8case: 14702| 9case: 17080
+index.distinct.tss.w.up.loop.each.end # any: 91559// default trial: 8074| 6case: 9290| 7case: 12050| 8case: 14702| 9case: 19908
 
 end.loop.up.tss.hits <- subjectHits(index.distinct.tss.w.up.loop.each.end)
 end.tss.up.hits <- queryHits(index.distinct.tss.w.up.loop.each.end)
@@ -1845,7 +1846,7 @@ df.overlapping.TSS.w.UPSTREAM.result.each.end <- tibble(
 ) %>% 
   mutate(tss.loop.up.id = str_c(up.loop.id, '|', tss.id, '|', WHERE))
 
-df.overlapping.TSS.w.UPSTREAM.result.each.end %>% dim() # any: 91559     6 // 1st trial: 8074| 8case: 14702
+df.overlapping.TSS.w.UPSTREAM.result.each.end %>% dim() # any: 91559     6 // default trial: 8074| 6case: 9290| 7case: 12050| 8case: 14702| 9case: 19908
 df.overlapping.TSS.w.UPSTREAM.result.each.end %>% head()
 
 df.overlapping.TSS.w.UPSTREAM.result.each.end %>% 
@@ -1853,11 +1854,11 @@ df.overlapping.TSS.w.UPSTREAM.result.each.end %>%
 colnames(df.overlapping.TSS.w.UPSTREAM.result.each.end)
 df.overlapping.TSS.w.UPSTREAM.result.each.end %>% dplyr::select(tss.loop.up.id)
 
-# any                         # case8
+# any                         # case default            # case6                   # case7                 # case8                   # case9
 # end.up.distance     n
-# 1            5000 20414     1            5000  3126
-# 2           10000 27145     2           10000  4996
-# 3           25000 44000     3           25000  6580
+# 1            5000 20414     1            5000  1706   1            5000  2167   1            5000  2643 1            5000  3126   # 1            5000  4056
+# 2           10000 27145     2           10000  2787   2           10000  3542   2           10000  4295 2           10000  4996   # 2           10000  6483
+# 3           25000 44000     3           25000  3581   3           25000  3581   3           25000  5112 3           25000  6580   # 3           25000  9369
 # total: 91559 (dedups) 
 
 # 2. TSS + DOWNSTREAM (df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter.DOWN.GR, df.tss.ucsc.GR)
@@ -1870,7 +1871,7 @@ index.distinct.tss.w.down.loop.each.end <- findOverlaps(
   type = "any",
   select = "all"
 )
-index.distinct.tss.w.down.loop.each.end # any: 106271, within: 106269 // 1st trial: 7932| 6case: 9040| 7case: 11556| 8case: 13989| 9case: 18910
+index.distinct.tss.w.down.loop.each.end # any: 106271, within: 106269 // default trial: 7932| 6case: 9040| 7case: 11556| 8case: 13989| 9case: 18910
 
 end.loop.down.tss.hits <- subjectHits(index.distinct.tss.w.down.loop.each.end)
 end.tss.down.hits.end <- queryHits(index.distinct.tss.w.down.loop.each.end)
@@ -1889,16 +1890,16 @@ df.overlapping.TSS.w.DOWNSTREAM.result.each.end <- tibble(
 ) %>%
   mutate(tss.loop.down.id = str_c(down.loop.id, '|', tss.id, '|', WHERE))
 
-df.overlapping.TSS.w.DOWNSTREAM.result.each.end %>% dim() # 106271 (dedup) // 1st trial: 7932| 8case: 13989
+df.overlapping.TSS.w.DOWNSTREAM.result.each.end %>% dim() # 106271 (dedup) // default trial: 7932| 6case: 9040| 7case: 11556| 8case: 13989| 9case: 18910
 df.overlapping.TSS.w.DOWNSTREAM.result.each.end %>% head()
 df.overlapping.TSS.w.DOWNSTREAM.result.each.end %>% 
   count(end.down.distance)
 colnames(df.overlapping.TSS.w.DOWNSTREAM.result.each.end)
 # any
-# end.down.distance     n     # case8
-# 1              5000 24273   1              5000  2877
-# 2             10000 30197   2             10000  4819
-# 3             25000 51801   3             25000  6293
+# end.down.distance     n     # default                    # case6                     # case7                   # case8                       # case9
+# 1              5000 24273   1              5000  1652    1              5000  2066   1              5000  2484 1              5000  2877     1              5000  3745
+# 2             10000 30197   2             10000  2746    2             10000  3440   2             10000  4180 2             10000  4819     2             10000  6101
+# 3             25000 51801   3             25000  3534    3             25000  3534   3             25000  4892 3             25000  6293     3             25000  9064
 # total: 106271 (dedup) // 111334 (dups)
 
 ########## bind_rows(UPSTREAM & DOWNSTREAM) -> BOTH
@@ -1923,16 +1924,16 @@ df.overlapping.TSS.w.BOTH.result <- bind_rows(df.overlapping.TSS.w.UPSTREAM.resu
   )) %>% 
   mutate(resolution = fct_relevel(resolution, "5K", "10K", "25K"))
 
-df.overlapping.TSS.w.BOTH.result %>% dim() # any: 197830      7 (dedup) // 16006| case8: 28691
+df.overlapping.TSS.w.BOTH.result %>% dim() # any: 197830      7 (dedup) // default: 16006| case6: 18330| case7: 23606| case8: 28691| case9: 38818
 df.overlapping.TSS.w.BOTH.result %>% colnames() # "resolution"   "tss.id"       "WHERE"        "loop.id"      "end.distance" "case.id"      "chr"         
 df.overlapping.TSS.w.BOTH.result %>% head()
 df.overlapping.TSS.w.BOTH.result %>% count(resolution)
 df.overlapping.TSS.w.BOTH.result %>% dplyr::select(case.id) %>% filter(!is.na(case.id))
 # any
-# resolution      n     # case8
-# 1 5K         44687    1 5K          6003      
-# 2 10K        57342    2 10K         9815      
-# 3 25K        95801    3 25K        12873
+# resolution      n   # case default          # case6             # case7              # case8              # case9
+# 1 5K         446871 1 5K          3358      5K          4233    1 5K          5127   1 5K          6003   1 5K          7801   
+# 2 10K        573422 2 10K         5533      10K         6982    2 10K         8475   2 10K         9815   2 10K        12584   
+# 3 25K        958013 3 25K         7115      25K         7115    3 25K        10004   3 25K        12873   3 25K        18433
                          
 df.case.from.tss <- df.overlapping.TSS.w.BOTH.result %>% 
   group_by(loop.id) %>% 
@@ -1954,12 +1955,12 @@ df.case.from.tss <- df.overlapping.TSS.w.BOTH.result %>%
 
 df.case.from.tss %>% head()
 df.case.from.tss %>% count(case)
-# case       n      # case8           
-# 1 BOTH    2139    1 BOTH    4803
-# 2 m.DOWN   437    2 m.DOWN   899
-# 3 m.UP     445    3 m.UP    1055
-# 4 u.DOWN  4368    4 u.DOWN  5122
-# 5 u.UP    4478    5 u.UP    5325
+# default       n      # case6               # case7               # case8             # case9           
+# 1 BOTH    2139    1 BOTH    2615        1 BOTH    3719        1 BOTH    4803      1 BOTH    6852
+# 2 m.DOWN   437    2 m.DOWN   508        2 m.DOWN   715        2 m.DOWN   899      2 m.DOWN  1187
+# 3 m.UP     445    3 m.UP     564        3 m.UP     807        3 m.UP    1055      3 m.UP    1485
+# 4 u.DOWN  4368    4 u.DOWN  4651        4 u.DOWN  5021        4 u.DOWN  5122      4 u.DOWN  5105
+# 5 u.UP    4478    5 u.UP    4745        5 u.UP    5179        5 u.UP    5325      5 u.UP    5298
 
 ## debug
 df.tss.debug <- df.overlapping.TSS.w.BOTH.result %>%
@@ -1990,12 +1991,12 @@ df.final.loop.dataset.tss %>% head(3)
 df.final.loop.dataset.tss %>% dim() # 31019    17
 df.final.loop.dataset.tss %>% count(case)
 
-# case       n      # case8
-# 1 BOTH    5277    1 BOTH   13848
-# 2 m.DOWN   919    2 m.DOWN  1999
-# 3 m.UP     964    3 m.UP    2397
-# 4 u.DOWN  4368    4 u.DOWN  5122
-# 5 u.UP    4478    5 u.UP    5325
+# default       n      # case6           # case7           # case8             # case9
+# 1 BOTH    5277    1 BOTH    6631    1 BOTH   10055    1 BOTH   13848      1 BOTH   22215
+# 2 m.DOWN   919    2 m.DOWN  1072    2 m.DOWN  1545    2 m.DOWN  1999      2 m.DOWN  2742
+# 3 m.UP     964    3 m.UP    1231    3 m.UP    1806    3 m.UP    2397      3 m.UP    3458
+# 4 u.DOWN  4368    4 u.DOWN  4651    4 u.DOWN  5021    4 u.DOWN  5122      4 u.DOWN  5105
+# 5 u.UP    4478    5 u.UP    4745    5 u.UP    5179    5 u.UP    5325      5 u.UP    5298
 
 
 ###############
@@ -2367,7 +2368,7 @@ index.distinct.promoter.w.up.loop.each.end <- findOverlaps(
   type = "any",
   select = "all"
 )
-index.distinct.promoter.w.up.loop.each.end # any: 68983 // lt2mb: 6710| 6case: 7573| 7case: 9691| 8case: 11776| 9case: 15656
+index.distinct.promoter.w.up.loop.each.end # any: 68983 // lt2mb default: 6710| 6case: 7573| 7case: 9691| 8case: 11776| 9case: 15656
 
 loop.up.hits.promoter.each.end <- subjectHits(index.distinct.promoter.w.up.loop.each.end)
 promoter.up.hits.each.end <- queryHits(index.distinct.promoter.w.up.loop.each.end)
@@ -2382,16 +2383,16 @@ df.overlapping.promoter.w.UPSTREAM.result.each.end <- data.frame(
 ) %>% 
   mutate(promoter.loop.up.id = str_c(up.loop.id, '|', promoter.id, '|', WHERE))
 
-df.overlapping.promoter.w.UPSTREAM.result.each.end %>% dim() # 68983     6 (dedups) // lt2mb: 6710| 6case: 7573| 7case: 9691| 8case: 11776| 9case: 15656
+df.overlapping.promoter.w.UPSTREAM.result.each.end %>% dim() # 68983     6 (dedups) // lt2mb default: 6710| 6case: 7573| 7case: 9691| 8case: 11776| 9case: 15656
 df.overlapping.promoter.w.UPSTREAM.result.each.end %>% head()
 
 df.overlapping.promoter.w.UPSTREAM.result.each.end %>% 
   count(end.up.distance)
-                          # any
-# caes 8                  # end.up.distance     n
-# 1            5000 2549  # 1            5000 15392
-# 2           10000 3999  # 2           10000 20602
-# 3           25000 5228  # 3           25000 329
+                                                                                                                                         # any
+# default                  # caes 6                    # caes 7                     # caes 8                  # caes 9                   # end.up.distance     n
+#1            5000 1485    #1            5000 1813     #1            5000 2159      # 1            5000 2549  #1            5000 3238    # 1            5000 15392
+#2           10000 2367    #2           10000 2902     #2           10000 3477      # 2           10000 3999  #2           10000 5129    # 2           10000 20602
+#3           25000 2858    #3           25000 2858     #3           25000 4055      # 3           25000 5228  #3           25000 7289    # 3           25000 329
 
 # 2. promoter + DOWNSTREAM (df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter.DOWN.GR, df.promoter.rn7.GR)
 index.distinct.promoter.w.down.loop.each.end <- findOverlaps(
@@ -2401,7 +2402,7 @@ index.distinct.promoter.w.down.loop.each.end <- findOverlaps(
   select = "all"
 )
 
-index.distinct.promoter.w.down.loop.each.end # .4 any: 79080 // // lt2mb: 6342| 8case: 10945| 9case: 
+index.distinct.promoter.w.down.loop.each.end # .4 any: 79080 // // lt2mb default: 6342| 6case: 7178| 7case: 9100| 8case: 10945| 9case: 14884
 end.loop.down.promoter.hits <- subjectHits(index.distinct.promoter.w.down.loop.each.end)
 end.promoter.down.hits <- queryHits(index.distinct.promoter.w.down.loop.each.end)
 
@@ -2415,19 +2416,19 @@ df.overlapping.promoter.w.DOWNSTREAM.result.each.end <- tibble(
 ) %>% 
   mutate(promoter.loop.down.id = str_c(down.loop.id, '|', promoter.id, '|', WHERE))
 
-df.overlapping.promoter.w.DOWNSTREAM.result.each.end %>% dim() # .4 any: 79080     6 (dedups) // lt2mb: 6342| 8case: 10945
+df.overlapping.promoter.w.DOWNSTREAM.result.each.end %>% dim() # .4 any: 79080     6 (dedups) // lt2mb default: 6342| 6case: 7178| 7case: 9100| 8case: 10945| 9case: 14884
 df.overlapping.promoter.w.DOWNSTREAM.result.each.end %>% head()
 
 df.overlapping.promoter.w.DOWNSTREAM.result.each.end %>% 
   count(end.down.distance)
 
 colnames(df.overlapping.promoter.w.DOWNSTREAM.result.each.end)
-                              # any
-                              # dedups
-# case8                       # end.down.distance     n
-# 1              5000  2283   # 1              5000 18483
-# 2             10000  3792   # 2             10000 23025
-# 3             25000  4870   # 3             25000 37572
+                                                                                                                               # any
+                                                                                                                               # dedups
+# case default                    # case6                      # case7                      # case8                       # case9                    # end.down.distance     n
+#1              5000  1358        #1              5000  1668   #1              5000  1992   # 1              5000  2283   #1              5000  3013 # 1              5000 18483
+#2             10000  2248        #2             10000  2774   #2             10000  3314   # 2             10000  3792   #2             10000  4806 # 2             10000 23025
+#3             25000  2736        #3             25000  2736   #3             25000  3794   # 3             25000  4870   #3             25000  7065 # 3             25000 37572
 
 df.overlapping.promoter.w.UPSTREAM.result.each.end %>% head()
 
@@ -2457,7 +2458,7 @@ df.overlapping.promoter.w.BOTH.result <- bind_rows(df.overlapping.promoter.w.UPS
 
 colnames(df.overlapping.promoter.w.BOTH.result)
 
-df.overlapping.promoter.w.BOTH.result %>% dim() # any: 148063 (dedups) // lt2mb: 13052| 8case: 22721| 9case: 
+df.overlapping.promoter.w.BOTH.result %>% dim() # any: 148063 (dedups) // lt2mb default: 13052| 6case: 14751| 7case: 18791| 8case: 22721| 9case: 30540
 df.overlapping.promoter.w.BOTH.result %>% head() 
 df.overlapping.promoter.w.BOTH.result %>% count(resolution)
 df.overlapping.promoter.w.BOTH.result %>% dplyr::select(promoter.gene_id) %>% filter(is.na(promoter.gene_id))
@@ -2481,12 +2482,12 @@ df.case.from.promoter <- df.overlapping.promoter.w.BOTH.result %>%
   ungroup()
 
 df.case.from.promoter %>% count(case)
-# case8           # case       n
-# 1 BOTH    3303  # 1 BOTH    1540
-# 2 m.DOWN   918  # 2 m.DOWN   506
-# 3 m.UP    1090  # 3 m.UP     528
-# 4 u.DOWN  4064  # 4 u.DOWN  3269
-# 5 u.UP    4446  # 5 u.UP    3586
+# case5                # case7              # case8           # case9           # default       n
+#1 BOTH    1836        #1 BOTH    2570      # 1 BOTH    3303  #1 BOTH    4744   # 1 BOTH    1540
+#2 m.DOWN   583        #2 m.DOWN   757      # 2 m.DOWN   918  #2 m.DOWN  1265   # 2 m.DOWN   506
+#3 m.UP     608        #3 m.UP     846      # 3 m.UP    1090  #3 m.UP    1488   # 3 m.UP     528
+#4 u.DOWN  3508        #4 u.DOWN  3887      # 4 u.DOWN  4064  #4 u.DOWN  4276   # 4 u.DOWN  3269
+#5 u.UP    3828        #5 u.UP    4227      # 5 u.UP    4446  #5 u.UP    4525   # 5 u.UP    3586
 
 ## debug
 df.promoter.debug <- df.overlapping.promoter.w.BOTH.result %>%
@@ -2517,13 +2518,13 @@ df.final.loop.dataset.promoter %>% head(3)
 df.final.loop.dataset.promoter %>% dim() # 13052    13
 df.final.loop.dataset.promoter %>% count(case)
 
-# case8
-# case    n       # case    n
-# 1   BOTH 9753   # 1   BOTH 4000
-# 2 m.DOWN 2059   # 2 m.DOWN 1071
-# 3   m.UP 2399   # 3   m.UP 1126
-# 4 u.DOWN 4064   # 4 u.DOWN 3269
-# 5   u.UP 4446   # 5   u.UP 3586
+# case6               # case7           # case8           # case9           # default
+#    case    n       # case    n        # case    n       # case    n       # case    n
+#1   BOTH 4865       #1   BOTH 7177     # 1   BOTH 9753   # 1   BOTH 15430  # 1   BOTH 4000
+#2 m.DOWN 1249       #2 m.DOWN 1668     # 2 m.DOWN 2059   # 2 m.DOWN  2943  # 2 m.DOWN 1071
+#3   m.UP 1301       #3   m.UP 1832     # 3   m.UP 2399   # 3   m.UP  3366  # 3   m.UP 1126
+#4 u.DOWN 3508       #4 u.DOWN 3887     # 4 u.DOWN 4064   # 4 u.DOWN  4276  # 4 u.DOWN 3269
+#5   u.UP 3828       #5   u.UP 4227     # 5   u.UP 4446   # 5   u.UP  4525  # 5   u.UP 3586
 
 ###############
 ###############
@@ -2565,7 +2566,7 @@ df.final.loop.dataset.promoter.unique <- df.final.loop.dataset.promoter %>%
   
 df.final.loop.dataset.pro_tss.unique.all <- bind_rows(df.final.loop.dataset.tss.unique, df.final.loop.dataset.promoter.unique) 
 df.final.loop.dataset.pro_tss.unique.all %>% head()
-df.final.loop.dataset.pro_tss.unique.all %>% dim() # case8: 18957|
+df.final.loop.dataset.pro_tss.unique.all %>% dim() # default: 15701| case6: 16732| case7: 18314| case8: 18957|case9: 19204
 
 ###################
 # Loops per Gene
@@ -3044,13 +3045,13 @@ final.loops.from.tss.step <- df.final.loop.dataset.tss %>%
 
 final.loops.from.tss.step
 final.loops.from.tss.step %>% head()
-final.loops.from.tss.step %>% dim()# any: 27,518 (dedups) w/ either // 11,993| lt2mb+up, case8: 10447
+final.loops.from.tss.step %>% dim()# any: 27,518 (dedups) w/ either // 11,993| lt2mb+up default: 8846, case6: 9396, case7: 10200, case8: 10447, case9: 10403
 final.loops.from.tss.step %>% count(resolution)
 
-# case8
-# 1 5K          2191
-# 2 10K         4029
-# 3 25K         4227
+# default                # case6                # case7                # case8                 # case9
+#1 5K          1896      #1 5K          2066    #1 5K          2214    # 1 5K          2191    #1 5K          2140
+#2 10K         3283      #2 10K         3663    #2 10K         3887    # 2 10K         4029    #2 10K         4103
+#3 25K         3667      #3 25K         3667    #3 25K         4099    # 3 25K         4227    #3 25K         4160
 
 # 4-3. promoter
 df.overlapping.promoter.w.BOTH.result
@@ -3120,10 +3121,10 @@ final.loops.from.promoter.step %>% head()
 final.loops.from.promoter.step %>% dim()
 final.loops.from.promoter.step %>% count(resolution)
 
-# case8
-# 1         5K 1836
-# 2        10K 3292
-# 3        25K 3382
+# default               # case6                # case7              # case8               # case9
+# 1         5K 1522     #1         5K 1660     #1         5K 1800   # 1         5K 1836   # 1         5K 1892
+# 2        10K 2531     #2        10K 2874     #2        10K 3113   # 2        10K 3292   # 2        10K 3495
+# 3        25K 2802     #3        25K 2802     #3        25K 3201   # 3        25K 3382   # 3        25K 3414
 
 ####################################
 ####################################
@@ -3171,7 +3172,7 @@ create_venn_plot <- function(ctcf_data, promoter_data, tss_data, ctcf_label) {
 }
 
 venn_plot_submission <- create_venn_plot(final.loops.from.ctcf.step, final.loops.from.promoter.step, final.loops.from.tss.step, "CTCF")
-ggsave(filename = "./figures/submission/ctcf_vs_promoter_tss_venn_diagrams_latest_histo_case8_lt_2mb.pdf", plot = venn_plot_submission, width = 11, height = 8.5, units = "in")
+ggsave(filename = "./figures/submission/ctcf_vs_promoter_tss_venn_diagrams_latest_histo_default_lt_2mb.pdf", plot = venn_plot_submission, width = 11, height = 8.5, units = "in")
 
 venn_plot_submission
 # latest # case8
