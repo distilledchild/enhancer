@@ -2138,7 +2138,7 @@ df.promoter.rn7 <- df.promoter.rn7.raw %>%
          promoter.id = paste(chr, start, end, gene_id, sep = ':'))
 
 df.promoter.rn7 %>% dim() # g.cleanded: 12427
-df.promoter.rn7 %>% head(3)
+df.promoter.rn7 %>% head(3) # chr     start     end gene_id length  center promoter.id 
 df.promoter.rn7 %>% filter(str_detect(gene_id, '\\]')) # 11
 
 # checking genes with the ones from tss
@@ -2596,6 +2596,136 @@ pdf(file="./figures/submission/lt2mb/histogram_number_of_promoter_within_ends_of
 p.hist.promoter.loopend.count
 
 dev.off()
+
+##########################################################
+##########################################################
+##########################################################
+
+df.promoter.rn7 %>% head(3) # chr     start     end gene_id length  center promoter.id 
+df.tss.ucsc %>% head(3) # chr  start    end        gene_id                          tss.id
+
+df.gene_tss_and_pro <- bind_rows(df.promoter.rn7 %>% 
+    mutate(across(c(start, end), as.numeric)) %>%
+    mutate(component = "pro") %>%
+    dplyr::select(-c(length, center)) %>% 
+    dplyr::rename(component_id = promoter.id) %>% 
+    mutate(component_id = str_c(component_id, component, sep='|')),
+    df.tss.ucsc %>% 
+    mutate(across(c(start, end), as.numeric)) %>%
+    mutate(component = "tss") %>%
+    dplyr::rename(component_id = tss.id) %>%
+    mutate(component_id = str_c(component_id, component, sep='|')))
+
+df.gene_tss_and_pro %>% head(3)
+df.gene_tss_and_pro %>% dim() # 29507  
+
+df.gene_tss_and_pro.GR <- GRanges(seqnames=df.gene_tss_and_pro$chr,
+                    ranges=IRanges(start=df.gene_tss_and_pro$start, end=df.gene_tss_and_pro$end),
+                    gene_id=df.gene_tss_and_pro$gene_id,
+                    component_id=df.gene_tss_and_pro$component_id,
+                    component=df.gene_tss_and_pro$component)
+
+df.final.loop.dataset.component.multiple <- bind_rows(
+  df.final.loop.dataset.tss %>% 
+    filter(str_starts(case, "m.")) %>% 
+    dplyr::select(loop.id, end.distance, resolution, tss.id, tss.gene_id, WHERE, case.id, tss_result_both_id, case_sort_id, WHERE_list, WHERE_uniq) %>% 
+    mutate(component.id = str_c(tss.id, 'tss', sep = '|'), component.gene_id = str_c(tss.gene_id, 'tss', sep = '|'), component_result_both_id = str_c(tss_result_both_id, 'tss', sep = '|')),
+  df.final.loop.dataset.promoter %>% 
+    filter(str_starts(case, "m.")) %>% 
+    dplyr::select(loop.id, end.distance, resolution, promoter.id, promoter.gene_id, WHERE, case.id,
+    promoter_result_both_id, case_sort_id, WHERE_list, WHERE_uniq) %>% 
+    mutate(component.id = str_c(promoter.id, '|', 'pro'), component.gene_id = str_c(promoter.gene_id, '|', 'pro'), component_result_both_id = str_c(promoter_result_both_id, '|', 'pro'))) 
+
+df.final.loop.dataset.component.multiple %>% head()
+df.final.loop.dataset.component.multiple %>% dim()
+
+df.final.loop.dataset.component.multiple.UP.for.granges <- df.final.loop.dataset.component.multiple %>% 
+  filter(WHERE == "UP") %>%
+  distinct(loop.id) %>% 
+  separate(loop.id, into = c("chr1", "x1", "x2", "chr2", "y1", "y2", "end.distance"), sep = "_", convert = TRUE, remove = FALSE) %>%
+  relocate(chr1, x1, x2, chr2, y1, y2, end.distance, .after = loop.id) %>% 
+  mutate(x0 = x1, x3 = x2, y0 = y1, y3 = y2) %>% 
+  mutate(x_mid = (x2 + x1)/2, y_mid = (y2 + y1)/2)
+
+df.final.loop.dataset.component.multiple.DOWN.for.granges <- df.final.loop.dataset.component.multiple %>% 
+  filter(WHERE == "DOWN") %>%
+  distinct(loop.id) %>% 
+  separate(loop.id, into = c("chr1", "x1", "x2", "chr2", "y1", "y2", "end.distance"), sep = "_", convert = TRUE, remove = FALSE) %>%
+  relocate(chr1, x1, x2, chr2, y1, y2, end.distance, .after = loop.id) %>% 
+  mutate(x0 = x1, x3 = x2, y0 = y1, y3 = y2) %>% 
+  mutate(x_mid = (x2 + x1)/2, y_mid = (y2 + y1)/2)
+
+df.final.loop.dataset.component.multiple.UP.for.granges %>% head(3)
+df.final.loop.dataset.component.multiple.UP.GR <- GRanges(
+  seqnames = df.final.loop.dataset.component.multiple.UP.for.granges$chr1,
+  ranges = IRanges(
+    start = df.final.loop.dataset.component.multiple.UP.for.granges$x_mid, 
+    end = df.final.loop.dataset.component.multiple.UP.for.granges$x_mid
+    ),
+    loop_id = df.final.loop.dataset.component.multiple.UP.for.granges$loop.id
+)
+
+df.final.loop.dataset.component.multiple_nearest_hits_UP <- distanceToNearest(df.final.loop.dataset.component.multiple.UP.GR, df.gene_tss_and_pro.GR, ignore.strand=TRUE)
+
+df.final.loop.dataset.component.multiple_nearest_matched_UP <- tibble(
+  loop_id = mcols(df.final.loop.dataset.component.multiple.UP.GR[queryHits(df.final.loop.dataset.component.multiple_nearest_hits_UP)])$loop_id,
+  end_distance = mcols(df.final.loop.dataset.component.multiple.UP.GR[queryHits(df.final.loop.dataset.component.multiple_nearest_hits_UP)])$end.distance,
+  component_id = mcols(df.gene_tss_and_pro.GR[subjectHits(df.final.loop.dataset.component.multiple_nearest_hits_UP)])$component_id,
+  gene_id = mcols(df.gene_tss_and_pro.GR[subjectHits(df.final.loop.dataset.component.multiple_nearest_hits_UP)])$gene_id,
+  distance = mcols(df.final.loop.dataset.component.multiple_nearest_hits_UP)$distance
+)
+
+df.final.loop.dataset.multiple_nearest_matched_UP_pair <- df.final.loop.dataset.component.multiple_nearest_matched_UP %>% 
+  group_by(loop_id) %>%
+  slice_min(order_by = distance, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+df.final.loop.dataset.multiple_nearest_matched_UP_pair # 1606
+df.final.loop.dataset.multiple_nearest_matched_UP_pair %>%  # 1606
+  mutate(component = sapply(strsplit(component_id, "\\|"), function(x) tail(x, 1))) %>%
+  count(component)
+#   component     n
+# 1 pro         785
+# 2 tss         821
+
+
+df.final.loop.dataset.component.multiple.DOWN.for.granges %>% head(3)
+df.final.loop.dataset.component.multiple.DOWN.GR <- GRanges(
+  seqnames = df.final.loop.dataset.component.multiple.DOWN.for.granges$chr1,
+  ranges = IRanges(
+    start = df.final.loop.dataset.component.multiple.DOWN.for.granges$y_mid, 
+    end = df.final.loop.dataset.component.multiple.DOWN.for.granges$y_mid
+    ),
+    loop_id = df.final.loop.dataset.component.multiple.DOWN.for.granges$loop.id
+)
+
+df.final.loop.dataset.component.multiple_nearest_hits_DOWN <- distanceToNearest(df.final.loop.dataset.component.multiple.DOWN.GR, df.gene_tss_and_pro.GR, ignore.strand=TRUE)
+
+df.final.loop.dataset.component.multiple_nearest_matched_DOWN <- tibble(
+  loop_id = mcols(df.final.loop.dataset.component.multiple.UP.GR[queryHits(df.final.loop.dataset.component.multiple_nearest_hits_DOWN)])$loop_id,
+  end_distance = mcols(df.final.loop.dataset.component.multiple.UP.GR[queryHits(df.final.loop.dataset.component.multiple_nearest_hits_DOWN)])$end.distance,
+  component_id = mcols(df.gene_tss_and_pro.GR[subjectHits(df.final.loop.dataset.component.multiple_nearest_hits_DOWN)])$component_id,
+  gene_id = mcols(df.gene_tss_and_pro.GR[subjectHits(df.final.loop.dataset.component.multiple_nearest_hits_DOWN)])$gene_id,
+  distance = mcols(df.final.loop.dataset.component.multiple_nearest_hits_DOWN)$distance
+)
+
+df.final.loop.dataset.multiple_nearest_matched_DOWN_pair <- df.final.loop.dataset.component.multiple_nearest_matched_DOWN %>% 
+  group_by(loop_id) %>%
+  slice_min(order_by = distance, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+df.final.loop.dataset.multiple_nearest_matched_DOWN_pair # 1409
+df.final.loop.dataset.multiple_nearest_matched_DOWN_pair %>% 
+# dplyr::select(component_id) %>% head()
+mutate(component = sapply(strsplit(component_id, "\\|"), function(x) tail(x, 1))) %>%
+count(component)
+#   component     n
+# 1 pro         662
+# 2 tss         747
+
+
+
+
 
 ##########################################################
 ##########################################################
