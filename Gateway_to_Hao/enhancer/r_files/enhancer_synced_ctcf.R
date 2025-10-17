@@ -24,23 +24,10 @@ getwd()
 # setwd('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\workshop\\2023_NIH_meeting\\loop_N_tss')
 # setwd('./Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss')
 # setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/enhancer_atlas2.0/all_species/neuron')
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 77228f3 (changing into the latest version of codes from the ones in Dropbox)
 # setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan')
 # setwd('/home/pkim/dropbox/Gateway_to_Hao/enhancer/r_files')
 # source(file.path('/home/pkim/dropbox/Gateway_to_Hao/project_common_code/', 'variables.R'))
 # source(file.path('/home/pkim/dropbox/Gateway_to_Hao/project_common_code/', 'funcs.R'))
-<<<<<<< HEAD
-=======
-setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan')
-setwd('/home/pkim/dropbox/Gateway_to_Hao/enhancer/r_files')
-source(file.path('/home/pkim/dropbox/Gateway_to_Hao/project_common_code/', 'variables.R'))
-source(file.path('/home/pkim/dropbox/Gateway_to_Hao/project_common_code/', 'funcs.R'))
->>>>>>> d754844 (changing variables, generating figures for submission, splitting file of enhancer_synced.R into three.)
-=======
->>>>>>> 77228f3 (changing into the latest version of codes from the ones in Dropbox)
 
 getwd()
 
@@ -53,10 +40,6 @@ source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/project_common_code/',
 # source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/enhancer_synced_data_preparation.R'))
 # source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/data_analysis.R'))
 # source(file.path('/Users/PanjunKim/dropbox/Gateway_to_Hao/enhancer/r_files/data_analysis.R'))
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 77228f3 (changing into the latest version of codes from the ones in Dropbox)
 
 ########################
 # 2. CTCF
@@ -920,8 +903,3 @@ ctcf_stats_100  <- calculate_boxplot_stats(df_ctcf_boxplot_100)
 # 1 5K             7     26    35  |  5K            19     34    53  |  5K            27     43    66
 # 2 10K           12     30    46  |  10K           28     45    72  |  10K           37     61    94
 # 3 25K           25     43    71  |  25K           47     78   120  |  25K           67    108   164
-<<<<<<< HEAD
-=======
->>>>>>> d754844 (changing variables, generating figures for submission, splitting file of enhancer_synced.R into three.)
-=======
->>>>>>> 77228f3 (changing into the latest version of codes from the ones in Dropbox)
