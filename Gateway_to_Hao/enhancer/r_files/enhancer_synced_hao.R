@@ -23,6 +23,7 @@ library("ggrepel")
 library("pdftools")
 library("magick")
 library("tools")
+library("httpgd")
 
 getwd()
 
@@ -49,7 +50,6 @@ setwd("~/dropbox/Gateway_to_Hao/enhancer/r_files")
 getwd()
 source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "variables.R"))
 source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "funcs.R"))
-source(file.path("~/dropbox/Gateway_to_Hao/enhancer/r_files/enhancer_synced_data_preparation.R"))
 
 ####################################
 # Sequencing stats
@@ -135,9 +135,9 @@ loop.file.list = fs::dir_ls("/home/hao/Dropbox/Gateway_to_Hao/enhancer/data/loop
 loop.file.list
 
 # Mac
-loop.file.list = fs::dir_ls("~/dropbox/K\ P/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/", regexp = ".bedpe$")
-loop.file.list = fs::dir_ls("/Users/PanjunKim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
-loop.file.list = fs::dir_ls("~/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
+# loop.file.list = fs::dir_ls("~/dropbox/K\ P/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/", regexp = ".bedpe$")
+# loop.file.list = fs::dir_ls("/Users/PanjunKim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
+# loop.file.list = fs::dir_ls("~/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/loops/", regexp = ".bedpe$")
 loop.file.list = fs::dir_ls("~/dropbox/Gateway_to_Hao/enhancer/data/loops", regexp = ".bedpe$")
 loop.file.list
 
@@ -148,7 +148,7 @@ df.init.loop.bed <- init.bedpe.df(loop.file.list, 'loops') %>%
 #   view()
 
 df.init.loop.bed %>% 
-  count()
+  count(sample)
 
 # sample    n        strain    n
 # 1   592BB 5263   SHR/OlaIpcv 5263
@@ -192,7 +192,7 @@ df.loop.deep.sample.all <- df.init.loop.bed %>%
 
 df.loop.deep.sample.all
 df.loop.deep.sample.all %>% head()
-df.loop.deep.sample.all %>% count(strain, resolution)
+df.loop.deep.sample.all %>% count(strain)
 
 ########################
 # 1. Loop
@@ -201,10 +201,10 @@ df.loop.deep.sample.all %>% count(strain, resolution)
 ######################################################################################################################## Figure S3.
 ########################
 # 1. checking duplication loops in a strain
-df.loop.deep.sample.all %>% 
+# df.loop.deep.sample.all %>% 
   #count(strain, loop.id) %>% # NO dups in a strain
-  count(strain, resolution, loop.id) %>% # NO dup in the same resolution in a strain
-  filter(n > 1) 
+  # count(strain, resolution, loop.id) %>% # NO dup in the same resolution in a strain
+  # filter(n > 1) 
 
 # 2. checking how much common loops are in samples
 resolutions <- c("5K", "10K", "25K")
@@ -267,7 +267,7 @@ grid.arrange(plots[["5K"]],
              plots[["10K"]], 
              plots[["25K"]], 
              nrow = 3
-             )
+)
 dev.off()
 
 ########################
@@ -501,12 +501,9 @@ line_graph_for_loops_per_depth <- ggplot(df_long_for_plot, aes(x = Depth, y = nu
     plot.title = element_text(hjust = 0.5),
     legend.position = "bottom"
   )
-
 line_graph_for_loops_per_depth # by hao
 
 ggsave("./figures/submission/line_graph_for_loops_per_depth_hao_w_new_label.pdf", plot = line_graph_for_loops_per_depth, device = "pdf", width = 11*0.6, height = 8.5*0.6, units = "in")
-
-
 ########################
 # 1. Loop
 # 1-1-5. figure: loops per sample by resolution
@@ -588,8 +585,8 @@ df.DISTINCT.loop.deep.sample.all <- df.loop.deep.sample.all %>%
   )) %>% 
   mutate(resolution = factor(resolution, levels = c("5K", "10K", "25K"))) %>% 
   mutate(x0 = x1, x3 = x2, y0 = y1, y3 = y2) %>%                                  #######################################################
-  left_join(chromosome_data, by = c('chr1' = 'chr')) %>%                          #######################################################
-  dplyr::rename(chr.end.coord = end)
+left_join(chromosome_data, by = c('chr1' = 'chr')) %>%                          #######################################################
+dplyr::rename(chr.end.coord = end)
 
 df.DISTINCT.loop.deep.sample.all %>% 
   dim() # 31773    11
@@ -635,16 +632,16 @@ create_granges <- function(df, direction = NULL, chr.col = "chr1", metadata.cols
   } else {
     stop("Invalid direction. Use 'up', 'down', or leave NULL for overall.")
   }
-
+  
   gr <- GRanges(
     seqnames = df[[chr.col]],
     ranges = IRanges(start = as.integer(df[[start.col]]), end = as.integer(df[[end.col]]))
   )
-
+  
   if (is.null(metadata.cols)) {
     metadata.cols <- setdiff(names(df), c(chr.col, start.col, end.col))
   }
-
+  
   mcols(gr) <- df[, metadata.cols, drop = FALSE]
   return(gr)
 }
@@ -675,16 +672,16 @@ df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head()
 ################ w/o capping only from all loops: 31417
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>% 
   filter(!(x0 == 0 | chr.end.coord == y3)) # 31773 - 444 (282 + 162) = 31329 + 88 = 31417
-  # filter(x0 == 0) # 282
-  # filter(chr.end.coord == y3)  # 162
+# filter(x0 == 0) # 282
+# filter(chr.end.coord == y3)  # 162
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping %>% dim() # 31417
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>% filter(x0 == 0 & chr.end.coord == y3) # 88 | 
 
 ################ w/o capping && less than 2mb
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping.lt.2mb <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>% 
   filter(!(x0 == 0 | chr.end.coord == y3)) %>% # 31773 - 444 = 31329, 88
-# filter(x0 == 0) # 282
-# filter(chr.end.coord == y3)  # 162
+  # filter(x0 == 0) # 282
+  # filter(chr.end.coord == y3)  # 162
   filter(distance < 2000000)
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping.lt.2mb %>% dim() # 30928
 
@@ -721,7 +718,7 @@ df.init.ctcf %>% count() # 5767921
 
 # Mac
 # ctcf<-read.table(file="/home/pkim/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", sep="\t", col.names = c("chr", "start", "end", "strand", "length"), header = FALSE) %>% 
-df.init.ctcf<-read.table(file="~/dropbox/K P/Gateway_to_Hao/enhancer/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
+# df.init.ctcf<-read.table(file="~/dropbox/K P/Gateway_to_Hao/enhancer/data/ctcf/fimo_2nd_trial_meme/fimo_2nd_trial.txt", header=TRUE, sep="\t")
 df.init.ctcf<-read.table(file="~/dropbox/Gateway_to_Hao/enhancer/data/ctcf/submission/E4/fimo_E4_submission_trial.txt", header=TRUE, sep="\t") %>% 
   dplyr::rename(chr = sequence_name, end = stop) %>%
   mutate(length = end - start)
@@ -1189,17 +1186,7 @@ ctcf.stats.by.resolution <- df.ctcf.counts %>%
   )
 ctcf.stats.by.resolution
 
-### any
-# # A tibble: 6 × 9
-# WHERE resolution   Min    Q1 Median    Q3  Mean    SD   Max
-# <fct> <fct>      <int> <dbl>  <dbl> <dbl> <dbl> <dbl> <int>
-# 1 UP    5K             1     8     28    40  28.7  22.3   155
-# 2 UP    10K            1    14     34    52  37.2  28.7   491
-# 3 UP    25K            1    30     51    83  60.4  43.2   635
-# 4 DOWN  5K             1     9     29    41  29.3  22.8   357
-# 5 DOWN  10K            1    15     34    53  37.9  28.6   282
-# 6 DOWN  25K            1    30     51    82  60.1  42.5   389
-### lt2mb
+### lt2mb, any
 # # A tibble: 6 × 9
 # WHERE resolution   Min    Q1 Median    Q3  Mean    SD   Max
 # <fct> <fct>      <int> <dbl>  <dbl> <dbl> <dbl> <dbl> <int>
@@ -1692,17 +1679,17 @@ df.DISTINCT.loop.deep.sample.all.padded.1trial.for.TSS.promoter <- df.pad.case8.
 
 compute_inner_distance_stats <- function(df) {
   df <- df %>% mutate(inner.distance = y0 - x3)
-
+  
   # quantile
   ylim_vals <- quantile(df$inner.distance, c(0.05, 0.95), na.rm = TRUE)
-
+  
   # min & median
   stats <- df %>%
     summarise(
       min_val = min(inner.distance, na.rm = TRUE),
       median_val = median(inner.distance, na.rm = TRUE)
     )
-
+  
   # return: list
   list(ylim_vals = ylim_vals, stats = stats)
 }
@@ -1726,9 +1713,9 @@ plot_inner_distance_boxplot <- function(df, ylim_vals, stats, title_text) {
       x = ""
     ) +
     theme(
-    axis.text.x = element_text(angle = 0, hjust = 1),
-    plot.title = element_text(hjust = 0.5),
-    legend.position = "bottom"
+      axis.text.x = element_text(angle = 0, hjust = 1),
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "bottom"
     )
 }
 
@@ -1898,7 +1885,7 @@ df.overlapping.TSS.w.BOTH.result %>% dplyr::select(case.id) %>% filter(!is.na(ca
 # 1 5K         446871 1 5K          3358      5K          4233    1 5K          5127   1 5K          6003   1 5K          7801   
 # 2 10K        573422 2 10K         5533      10K         6982    2 10K         8475   2 10K         9815   2 10K        12584   
 # 3 25K        958013 3 25K         7115      25K         7115    3 25K        10004   3 25K        12873   3 25K        18433
-                         
+
 df.case.from.tss <- df.overlapping.TSS.w.BOTH.result %>% 
   group_by(loop.id) %>% 
   summarise(
@@ -2048,7 +2035,7 @@ gene_pattern_promoter <- 'LOC103689961|LOC100909700|NEWGENE_1310561|LOC100911365
 ############################
 df.promoter.rn7.raw %>% dim()# 12,463
 df.promoter.rn7.raw %>% head(3)
-  
+
 # checking duplicates by counting rows b/w rows and gene rows
 n_coord_promoter <- df.promoter.rn7.raw %>% distinct(chr, start, end) %>% nrow() 
 n_coord_promoter # 12427
@@ -2414,7 +2401,7 @@ df.overlapping.promoter.w.UPSTREAM.result.each.end %>% head()
 
 df.overlapping.promoter.w.UPSTREAM.result.each.end %>% 
   count(end.up.distance)
-                                                                                                                                         # any
+# any
 # default                  # caes 6                    # caes 7                     # caes 8                  # caes 9                   # end.up.distance     n
 #1            5000 1485    #1            5000 1813     #1            5000 2159      # 1            5000 2549  #1            5000 3238    # 1            5000 15392
 #2           10000 2367    #2           10000 2902     #2           10000 3477      # 2           10000 3999  #2           10000 5129    # 2           10000 20602
@@ -2449,8 +2436,8 @@ df.overlapping.promoter.w.DOWNSTREAM.result.each.end %>%
   count(end.down.distance)
 
 colnames(df.overlapping.promoter.w.DOWNSTREAM.result.each.end)
-                                                                                                                               # any
-                                                                                                                               # dedups
+# any
+# dedups
 # case default                    # case6                      # case7                      # case8                       # case9                    # end.down.distance     n
 #1              5000  1358        #1              5000  1668   #1              5000  1992   # 1              5000  2283   #1              5000  3013 # 1              5000 18483
 #2             10000  2248        #2             10000  2774   #2             10000  3314   # 2             10000  3792   #2             10000  4806 # 2             10000 23025
@@ -2524,6 +2511,7 @@ df.case.from.promoter %>% count(case)
 
 # View(df.promoter.debug)
 
+
 # checking: loop.id case exclusive 
 check.exclusive.promoter <- df.case.from.promoter %>%
   group_by(loop.id) %>%
@@ -2541,6 +2529,7 @@ df.final.loop.dataset.promoter <- df.overlapping.promoter.w.BOTH.result %>% left
 df.final.loop.dataset.promoter %>% head(3)
 df.final.loop.dataset.promoter %>% dim() # 22721    13
 df.final.loop.dataset.promoter %>% count(case)
+
 
 # case6               # case7           # case8           # case9           # default
 #    case    n       # case    n        # case    n       # case    n       # case    n
@@ -2599,32 +2588,35 @@ dev.off()
 
 ##########################################################
 ##########################################################
+# for multiple hits of TSS & promoter in an anchor using distanceToNearest
+##########################################################
 ##########################################################
 
 df.promoter.rn7 %>% head(3) # chr     start     end gene_id length  center promoter.id 
 df.tss.ucsc %>% head(3) # chr  start    end        gene_id                          tss.id
 
 df.gene_tss_and_pro <- bind_rows(df.promoter.rn7 %>% 
-    mutate(across(c(start, end), as.numeric)) %>%
-    mutate(component = "pro") %>%
-    dplyr::select(-c(length, center)) %>% 
-    dplyr::rename(component_id = promoter.id) %>% 
-    mutate(component_id = str_c(component_id, component, sep='|')),
-    df.tss.ucsc %>% 
-    mutate(across(c(start, end), as.numeric)) %>%
-    mutate(component = "tss") %>%
-    dplyr::rename(component_id = tss.id) %>%
-    mutate(component_id = str_c(component_id, component, sep='|')))
+                                   mutate(across(c(start, end), as.numeric)) %>%
+                                   mutate(component = "pro") %>%
+                                   dplyr::select(-c(length, center)) %>% 
+                                   dplyr::rename(component_id = promoter.id) %>% 
+                                   mutate(component_id = str_c(component_id, component, sep='|')),
+                                 df.tss.ucsc %>% 
+                                   mutate(across(c(start, end), as.numeric)) %>%
+                                   mutate(component = "tss") %>%
+                                   dplyr::rename(component_id = tss.id) %>%
+                                   mutate(component_id = str_c(component_id, component, sep='|')))
 
 df.gene_tss_and_pro %>% head(3)
 df.gene_tss_and_pro %>% dim() # 29507  
 
 df.gene_tss_and_pro.GR <- GRanges(seqnames=df.gene_tss_and_pro$chr,
-                    ranges=IRanges(start=df.gene_tss_and_pro$start, end=df.gene_tss_and_pro$end),
-                    gene_id=df.gene_tss_and_pro$gene_id,
-                    component_id=df.gene_tss_and_pro$component_id,
-                    component=df.gene_tss_and_pro$component)
+                                  ranges=IRanges(start=df.gene_tss_and_pro$start, end=df.gene_tss_and_pro$end),
+                                  gene_id=df.gene_tss_and_pro$gene_id,
+                                  component_id=df.gene_tss_and_pro$component_id,
+                                  component=df.gene_tss_and_pro$component)
 
+# approach 1
 df.final.loop.dataset.component.multiple <- bind_rows(
   df.final.loop.dataset.tss %>% 
     filter(str_starts(case, "m.")) %>% 
@@ -2633,7 +2625,7 @@ df.final.loop.dataset.component.multiple <- bind_rows(
   df.final.loop.dataset.promoter %>% 
     filter(str_starts(case, "m.")) %>% 
     dplyr::select(loop.id, end.distance, resolution, promoter.id, promoter.gene_id, WHERE, case.id,
-    promoter_result_both_id, case_sort_id, WHERE_list, WHERE_uniq) %>% 
+                  promoter_result_both_id, case_sort_id, WHERE_list, WHERE_uniq) %>% 
     mutate(component.id = str_c(promoter.id, '|', 'pro'), component.gene_id = str_c(promoter.gene_id, '|', 'pro'), component_result_both_id = str_c(promoter_result_both_id, '|', 'pro'))) 
 
 df.final.loop.dataset.component.multiple %>% head()
@@ -2661,8 +2653,8 @@ df.final.loop.dataset.component.multiple.UP.GR <- GRanges(
   ranges = IRanges(
     start = df.final.loop.dataset.component.multiple.UP.for.granges$x_mid, 
     end = df.final.loop.dataset.component.multiple.UP.for.granges$x_mid
-    ),
-    loop_id = df.final.loop.dataset.component.multiple.UP.for.granges$loop.id
+  ),
+  loop_id = df.final.loop.dataset.component.multiple.UP.for.granges$loop.id
 )
 
 df.final.loop.dataset.component.multiple_nearest_hits_UP <- distanceToNearest(df.final.loop.dataset.component.multiple.UP.GR, df.gene_tss_and_pro.GR, ignore.strand=TRUE)
@@ -2684,7 +2676,7 @@ df.final.loop.dataset.multiple_nearest_matched_UP_pair # 1606
 df.final.loop.dataset.multiple_nearest_matched_UP_pair %>%  # 1606
   mutate(component = sapply(strsplit(component_id, "\\|"), function(x) tail(x, 1))) %>%
   count(component)
-#   component     n
+#   component     n (785 + 821 = 1606)
 # 1 pro         785
 # 2 tss         821
 
@@ -2695,8 +2687,8 @@ df.final.loop.dataset.component.multiple.DOWN.GR <- GRanges(
   ranges = IRanges(
     start = df.final.loop.dataset.component.multiple.DOWN.for.granges$y_mid, 
     end = df.final.loop.dataset.component.multiple.DOWN.for.granges$y_mid
-    ),
-    loop_id = df.final.loop.dataset.component.multiple.DOWN.for.granges$loop.id
+  ),
+  loop_id = df.final.loop.dataset.component.multiple.DOWN.for.granges$loop.id
 )
 
 df.final.loop.dataset.component.multiple_nearest_hits_DOWN <- distanceToNearest(df.final.loop.dataset.component.multiple.DOWN.GR, df.gene_tss_and_pro.GR, ignore.strand=TRUE)
@@ -2716,15 +2708,103 @@ df.final.loop.dataset.multiple_nearest_matched_DOWN_pair <- df.final.loop.datase
 
 df.final.loop.dataset.multiple_nearest_matched_DOWN_pair # 1409
 df.final.loop.dataset.multiple_nearest_matched_DOWN_pair %>% 
-# dplyr::select(component_id) %>% head()
-mutate(component = sapply(strsplit(component_id, "\\|"), function(x) tail(x, 1))) %>%
-count(component)
-#   component     n
+  # dplyr::select(component_id) %>% head()
+  mutate(component = sapply(strsplit(component_id, "\\|"), function(x) tail(x, 1))) %>%
+  count(component)
+#   component     n (662 + 747 = 1409)
 # 1 pro         662
 # 2 tss         747
 
+# approach 2
+df.gene_tss_and_pro.GR
+
+df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(3)
+df.DISTINCT.loop.deep.sample.all.lt.2mb.prep <- df.DISTINCT.loop.deep.sample.all.lt.2mb %>% mutate(mid_x = floor((x0 + x3) / 2), mid_y = floor((y0 + y3) / 2))
+df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR <- GRanges(
+  seqnames = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$chr1,
+  ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_x, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_x + 1),
+  strand = "*",
+  loop.id = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$loop.id,
+  distance = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$distance,
+  resolution = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$resolution
+)
+df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR <- GRanges(
+  seqnames = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$chr1,
+  ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_y, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_y + 1),
+  strand = "*",
+  loop.id = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$loop.id,
+  distance = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$distance,
+  resolution = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$resolution
+)
+
+hits_up <- distanceToNearest(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR, df.gene_tss_and_pro.GR)
+
+df_up <- data.frame(
+  queryHits = queryHits(hits_up),
+  subjectHits = subjectHits(hits_up),
+  distance = mcols(hits_up)$distance
+) %>%
+  mutate(
+    loop.id = mcols(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR)[queryHits, "loop.id"],
+    resolution = mcols(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR)[queryHits, "resolution"],
+    gene_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "gene_id"],
+    component = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component"],
+    WHERE = "UP"
+  )
+
+hits_down <- distanceToNearest(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR, df.gene_tss_and_pro.GR)
+
+df_down <- data.frame(
+  queryHits = queryHits(hits_down),
+  subjectHits = subjectHits(hits_down),
+  distance = mcols(hits_down)$distance
+) %>%
+  mutate(
+    loop.id = mcols(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR)[queryHits, "loop.id"],
+    resolution = mcols(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR)[queryHits, "resolution"],
+    gene_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "gene_id"],
+    component = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component"],
+    WHERE = "DOWN"
+  )
+
+df_up %>% head(3)
+df_down %>% head(3)
+
+df.final.up.down.tss.pro.nearest <- bind_rows(df_up, df_down)
+df.final.up.down.tss.pro.nearest %>% dim() # 62038
+df.final.up.down.tss.pro.nearest %>% head(3)
+
+df.final.up.down.tss.pro.nearest %>% count(loop.id) %>% count(n) # 2 31019 : all UP and DOWN = 2 rows per loop.id
 
 
+df.unique_loops <- df.final.up.down.tss.pro.nearest %>%
+  mutate(
+    e = as.numeric(gsub("K", "", resolution)) * 1000
+  ) %>% 
+  filter(distance <= e*0.5)
+
+df.unique_loops %>% head(3)
+df.unique_loops %>% dim() # 13143
+df.unique_loops %>% count(loop.id) %>% count(n) 
+# 1 1 9177
+# 2 2 1983
+
+###########################################################
+# logic test: PASS
+###########################################################
+tst.pro <- df.final.loop.dataset.promoter %>% 
+  filter(str_starts(case, "m.")) %>% # 4458 = 2059 + 2399
+  distinct(loop.id) # %>% # 2008
+  dim()
+
+ tst.tss <- df.final.loop.dataset.tss %>% 
+  filter(str_starts(case, "m.")) %>% # 4396
+  distinct(loop.id) # %>% # 1954
+  dim()
+
+bind_rows(tst.pro, tst.tss) %>% 
+  distinct(loop.id) %>% 
+  dim() # 3015
 
 
 ##########################################################
@@ -2738,20 +2818,20 @@ df.final.loop.dataset.tss.unique <- df.final.loop.dataset.tss %>%
   mutate(gene.id = str_split_n(tss.gene_id, '\\|', 1)) %>%
   dplyr::rename(case.where.id = tss.gene_id)
 
-  # view()
-  # colnames() %>%
-  # head()
+# view()
+# colnames() %>%
+# head()
 df.final.loop.dataset.promoter.unique <- df.final.loop.dataset.promoter %>%
   filter(str_starts(case, "u.")) %>% 
   dplyr::select(loop.id, case.id, WHERE, promoter.gene_id) %>% 
   mutate(case.id = str_c(case.id, "promoter", sep = '|')) %>% 
   mutate(gene.id = str_split_n(promoter.gene_id, '\\|', 1)) %>%
   dplyr::rename(case.where.id = promoter.gene_id)
-  # colnames()
-  # head()
-  # filter(is.na(gene.id)) %>% 
-  # view()
-  
+# colnames()
+# head()
+# filter(is.na(gene.id)) %>% 
+# view()
+
 df.final.loop.dataset.pro_tss.unique.all <- bind_rows(df.final.loop.dataset.tss.unique, df.final.loop.dataset.promoter.unique) 
 df.final.loop.dataset.pro_tss.unique.all %>% head()
 df.final.loop.dataset.pro_tss.unique.all %>% dim() # default: 15701| case6: 16732| case7: 18314| case8: 18957|case9: 19204
@@ -3178,9 +3258,9 @@ final.loops.from.ctcf.step
 final.loops.from.ctcf.step # 18,327 + 10 | sub.4 any, threshold > 6 : 25,620| lt2mb: 25,268
 final.loops.from.ctcf.step %>% 
   count(resolution)
-                     # sub.4
-                     # any: 
-                     # new threshold
+# sub.4
+# any: 
+# new threshold
 # lt2mb              # resolution     n
 # 1 10K         9375 # 1 10K         9420
 # 2 25K        11750 # 2 25K        12049
@@ -3593,62 +3673,3 @@ for (chr in unique_chromosomes) {
 }
 
 dev.off()
-
-
-        
-        
-        
-        
-        
-        
-        
- 1 Foxg1        
- 2 Gja1         
- 3 Adamts1      
- 4 Tgfb2        
- 5 Tsc22d1      
- 6 Foxo1        
- 7 Igfbp5       
- 8 Basp1        
- 9 Myo10        
-10 Plk2         
-11 Spry2        
-12 Tbx2         
-13 Dusp4        
-14 Eri1         
-15 Foxc1        
-16 Gnas         
-17 Hes1         
-18 Kirrel3      
-19 Mycn         
-20 Pdgfra       
-21 Zfp36l2      
-22 Arl14ep      
-23 Bcl6         
-24 Chst1        
-25 Fignl1       
-26 Igf1r        
-27 Kcnq3        
-28 LOC108348175 
-29 Npm1         
-30 Penk         
-31 Phyhipl      
-32 Plpp3        
-33 Rtraf        
-34 S1pr3        
-35 Tas2r7l      
-36 AABR070137981
-37 Cesl1        
-38 Cited2       
-39 Col12a1      
-40 Elk3         
-41 Fat4         
-42 Ficd         
-43 Kcnj1        
-44 Larp7        
-45 Mbnl2        
-46 Ncoa3        
-47 Qk           
-48 Ralgps2      
-49 Aplnr        
-50 Arl4c        
