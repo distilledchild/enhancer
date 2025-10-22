@@ -2616,7 +2616,7 @@ df.gene_tss_and_pro.GR <- GRanges(seqnames=df.gene_tss_and_pro$chr,
                                   component_id=df.gene_tss_and_pro$component_id,
                                   component=df.gene_tss_and_pro$component)
 
-# approach 1
+# approach 1: combine TSS & promoter data frame, then use distanceToNearest
 df.final.loop.dataset.component.multiple <- bind_rows(
   df.final.loop.dataset.tss %>% 
     filter(str_starts(case, "m.")) %>% 
@@ -2715,7 +2715,9 @@ df.final.loop.dataset.multiple_nearest_matched_DOWN_pair %>%
 # 1 pro         662
 # 2 tss         747
 
-# approach 2
+##############################################
+####################### approach 2
+##############################################
 df.gene_tss_and_pro.GR
 
 df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(3)
@@ -2767,6 +2769,9 @@ df_down <- data.frame(
     WHERE = "DOWN"
   )
 
+df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR
+df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR # 31019
+
 df_up %>% head(3)
 df_down %>% head(3)
 
@@ -2776,18 +2781,205 @@ df.final.up.down.tss.pro.nearest %>% head(3)
 
 df.final.up.down.tss.pro.nearest %>% count(loop.id) %>% count(n) # 2 31019 : all UP and DOWN = 2 rows per loop.id
 
+# hitogram
+tmp.fig <- ggplot(df.final.up.down.tss.pro.nearest, aes(x = distance)) +
+  geom_histogram(binwidth = 5000, fill = "#2C7BB6", color = "white") +
+  coord_cartesian(xlim = c(0, 5e5)) +
+  # scale_x_log10() +
+  # scale_x_log10(limits = c(1, 1e5)) +
+  labs(
+    title = "Distribution of Loop-Gene Distances",
+    x = "Distance (bp)",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  facet_wrap(~component+resolution)
+
+tmp.fig
+
+# task1: getting top 70 genes with most loops (by threshold)
+threshold_distance <- 2e5
+
+# 1. filtering with threshold distance < 2e5
+df.filtered <- df.final.up.down.tss.pro.nearest %>%
+  filter(distance < threshold_distance)
+
+# 2. the number of loops per gene
+df.gene_loop_count <- df.filtered %>%
+  count(gene_id, sort = TRUE)
+
+# 3. top 70
+df.top70 <- df.gene_loop_count %>%
+  slice_max(n, n = 70) %>%
+  arrange(n)
+
+# 4. bar plot
+ggplot(df.top70, aes(x = reorder(gene_id, n), y = n)) +
+  geom_bar(stat = "identity", fill = "#1F78B4") +
+  geom_text(aes(label = n), vjust = -0.3, color = "red", size = 3) +
+  coord_flip() +
+  labs(
+    title = "Top 70 Genes by Number of Loops (distance < 2e5)",
+    x = "Gene",
+    y = "Number of Loops"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# task2: percentage of loops retained after filtering
+# all loops
+total_loops <- df.final.up.down.tss.pro.nearest %>% distinct(loop.id)
+total_loops # 31019
+
+# loops after filtering
+filtered_loops <- df.filtered %>% distinct(loop.id)
+filtered_loops # 29724
+
+percent_retained <- round((filtered_loops / total_loops) * 100, 2)
+print(paste("Filtered loops retain", percent_retained, "% of total loops"))
+
+# task3: top 50 genes print
+# gene_id top 50
+top50_genes <- df.gene_loop_count %>%
+  slice_max(n, n = 50) %>%
+  pull(gene_id)
+
+cat(top50_genes, sep = "\n")
+
+
+
+
+
+df.final.up.down.tss.pro.nearest %>% filter(distance < 0)
+
+df.final.up.down.tss.pro.nearest %>% head()
 
 df.unique_loops <- df.final.up.down.tss.pro.nearest %>%
   mutate(
     e = as.numeric(gsub("K", "", resolution)) * 1000
   ) %>% 
-  filter(distance <= e*0.5)
+  filter(distance <= 2e+05)
 
 df.unique_loops %>% head(3)
 df.unique_loops %>% dim() # 13143
-df.unique_loops %>% count(loop.id) %>% count(n) 
+df.unique_loops %>% count(loop.id, component) %>%# view()
+  count(n) 
 # 1 1 9177
 # 2 2 1983
+
+df_single_loop <- df.unique_loops %>% # 9177
+  group_by(loop.id) %>%
+  filter(n() == 1) %>%
+  ungroup()
+
+# WHERE distribution
+where_dist <- df_single_loop %>%
+  count(WHERE)
+where_dist
+# 1 DOWN   4485
+# 2 UP     4692
+
+# component distribution
+component_dist <- df_single_loop %>%
+  count(component)
+component_dist
+# 1 pro        4035
+# 2 tss        5142
+
+df_multi <- df.unique_loops %>%
+  group_by(loop.id) %>%
+  filter(n() > 1) %>%
+  summarise(where_combo = paste(sort(unique(WHERE)), collapse = "_")) %>%
+  count(where_combo)
+df_multi # DOWN_UP      1983
+
+df_multi_component <- df.unique_loops %>%
+  group_by(loop.id) %>%
+  filter(n() > 1) %>%
+  summarise(component_combo = paste(sort(unique(component)), collapse = "_")) %>%
+  count(component_combo)
+df_multi_component
+#   component_combo     n 473 + 954 + 556 = 1983
+# 1 pro               473
+# 2 pro_tss           954
+# 3 tss               556
+
+# comparison b/w padding and approach 2
+
+df.final.loop.dataset.tss %>% 
+  count(case)
+df.final.loop.dataset.promoter %>% 
+  count(case)
+
+df.final.loop.dataset.tss.unique <- df.final.loop.dataset.tss %>% # 10447
+  filter(str_starts(case, "u.")) %>% 
+  dplyr::select(loop.id, case.id, WHERE, tss.gene_id) %>% 
+  mutate(case.id = str_c(case.id, "TSS", sep = '|')) %>% 
+  mutate(gene.id = str_split_n(tss.gene_id, '\\|', 1)) %>%
+  dplyr::rename(case.where.id = tss.gene_id)
+
+# view()
+# colnames() %>%
+# head()
+df.final.loop.dataset.promoter.unique <- df.final.loop.dataset.promoter %>% # 8510
+  filter(str_starts(case, "u.")) %>% 
+  dplyr::select(loop.id, case.id, WHERE, promoter.gene_id) %>% 
+  mutate(case.id = str_c(case.id, "promoter", sep = '|')) %>% 
+  mutate(gene.id = str_split_n(promoter.gene_id, '\\|', 1)) %>%
+  dplyr::rename(case.where.id = promoter.gene_id)
+
+df.loop.annotated <- bind_rows(
+  df.final.loop.dataset.tss.unique,
+  df.final.loop.dataset.promoter.unique
+) %>% group_by(loop.id) %>%
+  mutate(UQ = if_else(n() == 1, "ONLY", "OVLP")) %>%             # unique loop hit
+  mutate(
+    loop_target_gene = case_when(
+      n() == 1 ~ "UNIQ_G",  
+      length(unique(gene.id)) == 1 ~ "SINGLE_G",
+      TRUE ~ "MULTI_G"
+    )
+  ) %>%
+  mutate(
+    final_decision = case_when(
+      UQ == "OVLP" & loop_target_gene == "SINGLE_G" ~ if_else(
+        length(unique(WHERE)) == 1, "same_side", "each_anchor"
+      ),
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  ungroup()
+# 4200 + 4169 + 529 + 443 + 78 + 4964 + 78 + 4496 = 18957
+#   UQ    loop_target_gene WHERE final_decision     n
+#   <chr> <chr>            <fct> <chr>          <int>
+# 1 ONLY  UNIQ_G           UP    NA              4200
+# 2 ONLY  UNIQ_G           DOWN  NA              4169
+# 3 OVLP  MULTI_G          UP    NA               529
+# 4 OVLP  MULTI_G          DOWN  NA               443
+# 5 OVLP  SINGLE_G         UP    each_anchor       78
+# 6 OVLP  SINGLE_G         UP    same_side       4964
+# 7 OVLP  SINGLE_G         DOWN  each_anchor       78
+# 8 OVLP  SINGLE_G         DOWN  same_side       4496
+
+df.loop.annotated
+df.loop.annotated %>% count(UQ, loop_target_gene, WHERE, final_decision)
+df.loop.annotated %>% filter(UQ == "OVLP" & loop_target_gene == "SINGLE_G" & final_decision == "each_anchor") %>% 
+  arrange(loop.id) %>% view()
+loop_ids_annotated_all <- df.loop.annotated %>% # 13663 (5294 overlap: 10447 (5153) + 8510 (3216) = 18957)
+  distinct(loop.id) %>%
+  pull(loop.id)
+
+loop_ids_single <- df.unique_loops %>% # 9177
+  count(loop.id) %>%
+  filter(n == 1) %>%
+  pull(loop.id)
+
+overlap_all <- intersect(loop_ids_single, loop_ids_annotated_all)
+
+# 결과 요약
+length(overlap_all)  # 6813/ 9177, 6813/13663
+
+# TODO: comparing join VS bind_rows results
 
 ###########################################################
 # logic test: PASS
@@ -2805,7 +2997,6 @@ tst.pro <- df.final.loop.dataset.promoter %>%
 bind_rows(tst.pro, tst.tss) %>% 
   distinct(loop.id) %>% 
   dim() # 3015
-
 
 ##########################################################
 ##########################################################
