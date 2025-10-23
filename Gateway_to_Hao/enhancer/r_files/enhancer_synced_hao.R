@@ -2781,6 +2781,7 @@ df.final.up.down.tss.pro.nearest %>% head(3)
 
 df.final.up.down.tss.pro.nearest %>% count(loop.id) %>% count(n) # 2 31019 : all UP and DOWN = 2 rows per loop.id
 
+  
 # hitogram
 tmp.fig <- ggplot(df.final.up.down.tss.pro.nearest, aes(x = distance)) +
   geom_histogram(binwidth = 5000, fill = "#2C7BB6", color = "white") +
@@ -2792,59 +2793,85 @@ tmp.fig <- ggplot(df.final.up.down.tss.pro.nearest, aes(x = distance)) +
     x = "Distance (bp)",
     y = "Count"
   ) +
-  theme_minimal() +
-  facet_wrap(~component+resolution)
+  theme_minimal() #+
+  # facet_wrap(~component+resolution)
 
 tmp.fig
 
-# task1: getting top 70 genes with most loops (by threshold)
-threshold_distance <- 2e5
+# quantile boxplot
+approach2.stats <- df.final.up.down.tss.pro.nearest %>%
+  summarise(
+    Q1 = quantile(distance, 0.25),
+    Median = median(distance),
+    Q3 = quantile(distance, 0.75)
+  )
 
-# 1. filtering with threshold distance < 2e5
-df.filtered <- df.final.up.down.tss.pro.nearest %>%
-  filter(distance < threshold_distance)
-
-# 2. the number of loops per gene
-df.gene_loop_count <- df.filtered %>%
-  count(gene_id, sort = TRUE)
-
-# 3. top 70
-df.top70 <- df.gene_loop_count %>%
-  slice_max(n, n = 70) %>%
-  arrange(n)
-
-# 4. bar plot
-ggplot(df.top70, aes(x = reorder(gene_id, n), y = n)) +
-  geom_bar(stat = "identity", fill = "#1F78B4") +
-  geom_text(aes(label = n), vjust = -0.3, color = "red", size = 3) +
-  coord_flip() +
+ggplot(df.final.up.down.tss.pro.nearest, aes(y = distance)) +
+  geom_boxplot(fill = "#A6CEE3", color = "#1F78B4", outlier.color = "red", outlier.shape = 16) +
+  scale_y_log10() +
+  geom_hline(yintercept = approach2.stats$Q1, linetype = "dashed", color = "blue") +
+  geom_hline(yintercept = approach2.stats$Median, linetype = "dashed", color = "darkgreen") +
+  geom_hline(yintercept = approach2.stats$Q3, linetype = "dashed", color = "purple") +
+  annotate("text", x = 1.2, y = approach2.stats$Q1, label = paste("Q1:", round(approach2.stats$Q1)), color = "blue", vjust = -0.5) +
+  annotate("text", x = 1.2, y = approach2.stats$Median, label = paste("Median:", round(approach2.stats$Median)), color = "darkgreen", vjust = -0.5) +
+  annotate("text", x = 1.2, y = approach2.stats$Q3, label = paste("Q3:", round(approach2.stats$Q3)), color = "purple", vjust = -0.5) +
   labs(
-    title = "Top 70 Genes by Number of Loops (distance < 2e5)",
-    x = "Gene",
-    y = "Number of Loops"
+    title = "Loop Distance Distribution (Log Scale)",
+    y = "Distance (bp, log10)"
   ) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 
-# task2: percentage of loops retained after filtering
-# all loops
-total_loops <- df.final.up.down.tss.pro.nearest %>% distinct(loop.id)
-total_loops # 31019
+df <- df.final.up.down.tss.pro.nearest
+dim(df) # 62038
+approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5, top_n_genes = 70, print_top_n = 50) {
 
-# loops after filtering
-filtered_loops <- df.filtered %>% distinct(loop.id)
-filtered_loops # 29724
+  # Task 1: Filtering and top N genes by loop count
+  df.filtered <- df %>% filter(distance < threshold_distance)
+# dim(df.filtered) # 31019
+  df.gene_loop_count <- df.filtered %>%
+    count(gene_id, sort = TRUE)
 
-percent_retained <- round((filtered_loops / total_loops) * 100, 2)
-print(paste("Filtered loops retain", percent_retained, "% of total loops"))
+  df.top_genes <- df.gene_loop_count %>%
+    slice_max(n, n = top_n_genes) %>%
+    arrange(n)
 
-# task3: top 50 genes print
-# gene_id top 50
-top50_genes <- df.gene_loop_count %>%
-  slice_max(n, n = 50) %>%
-  pull(gene_id)
+  plot <- ggplot(df.top_genes, aes(x = reorder(gene_id, n), y = n)) +
+    geom_bar(stat = "identity", fill = "#1F78B4") +
+    geom_text(aes(label = n), vjust = -0.3, color = "red", size = 3) +
+    coord_flip() +
+    labs(
+      title = paste("Top", top_n_genes, "Genes by Number of Loops (distance <", threshold_distance, ")"),
+      x = "Gene",
+      y = "Number of Loops"
+    ) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
 
-cat(top50_genes, sep = "\n")
+  print(plot)
+
+  # Task 2: Percentage of loops retained
+  total_loops <- df %>% distinct(loop.id)
+  filtered_loops <- df.filtered %>% distinct(loop.id)
+
+  percent_retained <- round((nrow(filtered_loops) / nrow(total_loops)) * 100, 2)
+  message("total loops: ", nrow(total_loops), " ")
+  message("filtered_loops: ", nrow(filtered_loops), " ")
+  message("Filtered loops retain ", percent_retained, "% of total loops")
+
+  # Task 3: Print top genes
+  top_genes <- df.gene_loop_count %>%
+    slice_max(n, n = print_top_n) %>%
+    pull(gene_id)
+
+  cat("Top", print_top_n, "genes:\n")
+  cat(top_genes, sep = "\n")
+}
+
+threshold_distance <- approach2.stats$Median # 28943.5
+threshold_distance <- approach2.stats$Q3 # 82165.75
+threshold_distance
+approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = threshold_distance, top_n_genes = 70, print_top_n = 50)
 
 
 
