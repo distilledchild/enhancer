@@ -27,13 +27,6 @@ library("httpgd")
 
 getwd()
 
-# Windows
-# setwd('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\workshop\\2023_NIH_meeting\\loop_N_tss') # nolint
-# source(file.path('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\project_common_code', 'variables.R')) # nolint
-# source(file.path('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\project_common_code', 'funcs.R')) # nolint
-
-getwd()
-
 # Linux
 # setwd('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\workshop\\2023_NIH_meeting\\loop_N_tss') # nolint: commented_code_linter.
 # setwd('./Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss')
@@ -52,8 +45,7 @@ source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "variables.R")
 source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "funcs.R"))
 
 ####################################
-# Sequencing stats
-######################################################################################################################## Figure 1.a.
+# Sequencing stats ###################################################################################### Figure 1.a.
 ####################################
 seq.data <- read.table("../data/library_complexity.tsv", header = TRUE, sep = "\t")
 seq.data[, -1] <- lapply(seq.data[, -1], function(x) as.numeric(as.character(x)))
@@ -197,14 +189,14 @@ df.loop.deep.sample.all %>% count(strain)
 ########################
 # 1. Loop
 # 1-1. Exploratory Data analysis (EDA)
-# 1-1.1. data processing: 
-######################################################################################################################## Figure S3.
+# 1-1.1. data processing ######################################################################## Figure S3.
 ########################
 # 1. checking duplication loops in a strain
 # df.loop.deep.sample.all %>% 
   #count(strain, loop.id) %>% # NO dups in a strain
   # count(strain, resolution, loop.id) %>% # NO dup in the same resolution in a strain
   # filter(n > 1) 
+
 
 # 2. checking how much common loops are in samples
 resolutions <- c("5K", "10K", "25K")
@@ -272,8 +264,7 @@ dev.off()
 
 ########################
 # 1. Loop
-# 1-1-2. figure: shared loops - bar plot
-######################################################################################################################## Figure 3a.
+# 1-1-2. figure: shared loops - bar plot ######################################################################################### Figure 3a.
 ########################
 # checking shared loops
 # Step 1: shared loop
@@ -329,8 +320,7 @@ ggsave("./figures/submission/shared_loops_by_resolution.pdf",
        units = "in")
 ########################
 # 1. Loop
-# 1-1-2. figure: shared loops - network plot
-######################################################################################################################## Figure S2.
+# 1-1-2. figure: shared loops - network plot ############################################################################# Figure S2.
 ########################
 figure_green <- "#00573F"
 figure_orange <- "#FFA300"
@@ -367,8 +357,7 @@ ggsave("./figures/submission/network_plot_for_shared_loops.pdf", plot = network_
 
 ################################################
 # 1. Loop
-# 1-1-4. figure: loops by sequencing reads
-######################################################################################################################## Figure 1b.
+# 1-1-4. figure: loops by sequencing reads ############################################################################ Figure 1b.
 ################################################
 # Step 1: loops by strain: df.loop.deep.sample.all
 loop_counts_by_sample <- df.loop.deep.sample.all %>%
@@ -531,8 +520,7 @@ ggsave("figures/submission/loops_per_sample_by_resolution.pdf", plot = loops_per
 
 ########################
 # 1. Loop
-# 1-1-6. figure: loops per chromosome by resolution
-######################################################################################################################## Figure 2
+# 1-1-6. figure: loops per chromosome by resolution ########################################### Figure 2
 ########################
 df_chr_loop_counts <- df.loop.deep.sample.all %>%
   group_by(chr1, resolution) %>%
@@ -584,8 +572,8 @@ df.DISTINCT.loop.deep.sample.all <- df.loop.deep.sample.all %>%
     TRUE ~ NA
   )) %>% 
   mutate(resolution = factor(resolution, levels = c("5K", "10K", "25K"))) %>% 
-  mutate(x0 = x1, x3 = x2, y0 = y1, y3 = y2) %>%                                  #######################################################
-left_join(chromosome_data, by = c('chr1' = 'chr')) %>%                          #######################################################
+  mutate(x0 = x1, x3 = x2, y0 = y1, y3 = y2) %>%                                # x0, x3, y0, y3
+left_join(chromosome_data, by = c('chr1' = 'chr')) %>%                          # chromosome length info
 dplyr::rename(chr.end.coord = end)
 
 df.DISTINCT.loop.deep.sample.all %>% 
@@ -831,79 +819,14 @@ relative.pos.df.ctcf.dist.result %>%
 # 2-3-1. by CHROMOSOME
 ########################
 
-relative.pos.df.ctcf.dist.result
-
-chromosomes <- c(1:20, "X", "Y")
-
-plot_ctcf_list <- list()
-
-for (chr in chromosomes) {
-  tryCatch({
-    
-    message("START: Processing chromosome: ", chr)
-    
-    relative.pos.df.ctcf.dist.result.chr <- relative.pos.df.ctcf.dist.result %>% 
-      filter(str_detect(loop.id, paste0("_chr", chr, "_")))
-    
-    plot1.ctcf.dens <- relative.pos.df.ctcf.dist.result.chr %>% 
-      ggplot(aes(x = value)) +
-      geom_density(fill = "skyblue", color = "black", alpha = 0.7) +
-      ylim(c(0,1)) +
-      labs(title = paste0("Density of CTCF Found over Loop on Chr", chr),
-           x = "Relative Position to Loop",
-           y = "Density"
-      ) +
-      theme(plot.title = element_text(hjust = 0.5)) 
-    
-    plot1.ctcf.hist <- relative.pos.df.ctcf.dist.result.chr %>% 
-      mutate(loop.res.num = as.numeric(gsub("K", "000", as.character(loop.res)))) %>% 
-      ggplot(aes(x = value)) +
-      geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins = 200) +
-      labs(title = paste0("Histogram of CTCF Found over Loop on Chr", chr),
-           x = "Relative Position to Loop",
-           y = "Count"
-      ) +
-      theme(plot.title = element_text(hjust = 0.5)) 
-    
-    combined_plot_ctcf <- plot1.ctcf.hist + plot1.ctcf.dens # + can be used instead of |
-    plot_ctcf_list[[chr]] <- combined_plot_ctcf
-    
-    message("END: Processing chromosome: ", chr)
-  }, error = function(e) {
-    
-    message("Error processing chromosome: ", chr)
-    message("Error message: ", e$message)
-  })
-}
-
-pdf_path_overall_wo_capping_lt2mb_path <- "./figures/submission/lt2mb/overall_distribution_of_CTCF_by_chromosome_wo_capping_lt2mb.pdf"
-png_path_overall_wo_capping_lt2mb_path <- paste0(file_path_sans_ext(pdf_path_overall_wo_capping_lt2mb_path), ".png")
-
-pdf(pdf_path_overall_ctcf_wo_capping_lt2mb, width = 11*0.8, height = 8.5*0.8)
-
-ctcf_num_plots <- length(plot_ctcf_list) # 22 chromosomes
-ctcf_plots_per_page <- 4
-
-for (i in seq(1, ctcf_num_plots, by = ctcf_plots_per_page)) {
-  end_idx <- min(i + ctcf_plots_per_page - 1, ctcf_num_plots)
-  page_plots <- plot_ctcf_list[i:end_idx]
-  
-  combined_page <- plot_grid(plotlist = page_plots, ncol = 1, nrow = 4)
-  
-  print(combined_page)
-}
-
-dev.off()
-
-merge_pdf_pages_to_single_image <- function(pdf_path, output_pdf_path, output_png_path, dpi = 150, stack = TRUE) {
+# func 1. merging figures into one for the overall distribution of CTCF on loops
+merging_pdf_pages_to_single_image <- function(pdf_path, output_pdf_path, output_png_path, dpi = 150, stack = TRUE) {
   # Step 1: checking page count
   n_pages <- pdf_info(pdf_path)$pages
-  
   # Step 2: converting each page to image
   pdf_images <- lapply(1:n_pages, function(p) {
     image_read(pdf_render_page(pdf_path, page = p, dpi = dpi))
   })
-  
   # Step 3: merging images vertically
   merged_img <- image_append(do.call(c, pdf_images), stack = stack)
   
@@ -916,15 +839,83 @@ merge_pdf_pages_to_single_image <- function(pdf_path, output_pdf_path, output_pn
   image_write(merged_img, path = output_pdf_path, format = "pdf")
   image_write(merged_img, path = output_png_path, format = "png")
   
-  # Optional: return paths for confirmation
   return(list(pdf = output_pdf_path, png = output_png_path))
 }
+# func1 END
 
-merge_pdf_pages_to_single_image(
-  pdf_path = pdf_path_overall_wo_capping_lt2mb_path,
-  output_pdf_path = pdf_path_overall_wo_capping_lt2mb_path,
-  output_png_path = png_path_overall_wo_capping_lt2mb_path
-)
+# func2. checking component distribution by chromosome
+checking_component_distribution <- function(data, component_name, output_dir = "./figures/submission/lt2mb") {
+  
+  chromosomes <- c(1:20, "X", "Y")
+  plot_list <- list()
+  
+  for (chr in chromosomes) {
+    tryCatch({
+      message("START: Processing chromosome: ", chr)
+      
+      data_chr <- data %>% 
+        filter(str_detect(loop.id, paste0("_chr", chr, "_")))
+      
+      # Density plot
+      plot_dens <- data_chr %>%
+        ggplot(aes(x = value)) +
+        geom_density(fill = "skyblue", color = "black", alpha = 0.5) +
+        ylim(c(0,1)) +
+        labs(
+          title = paste0("Density of ", toupper(component_name), " Found over Loop on Chr", chr),
+          x = "Relative Position to Loop",
+          y = "Density"
+        ) +
+        theme(plot.title = element_text(hjust = 0.5))
+      
+      # Histogram
+      plot_hist <- data_chr %>%
+        ggplot(aes(x = value)) +
+        geom_histogram(fill = "skyblue", color = "black", alpha = 0.5, bins = 200) +
+        labs(
+          title = paste0("Histogram of ", toupper(component_name), " Found over Loop on Chr", chr),
+          x = "Relative Position to Loop",
+          y = "Count"
+        ) +
+        theme(plot.title = element_text(hjust = 0.5))
+      
+      # merging density & histogram
+      combined_plot <- plot_hist + plot_dens
+      plot_list[[chr]] <- combined_plot
+      
+      message("END: Processing chromosome: ", chr)
+      
+    }, error = function(e) {
+      message("Error processing chromosome: ", chr)
+      message("Error message: ", e$message)
+    })
+  }
+
+  pdf_path <- file.path(output_dir, paste0("overall_distribution_of_", component_name, "_by_chromosome_wo_capping_lt2mb.pdf"))
+  png_path <- paste0(file_path_sans_ext(pdf_path), ".png")
+  
+  # saving PDF
+  pdf(pdf_path, width = 11*0.8, height = 8.5*0.8)
+  num_plots <- length(plot_list)
+  plots_per_page <- 4
+  
+  for (i in seq(1, num_plots, by = plots_per_page)) {
+    end_idx <- min(i + plots_per_page - 1, num_plots)
+    page_plots <- plot_list[i:end_idx]
+    combined_page <- plot_grid(plotlist = page_plots, ncol = 1, nrow = 4)
+    print(combined_page)
+  }
+
+  dev.off()
+  
+  # converting PDF → PNG 
+  merging_pdf_pages_to_single_image(pdf_path, output_pdf_path = pdf_path, output_png_path = png_path)
+  
+  message("Completed processing for: ", toupper(component_name))
+}
+# func2 END
+
+checking_component_distribution(relative.pos.df.ctcf.dist.result, "ctcf")
 
 relative.pos.df.ctcf.dist.result %>% head()
 
@@ -933,37 +924,43 @@ relative.pos.df.ctcf.dist.result %>% head()
 # 2-3. overall distribution of CTCF on loops: figures
 # 2-3-2. by resolution
 ########################
-# CTCF Histogram (all resolution combined, left)
-plot.ctcf.hist <- ggplot(relative.pos.df.ctcf.dist.result, aes(x = value)) +
-  # geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins = 200) +
-  # geom_histogram(fill = "skyblue", color = NA, alpha = 0.7, bins = 200) +
-  geom_histogram(fill = "skyblue", color = "grey70", alpha = 0.7, bins = 200, linewidth = 0.1) +
-  labs(# title = "Histogram of CTCF Found over Loop",
-    x = "Relative Position to Loop",
-    y = "Count") + 
-  theme(plot.title = element_text(hjust = 0.5))
-plot.ctcf.hist
+# func3. plot_histogram for overall distribution
+plot_histogram <- function(df, xvar = value, xlab = "Relative Position to Loop", ylab = "Count") {
+  ggplot(df, aes(x = {{ xvar }})) +
+    geom_histogram(fill = "skyblue", color = "grey70", alpha = 0.7, bins = 200, linewidth = 0.1) +
+    labs(x = xlab, y = ylab) +
+    theme(plot.title = element_text(hjust = 0.5))
+}
+# func3 END
 
-# CTCF Density Plot (by resolution combined, right)
-plot.ctcf.dens <- ggplot(relative.pos.df.ctcf.dist.result, aes(x = value, color = loop.res, fill = loop.res)) +
-  geom_density(alpha = 0.3) +  # transparent
-  ylim(c(0, 0.75)) +
-  scale_color_manual(values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")) + 
-  scale_fill_manual(values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")) +
-  labs(# title = "Density of CTCF Found over Loop",
-    x = "Relative Position to Loop",
-    y = "Density",
-    color = "Resolution",
-    fill = "Resolution") + 
-  theme(plot.title = element_text(hjust = 0.5))
-plot.ctcf.dens
+# func4. plot_density for overall distribution
+plot_density <- function(df, xvar = value, groupvar = loop.res,
+                         xlab = "Relative Position to Loop", ylab = "Density",
+                         colors = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")) {
+  ggplot(df, aes(x = {{ xvar }}, color = {{ groupvar }}, fill = {{ groupvar }})) +
+    geom_density(alpha = 0.3) +
+    ylim(c(0, 0.75)) +
+    scale_color_manual(values = colors) +
+    scale_fill_manual(values = colors) +
+    labs(x = xlab, y = ylab, color = "Resolution", fill = "Resolution") +
+    theme(plot.title = element_text(hjust = 0.5))
+}
+# func4 END
 
-pdf("figures/submission/lt2mb/overall_distribution_of_CTCF_by_resolution_wo_capping_lt2mb.pdf", width = 11*0.8, height = 8.5*0.4)
+# func5. saving histogram & desity plot combined
+saving_combined_plot <- function(plot_left, plot_right, filename, width = 11 * 0.8, height = 8.5 * 0.4) {
+  pdf(file = filename, width = width, height = height)
+  combined_plot <- plot_left | plot_right
+  print(combined_plot)
+  dev.off()
+}
+# func5 END
 
-final_ctcf_plot <- plot.ctcf.hist | plot.ctcf.dens 
-print(final_ctcf_plot)
+plot.ctcf.hist <- plot_histogram(relative.pos.df.ctcf.dist.result)
+plot.ctcf.dens <- plot_density(relative.pos.df.ctcf.dist.result)
 
-dev.off()
+saving_combined_plot(plot.ctcf.hist, plot.ctcf.dens,
+                   "figures/submission/lt2mb/overall_distribution_of_CTCF_by_resolution_wo_capping_lt2mb.pdf")
 
 ########################
 # 2. CTCF
@@ -1501,111 +1498,22 @@ relative.pos.df.tss.dist.result %>% head()
 # 3-3-1. by CHROMOSOME
 ########################
 
-chromosomes <- c(1:20, "X", "Y")
+checking_component_distribution(relative.pos.df.tss.dist.result, "tss")
 
-plot_tss_list <- list()
+relative.pos.df.tss.dist.result %>% head()
 
-for (chr in chromosomes) {
-  tryCatch({
-    
-    message("START: Processing chromosome: ", chr)
-    
-    relative.pos.df.tss.dist.result.chr <- relative.pos.df.tss.dist.result %>% 
-      filter(str_detect(loop.id, paste0("_chr", chr, "_")))
-    
-    plot1.tss.dens <- relative.pos.df.tss.dist.result.chr %>% 
-      ggplot(aes(x = value)) +
-      geom_density(fill = "skyblue", color = "black", alpha = 0.7) +
-      ylim(c(0,1))+
-      labs(title = paste0("Density of TSS Found over Loop on Chr", chr),
-           x = "Relative Position to Loop",
-           y = "Density"
-      ) + 
-      theme(plot.title = element_text(hjust = 0.5))
-    
-    plot1.tss.hist <- relative.pos.df.tss.dist.result.chr %>% 
-      ggplot(aes(x = value)) +
-      geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
-      labs(title = paste0("Histogram of TSS Found over Loop on Chr", chr),
-           x = "Relative Position to Loop",
-           y = "Count"
-      ) + 
-      theme(plot.title = element_text(hjust = 0.5))
-    
-    combined_plot_tss <- plot1.tss.hist + plot1.tss.dens # + can be used instead of |
-    plot_tss_list[[chr]] <- combined_plot_tss
-    
-    message("END: Processing chromosome: ", chr)
-  }, error = function(e) {
-    
-    message("Error processing chromosome: ", chr)
-    message("Error message: ", e$message)
-  })
-}
-
-pdf_path_TSS_overall_wo_capping_lt2mb_path <- "./figures/submission/lt2mb/overall_distribution_of_TSS_by_chromosome_wo_capping_lt2mb.pdf"
-png_path_TSS_overall_wo_capping_lt2mb_path <- paste0(file_path_sans_ext(pdf_path_TSS_overall_wo_capping_lt2mb_path), ".png")
-
-pdf(pdf_path_TSS_overall_wo_capping_lt2mb_path, width = 11*0.8, height = 8.5*0.8)
-
-tss_num_plots <- length(plot_tss_list) # 22 chromosomes
-tss_plots_per_page <- 4
-
-for (i in seq(1, tss_num_plots, by = tss_plots_per_page)) {
-  end_idx <- min(i + tss_plots_per_page - 1, tss_num_plots)
-  page_plots <- plot_tss_list[i:end_idx]
-  
-  combined_page <- plot_grid(plotlist = page_plots, ncol = 1, nrow = 4)
-  
-  print(combined_page)
-}
-
-dev.off()
-
-merge_pdf_pages_to_single_image(
-  pdf_path = pdf_path_TSS_overall_wo_capping_lt2mb_path,
-  output_pdf_path = pdf_path_TSS_overall_wo_capping_lt2mb_path,
-  output_png_path = png_path_TSS_overall_wo_capping_lt2mb_path
-)
 ########################
 # 3. TSS
 # 3-3. overall distribution of TSS on loops: figures
 # 3-3-2. by resolution
 ########################
-# TSS Histogram (all resolution combined, left)
-plot.tss.hist <- ggplot(relative.pos.df.tss.dist.result, aes(x = value)) +
-  # geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
-  geom_histogram(fill = "skyblue", color = "grey70", alpha = 0.7, bins = 200, linewidth = 0.1) +
-  labs(# title = "Histogram of TSS Found over Loop",
-    x = "Relative Position to Loop",
-    y = "Count"
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
 
-plot.tss.hist
+plot.tss.hist <- plot_histogram(relative.pos.df.tss.dist.result)
+plot.tss.dens <- plot_density(relative.pos.df.tss.dist.result)
 
-# TSS Density Plot (by resolution combined, right)
-plot.tss.dens <- ggplot(relative.pos.df.tss.dist.result, aes(x = value, color = loop.res, fill = loop.res)) +
-  geom_density(alpha = 0.3) +  # transparent
-  ylim(c(0, 0.75)) +
-  scale_color_manual(values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")) + 
-  scale_fill_manual(values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")) +
-  labs(# title = "Density of TSS Found over Loop",
-    x = "Relative Position to Loop",
-    y = "Density",
-    color = "Resolution",
-    fill = "Resolution") + 
-  theme(plot.title = element_text(hjust = 0.5))
-
-plot.tss.dens
-
-pdf("figures/submission/lt2mb/overall_distribution_of_TSS_by_resolution_wo_capping_lt2mb.pdf", width = 11*0.8, height = 8.5*0.4)
-
-final_tss_plot <- plot.tss.hist | plot.tss.dens 
-print(final_tss_plot)
-
-dev.off()
-
+saving_combined_plot(plot.tss.hist, plot.tss.dens,
+                   "figures/submission/lt2mb/overall_distribution_of_TSS_by_resolution_wo_capping_lt2mb.pdf")
+                   
 ########################
 # 3. TSS
 # 3-4. Distribution of TSS at each end in a loop: for the number of TSS used in filtering valid loops: figures
@@ -1632,8 +1540,8 @@ count_each_filter <- function(df) {
 ############################################
 # padding by resolution
 ############################################
-# Function to generate padded loop dataframe with adjustable pad_scales per resolution
-make_padded_loops <- function(df, pad_25K = 0.5, pad_10K = 0.75, pad_5K = 1.5) {
+# func6. Generating padded loop dataframe with adjustable pad_scales per resolution
+making_padded_loops <- function(df, pad_25K = 0.5, pad_10K = 0.75, pad_5K = 1.5) {
   df %>%
     mutate(
       x_mid = (x1 + x2)/2,
@@ -1657,27 +1565,29 @@ make_padded_loops <- function(df, pad_25K = 0.5, pad_10K = 0.75, pad_5K = 1.5) {
       inner.distance = y0 - x3
     )
 }
+# func6 END
 
 # df.DISTINCT.loop.deep.sample.all VS df.DISTINCT.loop.deep.sample.all.lt.2mb
-df.pad.default.trial <- make_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb) # 0.5, 0.75, 1.5
+df.pad.default.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb) # 0.5, 0.75, 1.5
 
-df.pad.case6.trial <- make_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
+df.pad.case6.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
                                         pad_25K = 0.5, pad_10K = 1.0, pad_5K = 2.0)
 
-df.pad.case7.trial <- make_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
+df.pad.case7.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
                                         pad_25K = 0.75, pad_10K = 1.25, pad_5K = 2.5)
 
-df.pad.case8.trial <- make_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
+df.pad.case8.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
                                         pad_25K = 1.0, pad_10K = 1.5, pad_5K = 3.0)
 
-df.pad.case9.trial <- make_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
+df.pad.case9.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
                                         pad_25K = 1.5, pad_10K = 2.0, pad_5K = 4.0)
 
 # df.DISTINCT.loop.deep.sample.all.lt.2mb
 # df.DISTINCT.loop.deep.sample.all.padded.1trial.for.TSS.promoter <- df.pad.default.trial
 df.DISTINCT.loop.deep.sample.all.padded.1trial.for.TSS.promoter <- df.pad.case8.trial
 
-compute_inner_distance_stats <- function(df) {
+# func7. Computing inner distance statistics
+computing_inner_distance_stats <- function(df) {
   df <- df %>% mutate(inner.distance = y0 - x3)
   
   # quantile
@@ -1693,11 +1603,13 @@ compute_inner_distance_stats <- function(df) {
   # return: list
   list(ylim_vals = ylim_vals, stats = stats)
 }
+# func7 END
 
-result_counts_1trial_TSS <- count_each_filter(df.DISTINCT.loop.deep.sample.all.padded.1trial.for.TSS.promoter)
+result_counts_1trial_TSS <- computing_inner_distance_stats(df.DISTINCT.loop.deep.sample.all.padded.1trial.for.TSS.promoter)
 print(result_counts_1trial_TSS)
 
-plot_inner_distance_boxplot <- function(df, ylim_vals, stats, title_text) {
+# func8. Plotting inner distance boxplot
+plotting_inner_distance_boxplot <- function(df, ylim_vals, stats, title_text) {
   df %>%
     mutate(inner.distance = y0 - x3) %>%
     ggplot(aes(y = inner.distance)) +
@@ -1718,12 +1630,13 @@ plot_inner_distance_boxplot <- function(df, ylim_vals, stats, title_text) {
       legend.position = "bottom"
     )
 }
+# func8 END
 
 # Case default
-result_default_trial <- compute_inner_distance_stats(df.pad.default.trial)
+result_default_trial <- computing_inner_distance_stats(df.pad.default.trial)
 result_default_trial
 
-plot_inner_distance_boxplot_for_default <- plot_inner_distance_boxplot(
+plot_inner_distance_boxplot_for_default <- plotting_inner_distance_boxplot(
   df.pad.default.trial,
   result_default_trial$ylim_vals,
   result_default_trial$stats,
@@ -1732,10 +1645,10 @@ plot_inner_distance_boxplot_for_default <- plot_inner_distance_boxplot(
 plot_inner_distance_boxplot_for_default
 
 # Case8
-result_case8_trial <- compute_inner_distance_stats(df.pad.case8.trial)
+result_case8_trial <- computing_inner_distance_stats(df.pad.case8.trial)
 result_case8_trial
 
-plot_inner_distance_boxplot_for_case8 <- plot_inner_distance_boxplot(
+plot_inner_distance_boxplot_for_case8 <- plotting_inner_distance_boxplot(
   df.pad.case8.trial,
   result_case8_trial$ylim_vals,
   result_case8_trial$stats,
@@ -1744,12 +1657,12 @@ plot_inner_distance_boxplot_for_case8 <- plot_inner_distance_boxplot(
 plot_inner_distance_boxplot_for_case8
 
 # Case9
-result_case9_trial <- compute_inner_distance_stats(df.pad.case9.trial)
+result_case9_trial <- computing_inner_distance_stats(df.pad.case9.trial)
 result_case9_trial
 #  min_val median_val
 # 1   -5000     140000 *********************************** -5000
 
-plot_inner_distance_boxplot_for_case9 <- plot_inner_distance_boxplot(
+plot_inner_distance_boxplot_for_case9 <- plotting_inner_distance_boxplot(
   df.pad.case9.trial,
   result_case9_trial$ylim_vals,
   result_case9_trial$stats,
@@ -2202,115 +2115,22 @@ relative.pos.df.promoter.dist.result %>% head()
 # 4-3. overall distribution of promoter on loops: figures
 # 4-3-1. by CHROMOSOME
 ########################
-relative.pos.df.promoter.dist.result
 
-chromosomes <- c(1:20, "X", "Y")
+checking_component_distribution(relative.pos.df.promoter.dist.result, "promoter")
 
-plot_promoter_list <- list()
-
-for (chr in chromosomes) {
-  tryCatch({
-    
-    message("START: Processing chromosome: ", chr)
-    
-    relative.pos.df.promoter.dist.result.chr <- relative.pos.df.promoter.dist.result %>% 
-      filter(str_detect(loop.id, paste0("_chr", chr, "_")))
-    
-    plot1.promoter.dens <- relative.pos.df.promoter.dist.result.chr %>% 
-      ggplot(aes(x = value)) +
-      geom_density(fill = "skyblue", color = "black", alpha = 0.7) +
-      ylim(c(0,1))+
-      labs(title = paste0("Density of Promoter Found over Loop on Chr", chr),
-           x = "Relative Position to Loop",
-           y = "Density"
-      ) +
-      theme(plot.title = element_text(hjust = 0.5)) 
-    
-    plot1.promoter.hist <- relative.pos.df.promoter.dist.result.chr %>% 
-      ggplot(aes(x = value)) +
-      geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
-      labs(title = paste0("Histogram of Promoter Found over Loop on Chr", chr),
-           x = "Relative Position to Loop",
-           y = "Count"
-      ) +
-      theme(plot.title = element_text(hjust = 0.5)) 
-    
-    
-    combined_plot_promoter <- plot1.promoter.hist + plot1.promoter.dens # + can be used instead of |
-    plot_promoter_list[[chr]] <- combined_plot_promoter
-    
-    message("END: Processing chromosome: ", chr)
-  }, error = function(e) {
-    
-    message("Error processing chromosome: ", chr)
-    message("Error message: ", e$message)
-  })
-}
-
-pdf_path_promoter_overall_wo_capping_lt2mb_path <- "./figures/submission/lt2mb/overall_distribution_of_promoter_by_chromosome_wo_capping_lt2mb.pdf"
-png_path_promoter_overall_wo_capping_lt2mb_path <- paste0(file_path_sans_ext(pdf_path_promoter_overall_wo_capping_lt2mb_path), ".png")
-
-pdf(pdf_path_promoter_overall_wo_capping_lt2mb_path, width = 11*0.8, height = 8.5*0.8)
-
-promoter_num_plots <- length(plot_promoter_list) # 22 chromosomes
-promoter_plots_per_page <- 4
-
-for (i in seq(1, promoter_num_plots, by = promoter_plots_per_page)) {
-  end_idx <- min(i + promoter_plots_per_page - 1, promoter_num_plots)
-  page_plots <- plot_promoter_list[i:end_idx]
-  
-  combined_page <- plot_grid(plotlist = page_plots, ncol = 1, nrow = 4)
-  
-  print(combined_page)
-}
-
-dev.off()
-
-merge_pdf_pages_to_single_image(
-  pdf_path = pdf_path_promoter_overall_wo_capping_lt2mb_path,
-  output_pdf_path = pdf_path_promoter_overall_wo_capping_lt2mb_path,
-  output_png_path = png_path_promoter_overall_wo_capping_lt2mb_path
-)
+relative.pos.df.promoter.dist.result %>% head()
 
 ########################
 # 4. promoter
 # 4-3. overall distribution of promoter on loops: figures
 # 4-3-2. by resolution
 ########################
-# promoter Histogram (all resolution combined, left)
-plot.promoter.hist <- relative.pos.df.promoter.dist.result %>% 
-  ggplot(aes(x = value)) +
-  # geom_histogram(fill = "skyblue", color = "black", alpha = 0.7, bins=200) +
-  geom_histogram(fill = "skyblue", color = "grey70", alpha = 0.7, bins = 200, linewidth = 0.1) +
-  labs(# title = "Histogram of Promoter Found over Loop",
-    x = "Relative Position to Loop",
-    y = "Count"
-  ) +
-  theme(plot.title = element_text(hjust = 0.5))
 
-plot.promoter.hist
+plot.promoter.hist <- plot_histogram(relative.pos.df.promoter.dist.result)
+plot.promoter.dens <- plot_density(relative.pos.df.promoter.dist.result)
 
-# Promoter Density Plot (by resolution combined, right)
-plot.promoter.dens <- ggplot(relative.pos.df.promoter.dist.result, aes(x = value, color = loop.res, fill = loop.res)) +
-  geom_density(alpha = 0.3) +  # transparent
-  ylim(c(0, 0.75)) +
-  scale_color_manual(values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")) + 
-  scale_fill_manual(values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")) +
-  labs(# title = "Density of Promoter Found over Loop",
-    x = "Relative Position to Loop",
-    y = "Density",
-    color = "Resolution",
-    fill = "Resolution") + 
-  theme(plot.title = element_text(hjust = 0.5))
-
-plot.promoter.dens
-
-pdf("./figures/submission/lt2mb/overall_distribution_of_promoter_by_resolution_wo_capping_lt2mb.pdf", width = 11*0.8, height = 8.5*0.4)
-
-final_promoter_plot <- plot.promoter.hist | plot.promoter.dens 
-print(final_promoter_plot)
-
-dev.off()
+saving_combined_plot(plot.promoter.hist, plot.promoter.dens,
+                   "figures/submission/lt2mb/overall_distribution_of_promoter_by_resolution_wo_capping_lt2mb.pdf")
 
 #########################################
 #########################################
@@ -2318,50 +2138,43 @@ dev.off()
 #########################################
 #########################################
 
-p1 <- plot.ctcf.dens
-p2 <- plot.tss.dens
-p3 <- plot.promoter.dens
+# func9
+combining_and_save_plots <- function(p1, p2, p3,
+                                   filename = "histogram_combined_all.png",
+                                   output_dir = "./figures/submission/lt2mb",
+                                   width = 11, height = 8.5, dpi = 300) {
+  # base theme
+  base_theme <- theme_bw(base_size = 12) +
+    theme(plot.title.position = "plot",
+          panel.grid.minor = element_blank())
+  
+  # theme
+  p1 <- p1 + base_theme
+  p2 <- p2 + base_theme
+  p3 <- p3 + base_theme
+  
+  # combining plots
+  fig_combined <- (p1 | p2 | p3) +
+    plot_layout(ncol = 3, guides = "collect", widths = c(1, 1, 1)) &
+    theme(legend.position = "bottom",
+          legend.margin = margin(2, 6, 2, 6),
+          plot.tag = element_text(face = "bold", size = 12))
+  
+  # adding tag
+  fig_combined <- fig_combined +
+    plot_annotation(tag_levels = "a")
+  
+  # saving
+  ggsave(file.path(output_dir, filename), fig_combined, width = width, height = height, dpi = dpi, bg = "white")
+  
+  # return(fig_combined)
+}
+# func9 END
 
-p1 <- plot.ctcf.hist
-p2 <- plot.tss.hist
-p3 <- plot.promoter.hist
-
-base_theme <- theme_bw(base_size = 12) +
-  theme(plot.title.position = "plot",
-        panel.grid.minor = element_blank())
-
-p1 <- p1 + base_theme
-p2 <- p2 + base_theme
-p3 <- p3 + base_theme
-
-# ylim to c(0,0.75)
+combining_and_save_plots(plot.ctcf.hist, plot.tss.hist, plot.promoter.hist, "histogram_combined_all.png")
+combining_and_save_plots(plot.ctcf.dens, plot.tss.dens, plot.promoter.dens, "density_combined_all.png")
 
 
-# 1row 3col legend
-fig_combined <-
-  (p1 | p2 | p3) +
-  plot_layout(ncol = 3, guides = "collect", widths = c(1, 1, 1)) &
-  theme(legend.position = "bottom",
-        legend.margin = margin(2, 6, 2, 6),
-        plot.tag = element_text(face = "bold", size = 12))
-
-# title/subtitle/pannel tag(a, b, c)
-fig_combined <- fig_combined +
-  plot_annotation(
-    # title = "Figure X. Your overall title",
-    # subtitle = "Optional subtitle or notes",
-    tag_levels = "a"
-  )
-
-fig_combined
-
-# save (10 x 8.5 inch, 300 dpi)
-ggsave("./figures/submission/lt2mb/density_combined_all.png", fig_combined,
-       width = 11, height = 8.5, dpi = 300, bg = "white")
-ggsave("./figures/submission/lt2mb/histogram_combined_all.png", fig_combined,
-       width = 11, height = 8.5, dpi = 300, bg = "white")
-#########################################
-#########################################
 
 ########################
 # 4. promoter
@@ -2797,7 +2610,7 @@ tmp.fig <- ggplot(df.final.up.down.tss.pro.nearest, aes(x = distance)) +
   # facet_wrap(~component+resolution)
 
 tmp.fig
-
+df.final.up.down.tss.pro.nearest %>% head()
 # quantile boxplot
 approach2.stats <- df.final.up.down.tss.pro.nearest %>%
   summarise(
@@ -2805,6 +2618,7 @@ approach2.stats <- df.final.up.down.tss.pro.nearest %>%
     Median = median(distance),
     Q3 = quantile(distance, 0.75)
   )
+mean(df.final.up.down.tss.pro.nearest$distance)
 
 ggplot(df.final.up.down.tss.pro.nearest, aes(y = distance)) +
   geom_boxplot(fill = "#A6CEE3", color = "#1F78B4", outlier.color = "red", outlier.shape = 16) +
@@ -2868,24 +2682,98 @@ approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5
   cat(top_genes, sep = "\n")
 }
 
-threshold_distance <- approach2.stats$Median # 28943.5
+mean(df.final.up.down.tss.pro.nearest$distance) # 109537.7
 threshold_distance <- approach2.stats$Q3 # 82165.75
+threshold_distance <- approach2.stats$Median # 28943.5
+threshold_distance <- approach2.stats$Q1 # 8807
+threshold_distance <- approach2.stats$Q1 + 0.25*(approach2.stats$Q3 - approach2.stats$Q1) # 27146.69
 threshold_distance
 approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = threshold_distance, top_n_genes = 70, print_top_n = 50)
 
 
-
-
-
-df.final.up.down.tss.pro.nearest %>% filter(distance < 0)
-
 df.final.up.down.tss.pro.nearest %>% head()
 
 df.unique_loops <- df.final.up.down.tss.pro.nearest %>%
-  mutate(
-    e = as.numeric(gsub("K", "", resolution)) * 1000
-  ) %>% 
-  filter(distance <= 2e+05)
+#   # mutate(
+#   #   e = as.numeric(gsub("K", "", resolution)) * 1000
+#   # ) %>% 
+  filter(distance <= threshold_distance)
+
+df.final.up.down.tss.pro.nearest
+df.unique_loops <- df.final.up.down.tss.pro.nearest %>%
+  filter(
+    case_when(
+      resolution == "5K"  ~ distance <= 5000*1.5,
+      resolution == "10K" ~ distance <= 10000*1.5,
+      resolution == "25K" ~ distance <= 25000*1.5,
+      TRUE                ~ FALSE  # 다른 해상도는 제외
+    )
+  )
+
+ggplot(df.final.up.down.tss.pro.nearest, aes(x = distance)) +
+  geom_density(fill = "lightgreen", alpha = 0.5) +
+  labs(title = "Density Plot of Loop Distances", x = "Distance (bp)", y = "Density") +
+  theme_bw(base_size = 12) + 
+  facet_wrap(~resolution)
+
+df.unique_loops <- df.filtered
+
+df.unique_loops %>% dim() # 62038
+
+final.loops.from.tss.step <- df.unique_loops %>%
+  filter(component == "tss")
+final.loops.from.tss.step %>% dim()
+
+final.loops.from.promoter.step <- df.unique_loops %>%
+  filter(component == "pro")
+final.loops.from.promoter.step %>% dim()
+
+
+df.unique_loops  %>% head()
+df.unique_loops %>%
+  add_count(loop.id) %>%                 # loop.id별로 몇 번 등장했는지 세기
+  filter(n >= 2) %>%                     # 2개 이상 등장한 loop.id만 필터링
+  arrange(loop.id) %>%
+  view()
+
+  distinct(loop.id, resolution) %>%     # 중복 제거 (loop.id-resolution 조합)
+  count(resolution)   
+
+library(ggplot2)
+
+df.unique_loops %>% 
+  spread(distance, WHERE) %>% view()
+
+df_wide <- df.unique_loops %>%
+  add_count(loop.id) %>%                 # loop.id별로 몇 번 등장했는지 세기
+  filter(n >= 2) %>%                     # 2개 이상 등장한 loop.id만 필터링
+  # filter(component == 'pro') %>% 
+  dplyr::select(loop.id, WHERE, distance, resolution) %>% 
+  pivot_wider(
+    names_from = WHERE, # column with "up"/"down"
+    values_from = distance # column with numeric values
+) 
+
+
+
+# %>% 
+  ggplot(aes(x = UP, y = DOWN)) +
+  geom_point(aes(color = resolution)) +
+  labs(
+    title = "Scatter Plot of Loop Distance by Direction",
+    x = "UP",
+    y = "DOWN"
+  ) +
+  theme_bw(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
+
+
+df_wide
+
+cor(df_wide$UP, df_wide$DOWN, use = "complete.obs")
 
 df.unique_loops %>% head(3)
 df.unique_loops %>% dim() # 13143
@@ -3263,25 +3151,13 @@ df.final.loop.dataset.tss %>% head(3)
 
 ##########################################################
 ##########################################################
-##########################################################
 # ideogram (HAO)
-##########################################################
 ##########################################################
 ##########################################################
 library(RIdeogram)
 library(rsvg)
 library(scales)
 
-getwd()
-
-# chromosome_data_bottom <- read.table(file="~/dropbox/Gateway_to_Hao/enhancer/data/rn7_chromosome_length_from_ucsc.tsv", sep="\t") %>%
-#   dplyr::rename(Chr = V1, End = V2) %>% 
-#   mutate(Chr = str_remove(Chr, '^chr')) %>% 
-#   mutate(Start = 0) %>% 
-#   mutate(Start = as.numeric(Start), End = as.numeric(End)) %>% 
-#   mutate(CE_start = NA, CE_end = NA)
-# 
-# chromosome_data_bottom
 chromosome_data %>% head()
 chromosome_data <- chromosome_data %>% mutate(CE_start = NA, CE_end = NA)
 chromosome_data
@@ -3303,38 +3179,16 @@ df_binned <- df_ctcf_ideogram %>%
     EndBin = StartBin + bin_size - 1
   )
 
-# Step 4: 각 bin마다 개수 세기
+# Step 4: counting components per bin
 gene_density <- df_binned %>%
   group_by(Chr = chr, Start = StartBin, End = EndBin) %>%
   summarise(Value = n(), .groups = "drop") %>%
   arrange(Chr, Start)
 
-# 결과 확인
 head(gene_density)
-
-# TSS for ideogram: df_tss_ucsc
-df.tss.ucsc %>% head()
-
-df_tss_ucsc_ideogram <- df.tss.ucsc %>% 
-  dplyr::select(chr, start, end)
-
-df_tss_ucsc_ideogram %>% head()
-
-# promoter for ideogram: df_promoter
-df.promoter.rn7 %>% head()
-
-df_promoter_ideogram <- df.promoter.rn7 %>% 
-  dplyr::select(chr, start, end) 
-
-df_promoter_ideogram %>% head()
-
 
 process_feature_bins <- function(feature_df, chromosome_ends, bin_size = 1e6, label = "Feature") {
   options(scipen = 999)
-  
-  # col name
-  # colnames(chromosome_ends) <- c("chr", "start", "end", "CE_start", "CE_end")
-  # colnames(feature_df) <- c("chr", "start", "end")
   
   # col type
   chromosome_ends <- chromosome_ends %>% mutate(chr = str_remove(as.character(chr), 'chr'))
@@ -3393,64 +3247,55 @@ process_feature_bins <- function(feature_df, chromosome_ends, bin_size = 1e6, la
 
 
 ctcf_density <- process_feature_bins(df_ctcf_ideogram, chromosome_data, bin_size, label = "CTCF") %>% dplyr::select(-last_col()) # color = "#E41A1C"
-tss_density  <- process_feature_bins(df_tss_ucsc_ideogram, chromosome_data, bin_size, label = "TSS") %>% dplyr::select(-last_col()) # color = "#4DAF4A"
-promoter_density <- process_feature_bins(df_promoter_ideogram, chromosome_data, bin_size, label = "Promoter") %>% dplyr::select(-last_col())# color = "#377EB8"
-
-ctcf_density
-
-# sample code for ideogram
-# human_karyotype
-# gene_density
-# ideogram(karyotype = human_karyotype, overlaid = gene_density)
-# convertSVG("chromosome.svg", device = "png")
-
-chromosome_data
 ctcf_density
 
 ideogram(
   karyotype = chromosome_data %>% dplyr::rename(Chr = chr, Start = start, End = end) %>% mutate(Chr = str_remove(Chr, 'chr')),
   overlaid = ctcf_density %>% dplyr::rename(Chr = chr, Start = start, End = end) %>% mutate(Chr = str_remove(Chr, 'chr')),
-  # label = NULL,  # No additional labels for now
-  # label_type = "heatmap"
 )
 
-################################################################################################
 ################################################################################################
 ################################################################################################
 # threshold value visualization
 ################################################################################################
 ################################################################################################
-################################################################################################
-################################################################################################
+# func10. filtering loops by threshold
+plotting_and_filtering_summary <- function(df_counts, count_col, output_prefix) {
+
+  # 1. hitogram
+  p.hist <- ggplot(df_counts, aes(x = log2(.data[[count_col]]))) +
+    geom_histogram() +
+    facet_wrap(~WHERE + resolution, scales = "free_y") +
+    labs(
+      y = "Count"
+    )
+
+  #   geom_histogram() +
+  #   facet_wrap(~WHERE + resolution, scales = "free_y")
+
+  # 2. PDF
+  pdf_path <- paste0("./figures/submission/lt2mb/histogram_number_of_", output_prefix, "_within_ends_of_loops_by_resolution_end.pdf")
+  pdf(file = pdf_path, width = 11 * 0.8, height = 8.5 * 0.8)
+  print(p.hist)
+  dev.off()
+}
+# func10 END
+
 # 4-1. CTCF
 df.ctcf.counts
+
+df.ctcf.filtered <- plotting_and_filtering_summary(
+  df_counts = df.ctcf.counts,
+  count_col = "ctcf_count",
+  output_prefix = "ctcf"
+)
+
 ctcf.stats.by.resolution
-
-p.hist.ctcf.loopend.count <- ggplot(df.ctcf.counts, aes(x=log2(ctcf_count)))+
-  # p.hist.ctcf.loopend.count <- ggplot(df.ctcf.counts, aes(x=ctcf_count))+
-  geom_histogram()+
-  facet_wrap(~WHERE+resolution, scales="free_y")
-
-p.hist.ctcf.loopend.count
-
-pdf(file = "./figures/submission/histogram_number_of_ctcf_within_ends_of_loops_by_resolution_end.pdf", width = 11*0.8, height = 8.5*0.8)
-
-print(p.hist.ctcf.loopend.count)
-
-dev.off()
 
 # 2^2.5
 # [1] 5.656854
 # log2(5.656854)
 # [1] 2.5
-
-# loops.with.ctcf.above.q1 <- df.ctcf.counts %>% 
-#   left_join(ctcf.stats.by.resolution %>% 
-#               dplyr::select(resolution, WHERE, Q1), by = c("resolution", "WHERE")) %>% 
-#   # filter(ctcf_count >= Q1)
-#   filter(ctcf_count >= 6)
-
-df.ctcf.counts
 
 df.loops.above.ctcf.threshold <- df.ctcf.counts %>%
   filter(ctcf_count >= 6) %>%
@@ -3488,17 +3333,11 @@ final.loops.from.ctcf.step %>%
 df.overlapping.TSS.w.BOTH.result %>% head()
 df.tss.counts.each.end # .4 any: 44564| lt2mb: 14,006
 
-# TSS histogram
-p.hist.tss.loopend.count <- ggplot(df.tss.counts.each.end, aes(x = log2(tss_count_each_end))) +
-  geom_histogram() +
-  facet_wrap(~WHERE + resolution, scales = "free_y")
-
-p.hist.tss.loopend.count
-
-# PDF
-pdf(file = "./figures/submission/histogram_number_of_tss_within_ends_of_loops_by_resolution_end_1trial.pdf", width = 11*0.8, height = 8.5*0.8)
-print(p.hist.tss.loopend.count)
-dev.off()
+df.tss.filtered <- plotting_and_filtering_summary(
+  df_counts = df.tss.counts.each.end,
+  count_col = "tss_count_each_end",
+  output_prefix = "tss"
+)
 
 loops.with.tss.above.threshold <- df.tss.counts.each.end %>% 
   left_join(tss.stats.by.resolution.each.end %>% 
@@ -3542,20 +3381,11 @@ df.overlapping.promoter.w.BOTH.result
 df.promoter.counts.each.end # 38,174
 promoter.stats.by.resolution.each.end
 
-df.promoter.counts.each.end %>% 
-  count(promoter_count_each_end)
-
-# Promoter histogram
-p.hist.promoter.loopend.count <- ggplot(df.promoter.counts.each.end, aes(x = log2(promoter_count_each_end))) +
-  geom_histogram() +
-  facet_wrap(~WHERE + resolution, scales = "free_y")
-
-p.hist.promoter.loopend.count
-
-# PDF
-pdf(file = "./figures/submission/histogram_number_of_promoters_within_ends_of_loops_by_resolution_end_1trial.pdf", width = 11*0.8, height = 8.5*0.8)
-print(p.hist.promoter.loopend.count)
-dev.off()
+df.promoter.filtered <- plotting_and_filtering_summary(
+  df_counts = df.promoter.counts.each.end,
+  count_col = "promoter_count_each_end",
+  output_prefix = "promoter"
+)
 
 threshold.promoter = 1
 
@@ -3612,9 +3442,7 @@ final.loops.from.promoter.step %>% count(resolution)
 
 ####################################
 ####################################
-####################################
-# Venn Diagram SUBMISSION
-####################################
+# Venn Diagram
 ####################################
 ####################################
 
@@ -3642,9 +3470,6 @@ create_venn_plot <- function(ctcf_data, promoter_data, tss_data, ctcf_label) {
     fill_color = c("#f8766d", "#629bfe", "#32ba36"),
     show_elements = FALSE  
   ) 
-  # + 
-  # ggtitle(paste(ctcf_label, "vs Promoter vs TSS")) +
-  # theme(plot.title = element_text(hjust = 0.5, size = 22))
   
   venn_plot <- venn_plot +
     annotate("text", x = -1.5, y = 1.5, label = paste("CTCF:", ctcf_count), color = "#f8766d") +
@@ -3656,15 +3481,16 @@ create_venn_plot <- function(ctcf_data, promoter_data, tss_data, ctcf_label) {
 }
 
 venn_plot_submission <- create_venn_plot(final.loops.from.ctcf.step, final.loops.from.promoter.step, final.loops.from.tss.step, "CTCF")
-ggsave(filename = "./figures/submission/ctcf_vs_promoter_tss_venn_diagrams_latest_histo_default_lt_2mb.pdf", plot = venn_plot_submission, width = 11, height = 8.5, units = "in")
-
 venn_plot_submission
+
+ggsave(filename = "./figures/submission/lt2mb/ctcf_vs_promoter_tss_venn_diagrams_approach2_lt_2mb.pdf", plot = venn_plot_submission, width = 11, height = 8.5, units = "in")
+
 # latest # case8
 # 11526  # 11395
 
-##################
+####################################
 # functional loop extraction
-##################
+####################################
 
 # func for common loop extraction
 extract_overlapping_loops <- function(ctcf_data, promoter_data, tss_data) {
