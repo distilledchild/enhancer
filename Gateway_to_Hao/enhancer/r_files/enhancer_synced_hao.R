@@ -45,7 +45,7 @@ source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "variables.R")
 source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "funcs.R"))
 
 ####################################
-# Sequencing stats ###################################################################################### Figure 1.a.
+# Sequencing stats ###### Figure 1.a
 ####################################
 seq.data <- read.table("../data/library_complexity.tsv", header = TRUE, sep = "\t")
 seq.data[, -1] <- lapply(seq.data[, -1], function(x) as.numeric(as.character(x)))
@@ -108,7 +108,7 @@ sequencing_basic_stats <- ggplot(seq.data_melted, aes(x = Strain, y = Percentage
 sequencing_basic_stats
 
 ggsave(
-  "./figures/submission/sequencing_basic_stats.pdf",
+  "./figures/submission/lt2mb/sequencing_basic_stats_F1a.pdf",
   plot = sequencing_basic_stats,
   device = "pdf",
   width = 11*0.6,
@@ -186,16 +186,16 @@ df.loop.deep.sample.all
 df.loop.deep.sample.all %>% head()
 df.loop.deep.sample.all %>% count(strain)
 
-########################
+################################################
 # 1. Loop
 # 1-1. Exploratory Data analysis (EDA)
-# 1-1.1. data processing ######################################################################## Figure S3.
-########################
+# 1-1.1. data processing ############# Figure S3
+################################################
 # 1. checking duplication loops in a strain
-# df.loop.deep.sample.all %>% 
-  #count(strain, loop.id) %>% # NO dups in a strain
-  # count(strain, resolution, loop.id) %>% # NO dup in the same resolution in a strain
-  # filter(n > 1) 
+df.loop.deep.sample.all %>% 
+  # count(strain, loop.id) %>%             # NO dups in a strain
+  count(strain, resolution, loop.id) %>% # NO dup in the same resolution in a strain
+  filter(n > 1) 
 
 
 # 2. checking how much common loops are in samples
@@ -254,7 +254,7 @@ for(res in resolutions) {
 p
 
 # all figures by resolution into one figure
-pdf("./figures/submission/common_loops_heatmap_percentage_bw_strains.pdf", width = 8.5, height = 11)
+pdf("./figures/submission/lt2mb/common_loops_heatmap_percentage_bw_strains_S3.pdf", width = 8.5, height = 11)
 grid.arrange(plots[["5K"]], 
              plots[["10K"]], 
              plots[["25K"]], 
@@ -262,10 +262,10 @@ grid.arrange(plots[["5K"]],
 )
 dev.off()
 
-########################
+########################################################################
 # 1. Loop
-# 1-1-2. figure: shared loops - bar plot ######################################################################################### Figure 3a.
-########################
+# 1-1-2. figure: shared loops - bar plot ##################### Figure 3a
+########################################################################
 # checking shared loops
 # Step 1: shared loop
 df.loop.deep.sample.all %>% head()
@@ -312,16 +312,16 @@ shared_loops_by_resolution <- ggplot(plot_df, aes(x = resolution, y = mean_share
 
 shared_loops_by_resolution
 
-ggsave("./figures/submission/shared_loops_by_resolution.pdf", 
+ggsave("./figures/submission/lt2mb/shared_loops_by_resolution_F3a.pdf", 
        plot = shared_loops_by_resolution, 
        device = "pdf", 
        width = 8.5*0.6, 
        height = 11*0.6, 
        units = "in")
-########################
+########################################################################
 # 1. Loop
-# 1-1-2. figure: shared loops - network plot ############################################################################# Figure S2.
-########################
+# 1-1-2. figure: shared loops - network plot ################# Figure S2
+########################################################################
 figure_green <- "#00573F"
 figure_orange <- "#FFA300"
 
@@ -353,12 +353,16 @@ network_plot_for_shared_loops <- ggraph(network_graph, layout = "fr") +  # fr: f
 
 network_plot_for_shared_loops
 
-ggsave("./figures/submission/network_plot_for_shared_loops.pdf", plot = network_plot_for_shared_loops, device = "pdf", width = 11*0.6, height = 8.5*0.6, units = "in")
+ggsave("./figures/submission/lt2mb/network_plot_for_shared_loops_S2.pdf", 
+  plot = network_plot_for_shared_loops, 
+  device = "pdf", 
+  width = 11*0.6, height = 8.5*0.6, 
+  units = "in")
 
-################################################
+################################################################################################
 # 1. Loop
-# 1-1-4. figure: loops by sequencing reads ############################################################################ Figure 1b.
-################################################
+# 1-1-4. figure: loops by sequencing reads ########################################### Figure 1b
+################################################################################################
 # Step 1: loops by strain: df.loop.deep.sample.all
 loop_counts_by_sample <- df.loop.deep.sample.all %>%
   count(strain) %>% 
@@ -367,17 +371,17 @@ loop_counts_by_sample
 seq.data
 seq.data <- seq.data %>% dplyr::rename(strain = Strain)
 seq.data
-# strain    n
-# 1         BXH6 6568
-# 2        Bn-Lx 6535        
-# 3     F344/Stm 2903
-# 4        HXB10 7336
-# 5         HXB2 4656
-# 6        HXB23 7676
-# 7        HXB31 9131
-# 8       LE/Stm 2992
-# 9  SHR/OlaIpcv 5263
-# 10        SOBN 5932        
+#                    strain num_loop
+# 1                    BN-Lx     6535
+# 2                     BXH6     6568
+# 3                 F344/Stm     2903
+# 4                    HXB10     7336
+# 5                     HXB2     4656
+# 6                    HXB23     7676
+# 7                    HXB31     9131
+# 8                   LE/Stm     2992
+# 9              SHR/OlaIpcv     5263
+# 10 SHR/OlaIpcvxBN/NHsdMcwi     5932        
 
 # Step 2: sequencing info & join 
 merged_df <- loop_counts_by_sample %>%
@@ -402,76 +406,40 @@ df_long_for_plot <- merged_df %>%
 
 df_long_for_plot
 
-# p-value and cor
-correlation_results <- df_long_for_plot %>%
-  group_by(Sequencing_Metric) %>%
-  group_modify(~ cor.test(.x$Depth, .x$num_loop) %>% tidy()) %>%
-  dplyr::select(Sequencing_Metric, estimate, p.value) %>% 
-  # float
-  mutate(
-    r = round(estimate, 3),
-    p = ifelse(p.value < 0.001, "< 0.001", format(round(p.value, 3), nsmall = 3)),
-    label = paste0("r = ", r, ", p = ", p)
-  )
-
-# Sequencing_Metric estimate  p.value
-# <chr>                <dbl>    <dbl>
-# 1 Alignable_Reads      0.787 0.00689 
-# 2 Total_Reads          0.780 0.00783 
-# 3 Unique_Reads         0.884 0.000688
-
-correlation_results
-
-label_positions <- df_long_for_plot %>%
-  group_by(Sequencing_Metric) %>%
-  summarise(x = max(Depth), .groups = "drop") %>%
-  group_modify(~ {
-    metric <- .x$Sequencing_Metric[1]
-    model <- lm(num_loop ~ Depth, data = df_long_for_plot %>% filter(Sequencing_Metric == metric))
-    y_pred <- predict(model, newdata = data.frame(Depth = .x$x))
-    .x$y <- y_pred
-    .x
-  }) %>%
-  mutate(x = ifelse(Sequencing_Metric == "Unique Reads", x*0.65, x)) %>%
-  mutate(y = ifelse(Sequencing_Metric == "Unique Reads", 8214, y)) %>%
-  mutate(x = ifelse(Sequencing_Metric == "Alignable Reads", x*0.86, x)) %>%
-  mutate(y = ifelse(Sequencing_Metric == "Alignable Reads", 8314, y)) %>%
-  mutate(x = ifelse(Sequencing_Metric == "Total Reads", x*0.78, x)) %>%
-  mutate(y = ifelse(Sequencing_Metric == "Total Reads", y*0.54, y))
-
-# Calculate linear model statistics
-correlation_results <- df_long_for_plot %>%
-  group_by(Sequencing_Metric) %>%
-  do({
-    model <- lm(num_loop ~ Depth, data = .)
-    data.frame(
-      r.squared = summary(model)$r.squared,
-      p.value = summary(model)$coefficients["Depth", "Pr(>|t|)"]
-    )
-  }) %>%
-  ungroup() %>%
-  mutate(label = paste0("R2 = ", round(r.squared, 2), ", p = ", format(p.value, digits = 2)))
-
-correlation_results
-
-# R^2 to R
+# r & p-value
 correlation_results <- df_long_for_plot %>%
   group_by(Sequencing_Metric) %>%
   group_modify(~ cor.test(.x$Depth, .x$num_loop) %>% broom::tidy()) %>%
   ungroup() %>%
   mutate(
-    r = round(estimate, 3),
-    p = ifelse(p.value < 0.001, "< 0.001", format(round(p.value, 3), nsmall = 3)),
-    label = paste0("r = ", r, ", p = ", p)
+    r = format(round(estimate, 2), nsmall = 2),
+    p = format(round(p.value, 4), nsmall = 4),
+    label = paste0("R = ", r, ", p = ", p)
   )
 
 correlation_results
+#   Sequencing_Metric estimate statistic  p.value parameter conf.low conf.high
+#   <chr>                <dbl>     <dbl>    <dbl>     <int>    <dbl>     <dbl>
+# 1 Alignable Reads      0.787      3.61 0.00689          8    0.312     0.947
+# 2 Total Reads          0.780      3.52 0.00783          8    0.295     0.945
+# 3 Unique Reads         0.884      5.35 0.000688         8    0.574     0.972
+
+annot_positions <- data.frame(
+  Sequencing_Metric = c("Alignable Reads", "Total Reads", "Unique Reads"),
+  x = rep(min(df_long_for_plot$Depth) * 1.05, 3),
+  y = c(
+    max(df_long_for_plot$num_loop) * 0.97,
+    max(df_long_for_plot$num_loop) * 0.90,
+    max(df_long_for_plot$num_loop) * 0.82
+  )
+)
+
+# correlation_results와 병합
+annot_df <- left_join(correlation_results, annot_positions, by = "Sequencing_Metric")
 
 # Original labels
 original_labels <- levels(factor(df_long_for_plot$Sequencing_Metric))
-
-# Combine original labels with statistics
-combined_labels <- paste0(original_labels, " (", correlation_results$label, ")")
+original_labels
 
 line_graph_for_loops_per_depth <- ggplot(df_long_for_plot, aes(x = Depth, y = num_loop, color = Sequencing_Metric)) +
   geom_point() +
@@ -484,44 +452,42 @@ line_graph_for_loops_per_depth <- ggplot(df_long_for_plot, aes(x = Depth, y = nu
     color = "Category",
     fill = "Category" # Add fill to labs
   ) +
-  scale_color_discrete(labels = combined_labels) + # Use the combined labels
-  scale_fill_discrete(labels = combined_labels) + # and for fill as well
+  scale_color_discrete(labels = original_labels) + # Use the combined labels
+  scale_fill_discrete(labels = original_labels) + # and for fill as well
   theme(
     plot.title = element_text(hjust = 0.5),
     legend.position = "bottom"
+  ) +
+  geom_text(
+    data = annot_df,
+    aes(x = x, y = y, label = label, color = Sequencing_Metric),
+    hjust = 0,
+    size = 4.5,
+    fontface = "italic"
   )
-line_graph_for_loops_per_depth # by hao
 
-ggsave("./figures/submission/line_graph_for_loops_per_depth_hao_w_new_label.pdf", plot = line_graph_for_loops_per_depth, device = "pdf", width = 11*0.6, height = 8.5*0.6, units = "in")
-########################
+line_graph_for_loops_per_depth 
+
+ggsave("./figures/submission/lt2mb/line_graph_for_loops_per_depth_hao_w_new_label_F1b.pdf", plot = line_graph_for_loops_per_depth, device = "pdf", width = 11*0.6, height = 8.5*0.6, units = "in")
+
+figure1_combined <- sequencing_basic_stats + line_graph_for_loops_per_depth +
+  plot_layout(ncol = 2, nrow = 1) 
+
+figure1_combined
+
+ggsave(
+  "./figures/submission/lt2mb/figure1_combined_F1.pdf",
+  plot = figure1_combined,
+  device = "pdf",
+  width = 11,   
+  height = 5.5,        ############ NOT 8.5
+  units = "in"
+)
+
+########################################################################
 # 1. Loop
-# 1-1-5. figure: loops per sample by resolution
-########################
-df.loop.counts <- df.loop.deep.sample.all %>%
-  group_by(strain, resolution) %>%
-  summarise(n_loops = n_distinct(loop.id), .groups = "drop")
-
-loops_per_sample_by_resolution <- ggplot(df.loop.counts, aes(x = strain, y = n_loops, fill = resolution)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(
-    # title = "Number of Loop per Strain at Resolution",
-    x = "Strain",
-    y = "Number of Loops"
-  ) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  scale_fill_manual(values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93"))
-
-loops_per_sample_by_resolution
-
-ggsave("figures/submission/loops_per_sample_by_resolution.pdf", plot = loops_per_sample_by_resolution, device = "pdf", width = 11*0.6, height = 8.5*0.6 , units = "in")
-
-########################
-# 1. Loop
-# 1-1-6. figure: loops per chromosome by resolution ########################################### Figure 2
-########################
+# 1-1-6. figure: loops per chromosome by resolution ########### Figure 2
+########################################################################
 df_chr_loop_counts <- df.loop.deep.sample.all %>%
   group_by(chr1, resolution) %>%
   summarise(n_loops = n_distinct(loop.id), .groups = "drop")
@@ -544,7 +510,7 @@ df_chr_loop_counts_fig <- ggplot(df_chr_loop_counts, aes(x = chr1, y = n_loops, 
 
 df_chr_loop_counts_fig
 
-ggsave("./figures/submission/loop_counts_per_chr.pdf", plot = df_chr_loop_counts_fig, device = "pdf", width = 11*0.6, height = 8.5*0.6, units = "in")
+ggsave("./figures/submission/lt2mb/loop_counts_per_chr_F2.pdf", plot = df_chr_loop_counts_fig, device = "pdf", width = 11*0.6, height = 8.5*0.6, units = "in")
 
 ########################
 # 1. Loop
@@ -645,19 +611,23 @@ df.DISTINCT.loop.deep.sample.all # 31773
 df.DISTINCT.loop.deep.sample.all %>% dim() # 31773
 df.DISTINCT.loop.deep.sample.all %>% head(2) 
 
-# padding 1 distance with all loops
-OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance <- df.DISTINCT.loop.deep.sample.all %>% 
-  mutate(x_mid = (x1 + x2)/2, y_mid = (y1 + y2)/2) %>% # middle point of each end
-  mutate(x0 = ifelse(x_mid - distance < 0, 0, x_mid - distance), 
-         y3 = ifelse(y_mid + distance > chr.end.coord, chr.end.coord, y_mid + distance))  # 1 distance for padding
-
 # loops only less than 2mb: 31019
 df.DISTINCT.loop.deep.sample.all.lt.2mb <- df.DISTINCT.loop.deep.sample.all %>% 
   filter(distance < 2000000) # 31019, only use less than 2mb
 df.DISTINCT.loop.deep.sample.all.lt.2mb %>% dim() # 31019 (31773 - 754 (longer than 2mb))
 df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head()
 
-################ w/o capping only from all loops: 31417
+################################################
+# padding 1 distance with all loops: 31773
+################################################
+OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance <- df.DISTINCT.loop.deep.sample.all %>% 
+  mutate(x_mid = (x1 + x2)/2, y_mid = (y1 + y2)/2) %>% # middle point of each end
+  mutate(x0 = ifelse(x_mid - distance < 0, 0, x_mid - distance), 
+         y3 = ifelse(y_mid + distance > chr.end.coord, chr.end.coord, y_mid + distance))  # 1 distance for padding
+
+################################################
+# padding 1 distance && w/o capping only from all loops: 31417
+################################################
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>% 
   filter(!(x0 == 0 | chr.end.coord == y3)) # 31773 - 444 (282 + 162) = 31329 + 88 = 31417
 # filter(x0 == 0) # 282
@@ -665,7 +635,9 @@ OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping <- OVERALL.df.DIS
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping %>% dim() # 31417
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>% filter(x0 == 0 & chr.end.coord == y3) # 88 | 
 
-################ w/o capping && less than 2mb
+################################################
+# w/o capping && less than 2mb
+################################################
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping.lt.2mb <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>% 
   filter(!(x0 == 0 | chr.end.coord == y3)) %>% # 31773 - 444 = 31329, 88
   # filter(x0 == 0) # 282
@@ -694,6 +666,22 @@ ggplot(df.DISTINCT.loop.deep.sample.all.lt.2mb, aes(y = distance)) +
   theme(
     plot.title = element_text(hjust = 0.5)  # title centering
   )
+
+################################################
+# Q3
+################################################
+Q3_value <- df.DISTINCT.loop.deep.sample.all.lt.2mb.stats$Q3
+
+# loops less than Q3
+df.DISTINCT.loop.deep.sample.all.lt.2mb.Q3.filtered <- df.DISTINCT.loop.deep.sample.all.lt.2mb %>%
+  filter(distance <= Q3_value)
+df.DISTINCT.loop.deep.sample.all.lt.2mb.Q3.filtered.wo.capping <- df.DISTINCT.loop.deep.sample.all.lt.2mb.Q3.filtered %>% 
+  filter(!(x0 == 0 | chr.end.coord == y3)) 
+
+df.DISTINCT.loop.deep.sample.all.lt.2mb.Q3.filtered %>% head(3) 
+df.DISTINCT.loop.deep.sample.all.lt.2mb.Q3.filtered %>% dim() # 23449
+df.DISTINCT.loop.deep.sample.all.lt.2mb.Q3.filtered %>% count(resolution) # 5K 5651, 10K 9521, 25K 8277
+summary(df.DISTINCT.loop.deep.sample.all.lt.2mb.Q3.filtered$distance)
 
 ########################
 # 2. CTCF
@@ -760,15 +748,10 @@ df.DISTINCT.ctcf.2nd.fimo.GR <- GRanges(
 mcols(df.DISTINCT.ctcf.2nd.fimo.GR)$id <- df.DISTINCT.fimo.2nd.trial.ctcf$id
 mcols(df.DISTINCT.ctcf.2nd.fimo.GR)$ctcf_pos <- df.DISTINCT.fimo.2nd.trial.ctcf$ctcf_pos
 
-df.DISTINCT.ctcf.2nd.fimo.GR # .4:3191859
-
 ########################
 # 2. CTCF
 # 2-3. overall distribution of CTCF on loops
 ########################
-# adding 1 distance in each end (total distance becomes 3*distance)
-# OVERALL.df.DISTINCT.loop.deep.sample.all <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance
-# OVERALL.df.DISTINCT.loop.deep.sample.all <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping
 OVERALL.df.DISTINCT.loop.deep.sample.all <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping.lt.2mb ######################
 # OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping.lt.2mb %>% dim() # 30928    16
 
@@ -1152,21 +1135,6 @@ both_ctcf_ids # 30573
 
 ###############
 ###############
-# threshould for ctcf is about 2^2.5, regardless resolution
-p.hist.ctcf.loopend.count<-ggplot(df.ctcf.counts, aes(x=log2(ctcf_count)))+
-  geom_histogram()+
-  facet_wrap(~WHERE+resolution, scales="free_y")
-
-pdf(file="./figures/submission/lt2mb/histogram_number_of_ctcf_within_ends_of_loops_by_resolution_lt2mb.pdf", p.hist.ctcf.loopend.count, width=10, height=8)
-p.hist.ctcf.loopend.count
-dev.off()
-2^2.5
-# [1] 5.656854
-log2(5.656854)
-# [1] 2.5
-log2(CTCF) = 2.5
-
-################## CTCF = 6
 
 ctcf.stats.by.resolution <- df.ctcf.counts %>%
   # group_by(resolution) %>%
@@ -1897,17 +1865,7 @@ df.loop.with.tss.case <- df.DISTINCT.loop.deep.sample.all.lt.2mb %>% # 31773
   mutate(case = ifelse(is.na(case), "NONE", case))
 
 df.loop.with.tss.case %>% count(case)
-
 df.tss.counts
-# panjun, checkout this section. 
-# threshould for ctcf is about 2^2.5, regardless resolution
-p.hist.tss.loopend.count<-ggplot(df.tss.counts, aes(x=log2(tss_count)))+
-  geom_histogram()+
-  facet_wrap(~WHERE+resolution, scales="free_y")
-
-pdf(file="./figures/submission/lt2mb/histogram_number_of_tss_within_ends_of_loops_by_resolution_padded_case8_lt2mb.pdf", p.hist.tss.loopend.count, width=10, height=8)
-p.hist.tss.loopend.count
-dev.off()
 
 ########################
 # 4. promoter
@@ -2388,16 +2346,6 @@ df.loop.with.promoter.case <- df.DISTINCT.loop.deep.sample.all.lt.2mb %>% # 3177
 df.loop.with.promoter.case %>% count(case)
 
 df.promoter.counts
-
-# threshould for ctcf is about 2^2.5, regardless resolution
-p.hist.promoter.loopend.count<-ggplot(df.promoter.counts, aes(x=log2(promoter_count)))+
-  geom_histogram()+
-  facet_wrap(~WHERE+resolution, scales="free_y")
-
-pdf(file="./figures/submission/lt2mb/histogram_number_of_promoter_within_ends_of_loops_by_resolution_padded_case8_lt2mb.pdf", p.hist.promoter.loopend.count, width=10, height=8)
-p.hist.promoter.loopend.count
-
-dev.off()
 
 ##########################################################
 ##########################################################
