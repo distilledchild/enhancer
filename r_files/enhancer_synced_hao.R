@@ -226,7 +226,7 @@ df.loop.deep.sample.all <- df.init.loop.bed %>%
   dplyr::select(sample, strain, X.chr1, x1, x2, chr2, y1, y2, distance, end.distance, resolution, loop.id, sample.loop.id) %>% 
   dplyr::rename(chr1 = X.chr1)
 
-df.loop.deep.sample.all
+df.loop.deep.sample.all # 51300 + 7692 = 58992
 df.loop.deep.sample.all %>% head()
 df.loop.deep.sample.all %>% count(strain)
 
@@ -239,8 +239,7 @@ df.loop.deep.sample.all %>% count(strain)
 df.loop.deep.sample.all %>% 
   # count(strain, loop.id) %>%             # NO dups in a strain
   count(strain, resolution, loop.id) %>% # NO dup in the same resolution in a strain
-  filter(n > 1) 
-
+  filter(n > 1) # 0
 
 # 2. checking how much common loops are in samples
 resolutions <- c("5K", "10K", "25K")
@@ -672,7 +671,7 @@ OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>% filter(x0 == 0 & chr.end
 ################################################
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping.lt.2mb <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>% 
   filter(distance < 2000000)   %>% # 31019                          ################ distance is the original loop distance (prior to padding)
-  filter(!(x0 == 0 | chr.end.coord == y3)) %>% # 31773 - 444 = 31329, 88// # 30928
+  filter(!(x0 == 0 | chr.end.coord == y3)) #%>% # 31773 - 444 = 31329, 88// # 30928
   count(loop.id)  %>% view()
   # filter(x0 == 0) # 282
   # filter(chr.end.coord == y3)  # 162
@@ -963,7 +962,7 @@ saving_combined_plot(plot.ctcf.hist, plot.ctcf.dens,
 # so, the object should be used one without padding: df.DISTINCT.loop.deep.sample.all
 # 2-4-3. data processing for getting information of CTCF at ends in loops 
 ########################
-df.DISTINCT.loop.deep.sample.all.lt.2mb
+df.DISTINCT.loop.deep.sample.all.lt.2mb # 31019
 df.DISTINCT.loop.deep.sample.all.up.GR   <- create_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb, direction = "up")
 df.DISTINCT.loop.deep.sample.all.up.GR # 31773/ 31019
 
@@ -1237,26 +1236,26 @@ tss.select.sparate %>% head()
 tss.select.sparate %>% dim() # 17849
 # tss.select.sparate %>% filter(gene_id != gene_name) # 0 rows, so gene_id and gene_name are consistent
 
-# 21
+# Locus ID or RGD Gene ID (21) to be allocated with gene symbol (gene_name)
 loc.map.tss <- c(
-  "LOC100360846" = "Psmb6l1", # duplicated
+  "LOC100360846" = "Psmb6l1", # Locus ID duplicated: NM_001329883 picked
   "LOC100909648" = "Avpr1b",
   "LOC100911576" = "Hnrnpc",
   "LOC102553861" = "Gzmb",
   "LOC100911664" = "C17h6orf62",
   "LOC100365112" = "Ces2",
   "LOC103689947" = "Selenbp1",
-  "LOC100911796" = "Adora3",  # duplicated
+  "LOC100911796" = "Adora3",  # Locus ID duplicated: SAME COORDINATES
   "LOC361914"     = "Slc7a12",
   "LOC108348108"  = "Hspa1a",
   "LOC102548514"  = "Crnkl1",
   "LOC100911068"  = "Robo4",
-  "LOC689600"     = "1700020N15Rikl",
-  "RGD1564599"    = "1700020N15Rikl",
+  "LOC689600"     = "1700020N15Rikl", # SAME COORDINATES ****
+  "RGD1564599"    = "1700020N15Rikl", # SAME COORDINATES ****
   "LOC497796"     = "Klra17",
-  "RGD1565355"    = "Cd36-ps1", # duplicated
-  "LOC259246"     = "Mup5",
-  "LOC298116"     = "Mup5",
+  "RGD1565355"    = "Cd36-ps1", # RGD ID duplicated: NM_001109218 picked
+  "LOC259246"     = "Mup5", # SAME COORDINATES ***
+  "LOC298116"     = "Mup5", # SAME COORDINATES ***
   "LOC498750"    = "C17h6orf62-ps1",
   "LOC688090"    = "RT1-Bb",
   "RGD2301395"    = "Klrb1al"
@@ -1277,8 +1276,8 @@ gene_pattern_tss <- str_c(gene_list_tss, collapse = "|")
 gene_pattern_tss
 loc_pattern_tsssss <- str_c(names(loc.map.tss), collapse = "|")
 loc_pattern_tsssss
-gene_matching <- tss.select.sparate %>% filter(str_detect(gene_id, loc_pattern_tsssss)) # 24 rows (duplicated: LOC100360846, LOC100911796, RGD1565355)
-gene_matching
+gene_matching <- tss.select.sparate %>% filter(str_detect(gene_id, loc_pattern_tsssss)) 
+gene_matching # 24 rows (duplicated: LOC100360846, LOC100911796, RGD1565355)
 
 tss.select.sparate %>% dim() # 17849
 df.tss.ucsc.tss.id <- tss.select.sparate %>% 
@@ -1333,12 +1332,6 @@ multi_gene_per_coord_tss <- df.tss.ucsc.tss.id %>%
   arrange(desc(n_genes), chr, start, end)
 
 multi_gene_per_coord_tss # mutiple genes at same coord: 40 rows
-# 40 + 5 rows below = 45
-#  1 chr15 29799430  29799432        3 Mcpt10, Mcpt8, Mcpt8l2         
-#  2 chr15 4619121   4619123         3 Spetex-2F, Spetex-2G, Spetex-2H
-#  3 chr15 4717863   4717865         3 Spetex-2A, Spetex-2C, Spetex-2H
-#  4 chr15 4813644   4813646         3 Spetex-2C, Spetex-2D, Spetex-2E
-#  5 chr7  913736    913738          3 LOC685883, Myl6, Myl6l  
 print(multi_gene_per_coord_tss, n=Inf)
 # write_xlsx(multi_gene_per_coord_tss, "multi_gene_per_coord_tss.xlsx")
 
@@ -1376,16 +1369,120 @@ map_gene_tss <- df.tss.ucsc.tss.id %>%
 map_gene_tss
 map_gene_tss %>% filter(str_detect(gene_id, "\\]") == TRUE) # 40
 
-df.tss.ucsc <- df.tss.ucsc.tss.id %>% 
+df.tss.ucsc <- df.tss.ucsc.tss.id %>%  # 17848
   distinct(chr, start, end) %>% # 17080******
   left_join(map_gene_tss, by = c("chr", "start", "end")) %>%
-  mutate(tss.id = paste(chr, start, end, gene_id, sep = ":"))
+  mutate(tss.id = paste(chr, start, end, gene_id, sep = ":")) %>% 
+  filter(!str_detect(gene_id, "\\]")) # - 40
 
-df.tss.ucsc # 17080
-df.tss.ucsc %>% filter(str_detect(gene_id, "]")) # 40 PASS
-df.tss.ucsc %>% dim() # 17080
+df.tss.ucsc %>% head()# 17040/17080: chr   start     end gene_id                      tss.id
+df.tss.ucsc %>% dim() # 17040
+df.tss.ucsc %>% add_count(gene_id) %>% filter(n > 1)
+df.tss.ucsc %>% filter(str_detect(gene_id, gene_pattern_tss)) # 0 rows
 
-# GRanges Obj.: df.tss.ucsc.GR
+df.tss.ucsc %>% add_count(chr, start, end, gene_id) %>% filter(n > 1) # 0 rows
+
+############################
+############################
+df.ensembl.gtf <- read_tsv("~/dropbox/Gateway_to_Hao/enhancer/data/Rattus_norvegicus.mRatBN7.2.113.gtf", 
+                comment = "#", 
+                col_names = FALSE) 
+
+df.ensembl.gtf %>% head()
+df.ensembl.gtf %>% count(X3)
+df.ensembl.gtf %>% dplyr::select(X9) %>% head(3)
+
+colnames(df.ensembl.gtf) <- c("chr", "source", "feature", "start", "end", 
+                   "score", "strand", "frame", "attribute")
+
+df.ensembl.gtf.for.tss <- df.ensembl.gtf %>% 
+  filter(feature == "start_codon") %>% 
+  filter(chr %in% c(as.character(1:20), "X", "Y")) %>% 
+  mutate(chr = str_c("chr", chr))
+
+df.ensembl.gtf.for.tss %>% dim() # 42925
+df.ensembl.gtf.for.tss %>% head(3)
+df.ensembl.gtf.for.tss %>% dplyr::select(attribute) %>% head(3)
+
+# checking attribute keys
+df.ensembl.gtf.for.tss %>%
+  pull(attribute) %>%                           
+  strsplit(";") %>%                             
+  unlist() %>%                                  
+  trimws() %>%                                  
+  str_extract("^[^ ]+") %>%                     
+  unique() %>%                                   
+  sort()              
+
+# function for attributes
+extract_attributes <- function(attr_string) {
+  safe_extract <- function(key, string) {
+    match <- str_match(string, paste0(key, ' "([^"]*)?"'))[,2]
+    if (is.na(match) || trimws(match) == "") return(NA_character_) else return(match)
+  }
+  
+  tibble(
+    gene_id        = safe_extract("gene_id", attr_string),
+    gene_name      = safe_extract("gene_name", attr_string),
+    gene_biotype   = safe_extract("gene_biotype", attr_string),
+    tag                  = safe_extract("tag", attr_string),
+    transcript_biotype   = safe_extract("transcript_biotype", attr_string),
+    transcript_version   = safe_extract("transcript_version", attr_string),
+    exon_number    = safe_extract("exon_number", attr_string)
+  )
+}
+
+df.ensembl.gtf.for.tss # 42,925
+
+df.ensembl.gtf.for.tss.attribute <- df.ensembl.gtf.for.tss %>% 
+  bind_cols( df.ensembl.gtf.for.tss$attribute %>% lapply(extract_attributes) %>% bind_rows() ) %>%
+  dplyr::select(-c(source, feature, attribute, score, frame)) 
+
+df.ensembl.gtf.for.tss.attribute
+
+df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt <- df.ensembl.gtf.for.tss.attribute %>% 
+  filter(tag == "Ensembl_canonical") %>% # 21766
+  filter(gene_biotype == "protein_coding") %>% # 21760
+  mutate(
+    transcript_version = as.numeric(transcript_version),
+    exon_number = as.numeric(exon_number)
+  )
+df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt %>% dim() # 21760
+df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt %>% head() # 21760
+
+df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt.geneid.NOdup <- df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt %>% 
+  add_count(gene_id) %>%
+  filter(n == 1) # 21690
+
+df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt.geneid.dup.1pick <- df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt %>% 
+  add_count(gene_id) %>%
+  filter(n > 1) %>%
+  group_by(gene_id) %>%
+  arrange(desc(transcript_version), exon_number) %>%
+  slice_head(n = 1) %>%
+  ungroup() # 35
+  
+df.ensembl.gtf.for.tss.DISTINCT.geneid <- bind_rows(df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt.geneid.NOdup,
+                                                                                   df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt.geneid.dup.1pick)  %>% # 21776
+                                          dplyr::select(-n) %>% 
+                                          mutate(tss.id = paste(chr, start, end, strand, gene_id, sep = ":")) %>% 
+                                          dplyr::select(chr, start, end, strand, gene_id, gene_name, tss.id) 
+
+  
+df.ensembl.gtf.for.tss.DISTINCT.geneid %>% # 21725
+  # count(chr, start, end, gene_id) #%>% # 21,725
+  count(chr, start, end, strand, gene_id) #%>% # 21,725
+
+df.ensembl.gtf.for.tss.DISTINCT.geneid # %>% 
+  # count(chr) %>% print(n = Inf)
+  # head(3) # chr     start       end strand gene_id        gene_name
+  # dim() # 21,725
+  # distinct(gene_id) # 21,725
+  # filter(str_detect(gene_id, 'LOC|RGD')) # 0
+
+df.tss.ucsc <- df.ensembl.gtf.for.tss.DISTINCT.geneid # 21725
+
+# GRanges Obj.: df.tss.ucsc.GR: chr   start     end gene_id                      tss.id
 df.tss.ucsc.GR <- GRanges(
   seqnames = as.character(df.tss.ucsc$chr),
   ranges = IRanges(
@@ -1400,7 +1497,7 @@ mcols(df.tss.ucsc.GR)$tss_id <- df.tss.ucsc$tss.id
 mcols(df.tss.ucsc.GR)$gene_id <- df.tss.ucsc$gene_id
 # mcols(df.tss.ucsc.GR)$transcript_id <- df.tss.ucsc$transcript_id
 
-df.tss.ucsc.GR # 17080
+df.tss.ucsc.GR # 17080//21,725
 ##### tss with nuacc, 96563
 # nuacc <- read.csv("/home/pkim/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/csRNA.NuAcc.tss.txt", header = T, sep = '\t')
 # nuacc <- read.csv("/Users/PanjunKim/UTHSC GGI Dropbox/K P/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/csRNA.NuAcc.tss.txt", header = T, sep = '\t')
@@ -1413,6 +1510,7 @@ df.tss.ucsc.GR # 17080
 # 3. TSS
 # 3-3. overall distribution of TSS on loops
 ########################
+OVERALL.df.DISTINCT.loop.deep.sample.all.GR # 30928
 
 index.distinct.tss.w.OVERALL.whole.loop <- findOverlaps(
   df.tss.ucsc.GR, 
@@ -1421,7 +1519,7 @@ index.distinct.tss.w.OVERALL.whole.loop <- findOverlaps(
   select = "all"
 )
 
-index.distinct.tss.w.OVERALL.whole.loop # any: 359130/ w/o capping lt2mb: 208296
+index.distinct.tss.w.OVERALL.whole.loop # any: 359130/ w/o capping lt2mb: 208296/ ENSEMBL: 259900
 
 OVERALL.loop.for.tss.hits <- subjectHits(index.distinct.tss.w.OVERALL.whole.loop)
 OVERALL.tss.on.loop.hits <- queryHits(index.distinct.tss.w.OVERALL.whole.loop)
@@ -1440,7 +1538,7 @@ df.tss.dist.result <- tibble(
 ) %>% 
   mutate(across(where(is.numeric), ~ format(., scientific = FALSE)))
 
-df.tss.dist.result %>% dim() # any: 359130  9/ w/o capping lt2mb: 208296      9
+df.tss.dist.result %>% dim() # any: 359130  9/ w/o capping lt2mb: 208296      9/ ENSEMBL: 259900  9
 df.tss.dist.result %>% head()
 
 relative.pos.df.tss.dist.result <- df.tss.dist.result %>%
@@ -1495,68 +1593,6 @@ df.DISTINCT.loop.deep.sample.all # 31773
 df.DISTINCT.loop.deep.sample.all.lt.2mb  %>% dim()# 31019
 df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(2) # 31019
 
-count_each_filter <- function(df) {
-  list(
-    # capping
-    x0_eq_0 = df %>% filter(x0 == 0) %>% nrow(),                                  # case 1: x0 == 0 (chr start)
-    y3_raw_gt_chr.end.coord = df %>% filter(y3_raw > chr.end.coord) %>% nrow(),   # case 2: y3 > chr_end (must 0 occurance)
-    y3_eq_chr.end.coord = df %>% filter(y3 == chr.end.coord) %>% nrow(),          # case 3: y3 = chr_end (replaced with chr end)
-    delta_x_neq_delta_y = df %>% filter(delta_x != delta_y) %>% nrow(),           # case 4: delta x ! = delta y
-    # crossing 
-    x3_gt_y0_raw = df %>% filter(x3 > y0_raw) %>% nrow(),                         # case 5: x3 > y0
-    x3_eq_y0 = df %>% filter(x3 == y0) %>% nrow()                                 # case 6: x3 = y0
-  )
-}
-
-############################################
-# padding by resolution
-############################################
-# deprecated: func6. Generating padded loop dataframe with adjustable pad_scales per resolution
-making_padded_loops <- function(df, pad_25K = 0.5, pad_10K = 0.75, pad_5K = 1.5) {
-  df %>%
-    mutate(
-      x_mid = (x1 + x2)/2,
-      y_mid = (y1 + y2)/2,
-      e = end.distance,
-      pad_scale = case_when(
-        resolution == "25K" ~ pad_25K,
-        resolution == "10K" ~ pad_10K,
-        resolution == "5K"  ~ pad_5K,
-        TRUE ~ pad_25K  # default to 25K behavior
-      ),
-      x0 = pmax(0, x_mid - pad_scale * e),
-      x3 = x_mid + pad_scale * e,
-      y0_raw = y_mid - pad_scale * e,
-      y0 = pmax(0, y0_raw),
-      y3_raw = y_mid + pad_scale * e,
-      y3 = pmin(y3_raw, chr.end.coord),
-      new.loop.id = paste0(chr1, '_', x0, '_', x3, '_', chr2, '_', y0, '_', y3, '_', end.distance),
-      delta_x = x3 - x0,
-      delta_y = y3 - y0,
-      inner.distance = y0 - x3
-    )
-}
-# deprecated: func6 END
-
-# df.DISTINCT.loop.deep.sample.all VS df.DISTINCT.loop.deep.sample.all.lt.2mb
-df.pad.default.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb) # 0.5, 0.75, 1.5
-
-df.pad.case6.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
-                                        pad_25K = 0.5, pad_10K = 1.0, pad_5K = 2.0)
-
-df.pad.case7.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
-                                        pad_25K = 0.75, pad_10K = 1.25, pad_5K = 2.5)
-
-df.pad.case8.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
-                                        pad_25K = 1.0, pad_10K = 1.5, pad_5K = 3.0)
-
-df.pad.case9.trial <- making_padded_loops(df.DISTINCT.loop.deep.sample.all.lt.2mb,
-                                        pad_25K = 1.5, pad_10K = 2.0, pad_5K = 4.0)
-
-# df.DISTINCT.loop.deep.sample.all.lt.2mb
-# df.DISTINCT.loop.deep.sample.all.padded.1trial.for.TSS.promoter <- df.pad.default.trial
-df.DISTINCT.loop.deep.sample.all.padded.1trial.for.TSS.promoter <- df.pad.case8.trial
-
 # func7. Computing inner distance statistics
 computing_inner_distance_stats <- function(df) {
   df <- df %>% mutate(inner.distance = y0 - x3)
@@ -1575,9 +1611,6 @@ computing_inner_distance_stats <- function(df) {
   list(ylim_vals = ylim_vals, stats = stats)
 }
 # func7 END
-
-result_counts_1trial_TSS <- computing_inner_distance_stats(df.DISTINCT.loop.deep.sample.all.padded.1trial.for.TSS.promoter)
-print(result_counts_1trial_TSS)
 
 # func8. Plotting inner distance boxplot
 plotting_inner_distance_boxplot <- function(df, ylim_vals, stats, title_text) {
@@ -1603,59 +1636,15 @@ plotting_inner_distance_boxplot <- function(df, ylim_vals, stats, title_text) {
 }
 # func8 END
 
-# Case default
-result_default_trial <- computing_inner_distance_stats(df.pad.default.trial)
-result_default_trial
-
-plot_inner_distance_boxplot_for_default <- plotting_inner_distance_boxplot(
-  df.pad.default.trial,
-  result_default_trial$ylim_vals,
-  result_default_trial$stats,
-  "Defaults: pad_25K = 0.5, pad_10K = 0.75, pad_5K = 1.5"
-)
-plot_inner_distance_boxplot_for_default
-
-# Case8
-result_case8_trial <- computing_inner_distance_stats(df.pad.case8.trial)
-result_case8_trial
-
-plot_inner_distance_boxplot_for_case8 <- plotting_inner_distance_boxplot(
-  df.pad.case8.trial,
-  result_case8_trial$ylim_vals,
-  result_case8_trial$stats,
-  "case8: pad_25K = 1.0, pad_10K = 1.5, pad_5K = 3.0"
-)
-plot_inner_distance_boxplot_for_case8
-
-# Case9
-result_case9_trial <- computing_inner_distance_stats(df.pad.case9.trial)
-result_case9_trial
-#  min_val median_val
-# 1   -5000     140000 *********************************** -5000
-
-plot_inner_distance_boxplot_for_case9 <- plotting_inner_distance_boxplot(
-  df.pad.case9.trial,
-  result_case9_trial$ylim_vals,
-  result_case9_trial$stats,
-  "case9: pad_25K = 1.5, pad_10K = 2.0, pad_5K = 4.0"
-)
-plot_inner_distance_boxplot_for_case9
-
 ########################
 # 3. TSS
 # 3-4. Distribution of TSS at ends in a loop: for the number of TSS used in filtering valid loops: figures
 # so, the object should be used one WITH padding: df.DISTINCT.loop.deep.sample.all.padded.for.TSS
 # 3-4-3. data processing for getting information of TSS at ends in loops 
 ########################
-df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter <- df.DISTINCT.loop.deep.sample.all.padded.1trial.for.TSS.promoter ##################
-df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter <- df.pad.default.trial # ****************
-df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter <- df.pad.case6.trial # ****************
-df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter <- df.pad.case7.trial # ****************
-df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter <- df.pad.case8.trial # ****************
-df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter <- df.pad.case9.trial # ****************
-df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter <- df.DISTINCT.loop.deep.sample.all.lt.2mb
+df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter <- df.DISTINCT.loop.deep.sample.all.lt.2mb # 31019
 
-df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter %>% dim() # 23449
+df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter %>% dim() # 31019
 df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter %>% head(3)
 df.DISTINCT.loop.deep.sample.all.padded.for.TSS.promoter %>% colnames()
 
@@ -1883,34 +1872,50 @@ df.promoter.rn7.raw <- read_tsv(file_path, col_names = c("chr", "start", "end", 
 gene_pattern_promoter <- 'LOC103689961|LOC100909700|NEWGENE_1310561|LOC100911365|LOC100911881|LOC100912537|LOC103689931|LOC100909661|LOC100912534|LOC100911558|LOC100911417|LOC103691744|LOC108348108|LOC103690139|LOC103690006|RGD1566134|LOC100912026|LOC100911130|LOC103689993|LOC108348144'
 
 ############################
-# df.ensembl.gtf.for.promoter <- read_tsv("~/dropbox/Gateway_to_Hao/enhancer/data/Rattus_norvegicus.mRatBN7.2.113.gtf", 
-#                 comment = "#", 
-#                 col_names = FALSE)
-# 
-# df.ensembl.gtf.for.promoter %>% head()
-# 
-# colnames(df.ensembl.gtf.for.promoter) <- c("seqname", "source", "feature", "start", "end", 
-#                    "score", "strand", "frame", "attribute")
-# 
-# df.genes.from.gtf.for.promoter <- df.ensembl.gtf.for.promoter %>% filter(feature == "gene")
-# df.genes.from.gtf.for.promoter %>% head(3)
-# 
-# # function for attributes
-# extract_attributes <- function(attr_string) {
-#   gene_id <- str_match(attr_string, 'gene_id "([^"]+)"')[,2]
-#   gene_name <- str_match(attr_string, 'gene_name "([^"]+)"')[,2]
-#   return(data.frame(gene_id = gene_id, gene_name = gene_name))
-# }
-# 
-# gene.info.from.gtf.for.promoter <- bind_rows(lapply(df.genes.from.gtf.for.promoter$attribute, extract_attributes))
-# gene.info.from.gtf.for.promoter %>% 
-#   head(3)
-#   dim() # 30562
-#   filter(is.na(gene_name)) # 4380
-
-############################
 df.promoter.rn7.raw %>% dim()# 12,463
 df.promoter.rn7.raw %>% head(3)
+df.promoter.rn7.raw.ENSMBL <- df.promoter.rn7.raw %>% # 12,463
+   filter(!str_detect(gene, ":::")) %>% # 1
+   mutate(gene = str_replace_all(gene, "::", ":NA:")) %>%
+  # mutate(colon_count = stringr::str_count(gene, ":")) %>% count(colon_count) # 3 12463
+  separate(
+    gene,
+    into = c("iso_id", "gene_id", "refseq_id", "gene_name"),
+    sep = ":",
+    fill = "right",
+    extra = "drop"
+  ) 
+  
+df.promoter.rn7.raw.ENSMBL.single <- df.promoter.rn7.raw.ENSMBL %>% # 12,462
+  group_by(chr, start, end, gene_id) %>%
+  filter(n() == 1) %>% # 12454
+  ungroup()
+
+df.promoter.rn7.raw.ENSMBL.dup <- df.promoter.rn7.raw.ENSMBL %>% # 12,462
+  group_by(chr, start, end, gene_id) %>%
+  filter(n() > 1) %>% # 8
+  filter(!str_detect(refseq_id, "NA")) %>%
+  ungroup() # 4
+
+df.promoter.rn7.raw.ENSMBL.dedup <- bind_rows(
+  df.promoter.rn7.raw.ENSMBL.single,
+  df.promoter.rn7.raw.ENSMBL.dup
+) # 12,458
+
+df.promoter.rn7.raw.ENSMBL.dedup %>% 
+  # distinct(gene_id) %>% nrow() # 12,458
+  # count(chr, start, end) %>% filter(n > 1) # 0
+  # count(chr, start, end, gene_id) %>% filter(n > 1) # 0
+  # count(chr, start, end, gene_id, gene_name) %>% filter(n > 1) # 0
+#  filter(str_detect(gene_id, "NA")) %>% # 0
+  head(3)
+df.promoter.rn7 <- df.promoter.rn7.raw.ENSMBL.dedup %>%
+  mutate(length = end - start, 
+         center = round((end + start)/2), 
+         promoter.id = paste(chr, start, end, gene_id, sep = ':'))
+
+df.promoter.rn7 %>% dim() # 12,458
+df.promoter.rn7 %>% head()
 
 # checking duplicates by counting rows b/w rows and gene rows
 n_coord_promoter <- df.promoter.rn7.raw %>% distinct(chr, start, end) %>% nrow() 
@@ -2032,7 +2037,7 @@ index.promoter.w.OVERALL.whole.loop <- findOverlaps(
   type = "any",
   select = "all"
 )
-index.promoter.w.OVERALL.whole.loop # any: 264932 // w/o capping lt2mb: 158517
+index.promoter.w.OVERALL.whole.loop # any: 264932 // w/o capping lt2mb: 158517// ENSMBL 158846
 
 OVERALL.loop.for.promoter.hits <- subjectHits(index.promoter.w.OVERALL.whole.loop)
 OVERALL.promoter.on.loop.hits <- queryHits(index.promoter.w.OVERALL.whole.loop)
@@ -2052,7 +2057,7 @@ df.promoter.dist.result <- data.frame(
   mutate(across(where(is.numeric), ~ format(., scientific = FALSE)))
 
 df.promoter.dist.result %>% head()
-df.promoter.dist.result %>% dim() # any: 264932(dedups)// w/o capping lt2mb: 158517
+df.promoter.dist.result %>% dim() # any: 264932(dedups)// w/o capping lt2mb: 158517// ENSMBL: 158846
 
 relative.pos.df.promoter.dist.result <- df.promoter.dist.result %>%
   mutate(promoter_start = as.numeric(promoter_start),
@@ -2073,7 +2078,7 @@ relative.pos.df.promoter.dist.result <- df.promoter.dist.result %>%
   dplyr::select(loop.id, promoter_id, value, loop.res, promoter_gene_id)
 
 relative.pos.df.promoter.dist.result %>% head()
-relative.pos.df.promoter.dist.result %>% dim() # any: 264932(dedups) // w/o capping lt2mb: 158517
+relative.pos.df.promoter.dist.result %>% dim() # any: 264932(dedups) // w/o capping lt2mb: 158517 // ENSMBL: 158846
 ########################
 # 4. promoter
 # 4-3. overall distribution of promoter on loops: figures
@@ -2356,23 +2361,23 @@ df.promoter.counts
 ##########################################################
 ##########################################################
 
-df.promoter.rn7 %>% head(3) # chr     start     end gene_id length  center promoter.id 
 df.tss.ucsc %>% head(3) # chr  start    end        gene_id                          tss.id
-
-df.gene_tss_and_pro <- bind_rows(df.promoter.rn7 %>% 
-                                   mutate(across(c(start, end), as.numeric)) %>%
-                                   mutate(component = "pro") %>%
-                                   dplyr::select(-c(length, center)) %>% 
-                                   dplyr::rename(component_id = promoter.id) %>% 
-                                   mutate(component_id = str_c(component_id, component, sep='|')),
-                                 df.tss.ucsc %>% 
-                                   mutate(across(c(start, end), as.numeric)) %>%
-                                   mutate(component = "tss") %>%
-                                   dplyr::rename(component_id = tss.id) %>%
-                                   mutate(component_id = str_c(component_id, component, sep='|')))
+df.promoter.rn7 %>% head(3) # chr     start     end gene_id length  center promoter.id 
+df.gene_tss_and_pro <- bind_rows(df.tss.ucsc %>% 
+                                  dplyr::select(chr, start, end, gene_id, tss.id) %>%
+                                  mutate(across(c(start, end), as.numeric)) %>%
+                                  mutate(component = "tss") %>%
+                                  dplyr::rename(component_id = tss.id) %>%
+                                  mutate(component_id = str_c(component_id, component, sep='|')),
+                                df.promoter.rn7 %>% 
+                                  dplyr::select(chr, start, end, gene_id, promoter.id) %>%
+                                  mutate(across(c(start, end), as.numeric)) %>%
+                                  mutate(component = "pro") %>%
+                                  dplyr::rename(component_id = promoter.id) %>%
+                                  mutate(component_id = str_c(component_id, component, sep='|')))
 
 df.gene_tss_and_pro %>% head(3)
-df.gene_tss_and_pro %>% dim() # 29507  
+df.gene_tss_and_pro %>% dim() # 29507  // 34183
 
 df.gene_tss_and_pro.GR <- GRanges(seqnames=df.gene_tss_and_pro$chr,
                                   ranges=IRanges(start=df.gene_tss_and_pro$start, end=df.gene_tss_and_pro$end),
@@ -2380,16 +2385,18 @@ df.gene_tss_and_pro.GR <- GRanges(seqnames=df.gene_tss_and_pro$chr,
                                   component_id=df.gene_tss_and_pro$component_id,
                                   component=df.gene_tss_and_pro$component)
 
-df.gene_tss_and_pro.GR # 29507
+df.gene_tss_and_pro.GR # 29507// 34183
 
 df.DISTINCT.loop.deep.sample.all.lt.2mb %>% dim() # 31019
+df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(3)
 
 df.DISTINCT.loop.deep.sample.all.lt.2mb.prep <- df.DISTINCT.loop.deep.sample.all.lt.2mb %>% 
   mutate(mid_x = floor((x0 + x3) / 2), mid_y = floor((y0 + y3) / 2))
 
 df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR <- GRanges(
   seqnames = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$chr1,
-  ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_x, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_x + 1),
+  # ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_x, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_x + 1),
+  ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$x1, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$x2),
   strand = "*",
   loop.id = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$loop.id,
   distance = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$distance,
@@ -2397,7 +2404,8 @@ df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR <- GRanges(
 )
 df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR <- GRanges(
   seqnames = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$chr1,
-  ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_y, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_y + 1),
+  # ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_y, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$mid_y + 1),
+  ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$y1, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$y2),
   strand = "*",
   loop.id = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$loop.id,
   distance = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$distance,
@@ -2468,6 +2476,7 @@ ggplot(df.final.up.down.tss.pro.nearest, aes(y = distance)) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 
+# func.
 approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5, top_n_genes = 70, print_top_n = 50) {
 
   # Task 1: Filtering and top N genes by loop count
@@ -2512,24 +2521,25 @@ approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5
   cat(top_genes, sep = "\n")
 }
 
-mean(df.final.up.down.tss.pro.nearest$distance) # 109537.7
-threshold_distance <- approach2.stats$Q3 # 82165.75
-threshold_distance <- approach2.stats$Median # 28943.5
-threshold_distance <- approach2.stats$Q1 # 8807
+mean(df.final.up.down.tss.pro.nearest$distance) # 109537.7// midpoint, ENSEMBL61564.34// span, ENSEMBL 55191.25
+threshold_distance <- approach2.stats$Q3 # 82165.75// midpoint, ENSEMBL 62222.75//  span, ENSEMBL 54824
+threshold_distance <- approach2.stats$Median # 28943.5// midpoint, ENSEMBL 23377.5//  span, ENSEMBL 16545.5
+threshold_distance <- approach2.stats$Q1 # 8807// midpoint, ENSEMBL 7422 //  span, ENSEMBL 514.25
 threshold_distance
 approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = threshold_distance, top_n_genes = 70, print_top_n = 50)
-
+# ENSEMBL point: https://biit.cs.ut.ee/gplink/l/aEqIdfCD3TD
+# ENSEMBL span: https://biit.cs.ut.ee/gplink/l/aDqh-aFfbQP
 df.final.up.down.tss.pro.nearest %>% head()
 
 df.unique_loops <- df.final.up.down.tss.pro.nearest %>%
-  filter(
-    case_when(
-      resolution == "5K"  ~ distance <= 5000*1.5,
-      resolution == "10K" ~ distance <= 10000*1.5,
-      resolution == "25K" ~ distance <= 25000*1.5,
-      TRUE                ~ FALSE  
-    )
-  ) %>% 
+  # filter(
+  #   case_when(
+  #     resolution == "5K"  ~ distance <= 5000*1.5,
+  #     resolution == "10K" ~ distance <= 10000*1.5,
+  #     resolution == "25K" ~ distance <= 25000*1.5,
+  #     TRUE                ~ FALSE  
+  #   )
+  # ) %>% 
   filter(distance <= threshold_distance)
 
 
@@ -2539,17 +2549,16 @@ ggplot(df.final.up.down.tss.pro.nearest, aes(x = distance)) +
   theme_bw(base_size = 12) + 
   facet_wrap(~resolution)
 
-df.unique_loops %>% dim() # 23524
+df.unique_loops %>% dim() # 23524// point ENSEMBL: 24987// span ENSEMBL: 31019
 
 # final
 final.loops.from.tss.step <- df.unique_loops %>%
   filter(component == "tss")
-final.loops.from.tss.step %>% dim() # 13407
+final.loops.from.tss.step %>% dim() # point ENSEMBL:13407//span ENSEMBL: 15748
 
 final.loops.from.promoter.step <- df.unique_loops %>%
   filter(component == "pro")
-final.loops.from.promoter.step %>% dim() # 10117
-
+final.loops.from.promoter.step %>% dim() # point ENSEMBL: 10117// span ENSEMBL: 13209
 
 df.unique_loops  %>% head()
 df.unique_loops %>%
@@ -3239,9 +3248,9 @@ extract_overlapping_loops <- function(ctcf_data, promoter_data, tss_data) {
 }
 # func12. END
 
-final.loops.from.ctcf.step %>% dim()# sub.4 any, either 6: 25,620
-final.loops.from.tss.step %>% dim() # sub.4 dedups any, either: 27,518// 13407
-final.loops.from.promoter.step %>% dim() # sub.4 dedups any, either: 25,156// 10117
+final.loops.from.ctcf.step %>% dim()# sub.4 any, either 6: 25,620// span ENSEMBL 25268
+final.loops.from.tss.step %>% dim() # sub.4 dedups any, either: 27,518// 13407// span ENSEMBL  17810
+final.loops.from.promoter.step %>% dim() # sub.4 dedups any, either: 25,156// span ENSEMBL  13209
 
 overlapping_loops <- extract_overlapping_loops(
   ctcf_data = final.loops.from.ctcf.step,
@@ -3249,9 +3258,9 @@ overlapping_loops <- extract_overlapping_loops(
   tss_data = final.loops.from.tss.step
 )
 
-overlapping_loops$ctcf_promoter_only # PASS// 608 // 5497      
-overlapping_loops$ctcf_tss_only # PASS// 2519 // 7799
-overlapping_loops$ctcf_promoter_tss_overlap # PASS// 20513 // 2302
+overlapping_loops$ctcf_promoter_only # PASS// 608 // 5497      // 6240
+overlapping_loops$ctcf_tss_only # PASS// 2519 // 7799 // 9015
+overlapping_loops$ctcf_promoter_tss_overlap # PASS// 20513 // 2302 // 3426
 
 df.ctcf.promoter.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_only, category = "CP", stringsAsFactors = FALSE)
 df.ctcf.tss.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_tss_only, category = "CT", stringsAsFactors = FALSE)
@@ -3277,16 +3286,17 @@ df.final.loop %>% mutate(resolution = str_split_n(loop.id, '_', 7)) %>% count(re
 save(df.final.loop, file="./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.rda")
 write.csv(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.dedup.any.lt2mb.csv", row.names = FALSE)
 
-df.final.loop # 23640
-df.DISTINCT.loop.deep.sample.all
+df.final.loop # 23640// 18681
+df.final.loop %>% head()
+df.DISTINCT.loop.deep.sample.all %>% head()
 
 df.final.DISTINCT.loop.joined <- df.final.loop %>% 
-  inner_join(df.DISTINCT.loop.deep.sample.all %>% mutate(loop.id = str_remove(loop.id, "_[^_]*$")), by = "loop.id")
+  inner_join(df.DISTINCT.loop.deep.sample.all, by = "loop.id")
 df.final.DISTINCT.loop.joined %>% dim()
 df.final.DISTINCT.loop.joined
 
 
-df.final.loop %>% distinct(loop.id) # 23460
+df.final.loop %>% distinct(loop.id) # 23460// 18681
 
 ########################
 ########################

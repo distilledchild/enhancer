@@ -1,0 +1,23 @@
+Experiment description: Juicer version 1.6; BWA 0.7.17-r1188; 45 threads; openjdk version "1.8.0_312"; /lustre/isaac/proj/UTHSC0013/panjun_work/projects/hic/2023A/hic-analysis/juicer/607CC/scripts/juicer.sh -d /lustre/isaac/proj/UTHSC0013/panjun_work/projects/hic/2023A/hic-analysis/juicer/607CC -p /lustre/isaac/proj/UTHSC0013/panjun_work/refs/rn7_ucsc/bwa_rn7chr/chrom.sizes -y /lustre/isaac/proj/UTHSC0013/panjun_work/projects/hic/2023A/hic-analysis/juicer/607CC/restriction_sites/rn7chr_juicer_arima4.txt -z /lustre/isaac/proj/UTHSC0013/panjun_work/refs/rn7_ucsc/bwa_rn7chr/rn7chr.fa -S chimeric -D /lustre/isaac/proj/UTHSC0013/panjun_work/projects/hic/2023A/hic-analysis/juicer/607CC -t 45                                                                                                                                                                                                                                                                                                                  
+Sequenced Read Pairs:  333,215,722
+ Normal Paired: 175,468,875 (52.66%)
+ Chimeric Paired: 126,869,215 (38.07%)
+ Chimeric Ambiguous: 24,642,699 (7.40%)
+ Unmapped: 6,234,933 (1.87%)
+ Ligation Motif Present: 0 (0.00%)
+Alignable (Normal+Chimeric Paired): 302,338,090 (90.73%)
+WARN [2023-02-05T01:32:21,059]  [Globals.java:138] [main]  Development mode is enabled
+Unique Reads: 271,074,393 (81.35%)
+PCR Duplicates: 29,925,948 (8.98%)
+Optical Duplicates: 1,337,749 (0.40%)
+Library Complexity Estimate: 1,411,666,180
+Intra-fragment Reads: 0 (0.00% / 0.00%)
+Below MAPQ Threshold: 38,444,740 (11.54% / 14.18%)
+Hi-C Contacts: 232,629,653 (69.81% / 85.82%)
+ Ligation Motif Present: 0  (0.00% / 0.00%)
+ 3' Bias (Long Range): 50% - 50%
+ Pair Type %(L-I-O-R): 25% - 25% - 25% - 25%
+Inter-chromosomal: 35,803,083  (10.74% / 13.21%)
+Intra-chromosomal: 196,826,570  (59.07% / 72.61%)
+Short Range (<20Kb): 118,992,907  (35.71% / 43.90%)
+Long Range (>20Kb): 77,798,172  (23.35% / 28.70%)
