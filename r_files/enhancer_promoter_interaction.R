@@ -28,6 +28,10 @@ library("RIdeogram")
 library("rsvg")
 library("rtracklayer")
 
+options(tibble.width = Inf)
+options(tibble.max_extra_cols = Inf)
+options(scipen = 999)
+
 getwd()
 
 # Linux
@@ -407,7 +411,8 @@ network_plot_for_shared_loops
 saving_plot_dual(
   plot_obj = network_plot_for_shared_loops,
   filename_base = "network_plot_for_shared_loops_S2",
-  output_dir = "./figures/submission/lt2mb")
+  output_dir = "./figures/submission/lt2mb"
+)
 
 ################################################################################################
 # 1. Loop
@@ -421,17 +426,6 @@ loop_counts_by_sample
 seq.data
 seq.data <- seq.data %>% dplyr::rename(strain = Strain)
 seq.data
-#                    strain num_loop
-# 1                    BN-Lx     6535
-# 2                     BXH6     6568
-# 3                 F344/Stm     2903
-# 4                    HXB10     7336
-# 5                     HXB2     4656
-# 6                    HXB23     7676
-# 7                    HXB31     9131
-# 8                   LE/Stm     2992
-# 9              SHR/OlaIpcv     5263
-# 10 SHR/OlaIpcvxBN/NHsdMcwi     5932        
 
 # Step 2: sequencing info & join 
 merged_df <- loop_counts_by_sample %>%
@@ -521,7 +515,8 @@ line_graph_for_loops_per_depth
 saving_plot_dual(
   plot_obj = line_graph_for_loops_per_depth,
   filename_base = "line_graph_for_loops_per_depth_hao_w_new_label_F1b",
-  output_dir = "./figures/submission/lt2mb")
+  output_dir = "./figures/submission/lt2mb"
+)
 
 figure1_combined <- sequencing_basic_stats + line_graph_for_loops_per_depth +
   plot_layout(ncol = 2, nrow = 1) 
@@ -534,7 +529,8 @@ saving_plot_dual(
   output_dir = "./figures/submission/lt2mb",
   height = 5.5,        ############ NOT 8.5
   scale_x = 1,
-  scale_y = 1)
+  scale_y = 1
+)
 
 ########################################################################
 # 1. Loop
@@ -564,7 +560,8 @@ df_chr_loop_counts_fig
 saving_plot_dual(
   plot_obj = df_chr_loop_counts_fig,
   filename_base = "loop_counts_per_chr_F2",
-  output_dir = "./figures/submission/lt2mb")
+  output_dir = "./figures/submission/lt2mb"
+)
 
 ########################
 # 1. Loop
@@ -802,7 +799,7 @@ df.ctcf.dist.result <- tibble(
 ) %>% 
   mutate(across(where(is.numeric), ~ format(., scientific = FALSE)))
 
-df.ctcf.dist.result %>% dim() # sub.4: 68014890(any), 68012481(within) | 40250853(any, w/o capping + lt 2mb)
+df.ctcf.dist.result %>% dim() # 40250853(any, w/o capping + lt 2mb)
 
 # converting data types
 relative.pos.df.ctcf.dist.result <- df.ctcf.dist.result %>%
@@ -1221,9 +1218,9 @@ tss.select.sparate %>% dim() # 17849
 # tss.select.sparate %>% filter(gene_id != gene_name) # 0 rows, so gene_id and gene_name are consistent
 
 #############################
-# tss resource 2: deprecated
+# tss resource 2: deprecated (EXON used)
 #############################
-df.refgene.gtf <- read_tsv("~/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_refGene.gtf",
+df.refgene.gtf <- read_tsv("~/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_refGene.gtf", # download from ucsc: https://hgdownload.soe.ucsc.edu/goldenPath/rn7/bigZips/genes/
                            comment = "#",  
                            col_names = c("chr", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"),
                            col_types = cols(.default = "c"))  # char
@@ -1241,21 +1238,43 @@ df.refgene.gtf %>%
 # 6 stop_codon   17806
 # 7 transcript   18570
 
-df.refgene.gtf.parsed <- df.refgene.gtf %>%
-  mutate(
-    gene_id = gsub('.*gene_id "([^"]+)".*', '\\1', attribute),
-    transcript_id = gsub('.*transcript_id "([^"]+)".*', '\\1', attribute),
-    gene_name = gsub('.*gene_name "([^"]+)".*', '\\1', attribute)
-  )
+############################
+# tss resource 2-1: RefSeq exon data processing
+############################
+#################################################### 
+# retrieving exon data from RefSeq GTF
+#################################################### 
+df.refgene.gtf.for.exon.raw <- df.refgene.gtf %>% 
+  filter(feature == "exon") %>% 
+  filter(chr %in% c(paste0("chr", 1:20), "chrX", "chrY"))
 
-df.refgene.gtf.parsed.start.codon <- df.refgene.gtf.parsed %>%
-  filter(feature == "start_codon") %>%
-  dplyr::select(chr, start, end, strand, gene_id, transcript_id, gene_name) 
-# %>%
-#   head()
+# checking attribute keys
+refgene.exon.attribute.keys <- get_attribute_keys(df.refgene.gtf.for.exon.raw$attribute)
+refgene.exon.attribute.keys
+# [1] "exon_id"       "exon_number"   "gene_id"       "gene_name"     "transcript_id"
 
-df.refgene.gtf.parsed.start.codon # 17849
-df.refgene.gtf.parsed.start.codon %>% count(strand)
+# adding columns from attribute
+df.refgene.gtf.for.exon.attribute <- df.refgene.gtf.for.exon.raw %>% 
+  bind_cols(df.refgene.gtf.for.exon.raw$attribute %>% map_dfr(~extracting_attributes(.x, keys = refgene.exon.attribute.keys))) %>%
+  dplyr::select(-c(source, feature, attribute, score, frame))
+
+df.refgene.gtf.for.exon.attribute # 174,505
+df.refgene.gtf.for.exon.attribute %>% # 174,505
+  filter(gene_id != gene_name)
+
+# filtering: get the last exon (largest exon_number) per gene_id
+df.refgene.gtf.for.exon <- df.refgene.gtf.for.exon.attribute %>%
+  mutate(exon_number = as.numeric(exon_number)) %>% # convert to numeric
+  group_by(gene_id) %>% 
+  slice_max(order_by = exon_number, n = 1, with_ties = FALSE) %>% # keep only the largest exon_number
+  ungroup() %>% 
+  mutate(refseq_exon_id = str_c(chr, ':', start, ':', end, ':', gene_name, ':', gene_id, ':', exon_number))
+
+df.refgene.gtf.for.exon %>% dim() # 17,488
+df.refgene.gtf.for.exon %>% head(3)
+df.refgene.gtf.for.exon %>% add_count(gene_id) %>% filter(n > 1) # should be 0
+df.refgene.gtf.for.exon
+
 
 ############################
 # tss resource 3
@@ -1269,7 +1288,7 @@ df.ensembl.gtf %>% count(X3)
 #   X3                   n
 # 1 CDS             471937
 # 2 Selenocysteine      25
-# 3 exon            526642
+# 3 exon            526642 ** last exon of gene
 # 4 five_prime_utr   63845
 # 5 gene             30562
 # 6 start_codon      42990 ********
@@ -1281,6 +1300,45 @@ df.ensembl.gtf %>% dplyr::select(X9) %>% head(3) # attribute
 colnames(df.ensembl.gtf) <- c("chr", "source", "feature", "start", "end", 
                    "score", "strand", "frame", "attribute")
 
+# func 8-1. get attribute keys from GTF attribute column
+get_attribute_keys <- function(attribute_vector) {
+  attribute_vector %>%                           
+    strsplit(";") %>%                             
+    unlist() %>%                                  
+    trimws() %>%                                  
+    str_extract("^[^ ]+") %>%                     
+    unique() %>%                                   
+    sort()
+}
+# func 8-1 END
+
+# func 8-2. extracting attribute keys and values dynamically
+extracting_attributes <- function(attr_string, keys = NULL) {
+  # If keys are not provided, extract them from the attribute string
+  if (is.null(keys)) {
+    keys <- get_attribute_keys(attr_string)
+  }
+  
+  # Helper function to safely extract a value for a given key
+  safe_extract <- function(key, string) {
+    match <- str_match(string, paste0(key, ' "([^"]*)?"'))[,2]
+    if (is.na(match) || trimws(match) == "") return(NA_character_) else return(match)
+  }
+  
+  # Create a named list of extracted values
+  result <- setNames(
+    lapply(keys, function(k) safe_extract(k, attr_string)),
+    keys
+  )
+  
+  # Convert to tibble
+  as_tibble(result)
+}
+# func 8-2 END
+
+#################################################### 
+# retrieving tss data
+#################################################### 
 df.ensembl.gtf.for.tss <- df.ensembl.gtf %>% 
   filter(feature == "start_codon") %>% 
   filter(chr %in% c(as.character(1:20), "X", "Y")) %>% 
@@ -1290,15 +1348,13 @@ df.ensembl.gtf.for.tss %>% dim() # 42925
 df.ensembl.gtf.for.tss %>% head(3)
 df.ensembl.gtf.for.tss %>% dplyr::select(attribute) %>% head(3)
 
+df.ensembl.gtf.for.tss %>% filter(str_detect(attribute, 'ENSRNOG00000042691'))
+
+df.ensembl.gtf.for.tss # 42,925
+
 # checking attribute keys
-df.ensembl.gtf.for.tss %>%
-  pull(attribute) %>%                           
-  strsplit(";") %>%                             
-  unlist() %>%                                  
-  trimws() %>%                                  
-  str_extract("^[^ ]+") %>%                     
-  unique() %>%                                   
-  sort()              
+tss.attribute.keys <- get_attribute_keys(df.ensembl.gtf.for.tss$attribute)
+tss.attribute.keys              
 #  [1] "exon_number"                  "gene_biotype"                
 #  [3] "gene_id"                      "gene_name"                   
 #  [5] "gene_source"                  "gene_version"                
@@ -1306,33 +1362,11 @@ df.ensembl.gtf.for.tss %>%
 #  [9] "transcript_biotype"           "transcript_id"               
 # [11] "transcript_name"              "transcript_source"           
 # [13] "transcript_version" 
-# function for attributes
-
-# func 8. extracting attribute keys and values
-extracting_attributes <- function(attr_string) {
-  safe_extract <- function(key, string) {
-    match <- str_match(string, paste0(key, ' "([^"]*)?"'))[,2]
-    if (is.na(match) || trimws(match) == "") return(NA_character_) else return(match)
-  }
-  
-  tibble(
-    gene_id        = safe_extract("gene_id", attr_string),
-    gene_name      = safe_extract("gene_name", attr_string),
-    gene_biotype   = safe_extract("gene_biotype", attr_string),
-    tag                  = safe_extract("tag", attr_string),
-    transcript_biotype   = safe_extract("transcript_biotype", attr_string),
-    transcript_version   = safe_extract("transcript_version", attr_string),
-    exon_number    = safe_extract("exon_number", attr_string)
-  )
-}
-# func 8 END
-
-df.ensembl.gtf.for.tss # 42,925
 
 # adding columns from attribute
 df.ensembl.gtf.for.tss.attribute <- df.ensembl.gtf.for.tss %>% 
-  bind_cols(df.ensembl.gtf.for.tss$attribute %>% lapply(extracting_attributes) %>% bind_rows() ) %>%
-  dplyr::select(-c(source, feature, attribute, score, frame)) 
+  bind_cols(df.ensembl.gtf.for.tss$attribute %>% map_dfr(~extracting_attributes(.x, keys = tss.attribute.keys))) %>%
+  dplyr::select(-c(source, feature, attribute, score, frame, exon_number)) 
 
 df.ensembl.gtf.for.tss.attribute
 
@@ -1341,8 +1375,7 @@ df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt <- df.ensembl.gtf.for.tss.att
   filter(tag == "Ensembl_canonical") %>% # 21766
   filter(gene_biotype == "protein_coding") %>% # 21760
   mutate(
-    transcript_version = as.numeric(transcript_version),
-    exon_number = as.numeric(exon_number)
+    transcript_version = as.numeric(transcript_version)
   )
 df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt %>% dim() # 21760
 df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt %>% head() # 21760
@@ -1357,7 +1390,7 @@ df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt.geneid.dup.1pick <- df.ensemb
   add_count(gene_id) %>%
   filter(n > 1) %>%
   group_by(gene_id) %>%
-  arrange(desc(transcript_version), exon_number) %>%
+  arrange(desc(transcript_version)) %>%
   slice_head(n = 1) %>%
   ungroup() # 35
 
@@ -1365,17 +1398,16 @@ df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt.geneid.dup.1pick <- df.ensemb
 df.ensembl.gtf.for.tss.DISTINCT.geneid <- bind_rows(df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt.geneid.NOdup,
                                                                                    df.ensembl.gtf.for.tss.attribute.filtered.tag.gnbt.geneid.dup.1pick)  %>% # 21776
                                           dplyr::select(-n) %>% 
-                                          mutate(tss.id = paste(chr, start, end, strand, gene_id, sep = ":")) %>% 
+                                          mutate(tss.id = paste(chr, start, end, strand, gene_id, gene_name, sep = ":")) %>% 
                                           dplyr::select(chr, start, end, strand, gene_id, gene_name, tss.id) 
 
-# data integrity check  
 df.ensembl.gtf.for.tss.DISTINCT.geneid %>% # 21725
   # count(chr, start, end, gene_id) #%>% # 21,725
   count(chr, start, end, strand, gene_id) #%>% # 21,725
 
-df.ensembl.gtf.for.tss.DISTINCT.geneid %>% count(gene_id)
+df.ensembl.gtf.for.tss.DISTINCT.geneid %>% count(gene_id) # 21,725
 
-
+# tss data integrity check
 df.ensembl.gtf.for.tss.DISTINCT.geneid # %>% 
   # count(chr) %>% print(n = Inf)
   # head(3) # chr     start       end strand gene_id        gene_name
@@ -1383,25 +1415,81 @@ df.ensembl.gtf.for.tss.DISTINCT.geneid # %>%
   # distinct(gene_id) # 21,725
   # filter(str_detect(gene_id, 'LOC|RGD')) # 0
 
-# using legacy variable of df.tss.ucsc
-df.tss.ucsc <- df.ensembl.gtf.for.tss.DISTINCT.geneid # 21725
+#################################################### 
+# retrieving exon data
+#################################################### 
+df.ensembl.gtf.for.exon.raw <- df.ensembl.gtf %>% 
+  filter(feature == "exon") %>% 
+  filter(chr %in% c(as.character(1:20), "X", "Y")) %>% 
+  mutate(chr = str_c("chr", chr))
 
-# GRanges Obj.: df.tss.ucsc.GR: chr   start     end gene_id                      tss.id
-df.tss.ucsc.GR <- GRanges(
-  seqnames = as.character(df.tss.ucsc$chr),
+# checking attribute keys
+exon.attribute.keys <- get_attribute_keys(df.ensembl.gtf.for.exon.raw$attribute)
+exon.attribute.keys      
+
+#  [1] "exon_id"                      "exon_number"                 
+#  [3] "exon_version"                 "gene_biotype"                
+#  [5] "gene_id"                      "gene_name"                   
+#  [7] "gene_source"                  "gene_version"                
+#  [9] "projection_parent_transcript" "tag"                         
+# [11] "transcript_biotype"           "transcript_id"               
+# [13] "transcript_name"              "transcript_source"           
+# [15] "transcript_version"  
+
+# adding columns from attribute
+df.ensembl.gtf.for.exon.attribute <- df.ensembl.gtf.for.exon.raw %>% 
+  bind_cols(df.ensembl.gtf.for.exon.raw$attribute %>% map_dfr(~extracting_attributes(.x, keys = exon.attribute.keys))) %>%
+  dplyr::select(-c(source, feature, attribute, score, frame)) 
+
+df.ensembl.gtf.for.exon.attribute # 526,204
+
+# filtering
+df.ensembl.gtf.for.exon <- df.ensembl.gtf.for.exon.attribute %>% # 526,204
+  filter(tag == "Ensembl_canonical") %>%          # 1st filter
+  filter(gene_biotype == "protein_coding") %>%     # 2nd filter
+  mutate(exon_number = as.numeric(exon_number)) %>% # convert to numeric
+  group_by(gene_id) %>% 
+  slice_max(order_by = exon_number, n = 1, with_ties = FALSE) %>%      # keep only the largest exon_number
+  ungroup() %>% 
+  mutate(ensembl_exon_id = str_c(chr, ':', start, ':', end, ':', gene_name, ':', gene_id, ':', exon_number)) %>% 
+  dplyr::select(-c(gene_biotype, tag, transcript_biotype, transcript_version))
+
+df.ensembl.gtf.for.exon %>% dim() # 23,024
+df.ensembl.gtf.for.exon %>% head(3)
+df.ensembl.gtf.for.exon %>% add_count(gene_id) %>% filter(n == 1) # 23,024
+df.ensembl.gtf.for.exon
+
+df.ensembl.gtf.for.exon %>% 
+  filter(gene_id == "ENSG00000157764")
+
+df.tss.ensembl <- df.ensembl.gtf.for.tss.DISTINCT.geneid %>% 
+  left_join(df.ensembl.gtf.for.exon %>% dplyr::select(gene_id, ensembl_exon_id), by = "gene_id") %>%  # 21,725
+  left_join(df.refgene.gtf.for.exon %>% dplyr::select(gene_name, refseq_exon_id), by = "gene_name")
+
+# integrity check
+df.tss.ensembl %>% filter(!is.na(ensembl_exon_id) & !is.na(refseq_exon_id)) # 14,071/21,725
+df.tss.ensembl %>% filter(is.na(ensembl_exon_id) & is.na(refseq_exon_id)) # 1,360/21,725
+df.tss.ensembl %>% filter(is.na(ensembl_exon_id) & !is.na(refseq_exon_id)) # 0/21,725
+df.tss.ensembl %>% filter(!is.na(ensembl_exon_id) & is.na(refseq_exon_id)) # 6,294/21,725
+
+# GRanges Obj.: df.tss.ensembl.GR: chr   start     end gene_id                      tss.id
+df.tss.ensembl.GR <- GRanges(
+  seqnames = as.character(df.tss.ensembl$chr),
   ranges = IRanges(
-    start = as.numeric(df.tss.ucsc$start),
-    end = as.numeric(df.tss.ucsc$end)
+    start = as.numeric(df.tss.ensembl$start),
+    end = as.numeric(df.tss.ensembl$end)
   ),
-  strand = df.tss.ucsc$strand
+  strand = df.tss.ensembl$strand
 )
 
 # meta data
-mcols(df.tss.ucsc.GR)$tss_id <- df.tss.ucsc$tss.id
-mcols(df.tss.ucsc.GR)$gene_id <- df.tss.ucsc$gene_id
-# mcols(df.tss.ucsc.GR)$transcript_id <- df.tss.ucsc$transcript_id
+mcols(df.tss.ensembl.GR)$tss_id <- df.tss.ensembl$tss.id
+mcols(df.tss.ensembl.GR)$gene_id <- df.tss.ensembl$gene_id
+mcols(df.tss.ensembl.GR)$gene_name <- df.tss.ensembl$gene_name
+mcols(df.tss.ensembl.GR)$ensembl_exon_id <- df.tss.ensembl$ensembl_exon_id
+mcols(df.tss.ensembl.GR)$refseq_exon_id <- df.tss.ensembl$refseq_exon_id
 
-df.tss.ucsc.GR # 17080//21,725
+df.tss.ensembl.GR # 21,725
 
 ########################
 # 3. TSS
@@ -1410,7 +1498,7 @@ df.tss.ucsc.GR # 17080//21,725
 OVERALL.df.DISTINCT.loop.deep.sample.all.GR # 30928
 
 index.distinct.tss.w.OVERALL.whole.loop <- findOverlaps(
-  df.tss.ucsc.GR, 
+  df.tss.ensembl.GR, 
   OVERALL.df.DISTINCT.loop.deep.sample.all.GR, 
   type = "any",
   select = "all"
@@ -1426,12 +1514,12 @@ df.tss.dist.result <- tibble(
   loop.start = OVERALL.df.DISTINCT.loop.deep.sample.all$x0[OVERALL.loop.for.tss.hits],
   loop.end = OVERALL.df.DISTINCT.loop.deep.sample.all$y3[OVERALL.loop.for.tss.hits],
   loop.res=OVERALL.df.DISTINCT.loop.deep.sample.all$resolution[OVERALL.loop.for.tss.hits],
-  tss_chr = df.tss.ucsc$chr[OVERALL.tss.on.loop.hits],
-  tss_start = df.tss.ucsc$start[OVERALL.tss.on.loop.hits],
-  tss_end = df.tss.ucsc$end[OVERALL.tss.on.loop.hits],
-  tss_id = df.tss.ucsc$tss.id[OVERALL.tss.on.loop.hits],
-  tss_geneid = df.tss.ucsc$gene_id[OVERALL.tss.on.loop.hits],
-  tss_strand = df.tss.ucsc$strand[OVERALL.tss.on.loop.hits]
+  tss_chr = df.tss.ensembl$chr[OVERALL.tss.on.loop.hits],
+  tss_start = df.tss.ensembl$start[OVERALL.tss.on.loop.hits],
+  tss_end = df.tss.ensembl$end[OVERALL.tss.on.loop.hits],
+  tss_id = df.tss.ensembl$tss.id[OVERALL.tss.on.loop.hits],
+  tss_geneid = df.tss.ensembl$gene_id[OVERALL.tss.on.loop.hits],
+  tss_strand = df.tss.ensembl$strand[OVERALL.tss.on.loop.hits]
 ) %>% 
   mutate(across(where(is.numeric), ~ format(., scientific = FALSE)))
 
@@ -1568,7 +1656,8 @@ Rn_EPDnew_001_rn6.bed.gr <- GRanges(
   name = Rn_EPDnew_001_rn6.bed.raw$name,
   score = Rn_EPDnew_001_rn6.bed.raw$score
 )
-export(Rn_EPDnew_001_rn6.bed.gr, "/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6.bed.gr", format = "BED")
+Rn_EPDnew_001_rn6.bed.gr
+BiocIO::export(Rn_EPDnew_001_rn6.bed.gr, "/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6.bed.gr", format = "BED")
 Rn_EPDnew_001_rn6.bed <- import("/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6.bed.gr", format = "BED")
 Rn_EPDnew_001_rn6.bed
 
@@ -1588,65 +1677,89 @@ export(Rn_EPDnew_001_rn7, "~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_
 
 df.Rn_EPDnew_001_rn7 <- as_tibble(Rn_EPDnew_001_rn7)
 df.Rn_EPDnew_001_rn7
-df.Rn_EPDnew_001_rn7 %>% dim() # 11953/12022| 12533/12601
-df.Rn_EPDnew_001_rn7 %>% count(name) %>% filter(n > 1) # 0 | 0
+df.Rn_EPDnew_001_rn7 %>% add_count(seqnames, start, end, name) %>% filter(n > 1) # 0
+df.Rn_EPDnew_001_rn7 %>% dim() # 12533/12601
+df.Rn_EPDnew_001_rn7 %>% count(name) %>% filter(n > 1) # 0
 
 # ENSEMBL ID with gene symbol
 df.gene.mapping.for.promoter <- read_tsv("~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/db/promoter_ensembl.txt", 
-                        col_names = c("promoter_symbol", "gene_id"),
+                        col_names = c("promoter_id", "gene_id"),
                         col_types = cols(
-                          promoter_symbol = col_character(),
+                          promoter_id = col_character(),
                           gene_id = col_character()
                         )) %>% # 12,793
-                        mutate(gene_id = if_else(str_detect(promoter_symbol, 'Cfb_1'), "ENSRNOG00000051158.3", gene_id)) %>% # https://useast.ensembl.org/Rattus_norvegicus/Gene/Idhistory?g=ENSRNOG00000051158
+                        mutate(gene_id = if_else(str_detect(promoter_id, 'Cfb_1'), "ENSRNOG00000051158.3", gene_id)) %>% # https://useast.ensembl.org/Rattus_norvegicus/Gene/Idhistory?g=ENSRNOG00000051158
                         distinct() # 12,600
 
 df.gene.mapping.for.promoter #12,600
-df.gene.mapping.for.promoter %>% add_count(promoter_symbol) %>% filter(n > 1) # 0
+df.gene.mapping.for.promoter %>% add_count(promoter_id) %>% filter(n > 1) # 0
 df.gene.mapping.for.promoter %>% add_count(gene_id) %>% filter(n > 1) # 1072
+# example 
+#    promoter_id gene_id                n
+#  1 Sgk1_1      ENSRNOG00000011815     3
+#  2 Sgk1_2      ENSRNOG00000011815     3
+#  3 Sgk1_3      ENSRNOG00000011815     3
 
-df.promoter.rn7 <- left_join(df.Rn_EPDnew_001_rn7, df.gene.mapping.for.promoter, by = c("name" = "promoter_symbol"))
-df.promoter.rn7 %>% dim() # 11,953| 12533
-df.promoter.rn7 %>% head()
-df.promoter.rn7 %>% filter(is.na(gene_id)) # 0| 1 : 1 chr3     115016225 115016226     2 -      AABR07053687_2     1 NA     
-df.gene.mapping.for.promoter %>% filter(str_detect(promoter_symbol, "AABR07053687"))
-df.promoter.rn7 <- df.promoter.rn7 %>% mutate(gene_id = if_else(str_detect(name, "AABR07053687"), "ENSRNOG00000015756", gene_id))
+# adding gene_id (ENSEMBL)
+df.promoter.rn7.raw <- left_join(df.Rn_EPDnew_001_rn7, df.gene.mapping.for.promoter, by = c("name" = "promoter_id"))
+df.promoter.rn7.raw %>% dim() # 11,953| 12533
+df.promoter.rn7.raw %>% head()
+df.promoter.rn7.raw %>% filter(is.na(gene_id)) # 0| 1 : 1 chr3     115016225 115016226     2 -      AABR07053687_2     1 NA     
 
-df.promoter.rn7 %>% add_count(name) %>% filter(n > 1) # 0
-df.promoter.rn7 %>% add_count(seqnames, start, end, gene_id) %>% filter(n > 1) # 0 | 8
+df.gene.mapping.for.promoter %>% filter(str_detect(promoter_id, "AABR07053687"))
 
-# only _1
-df.promoter.rn7.dup.only._1 <- df.promoter.rn7 %>%
-  add_count(seqnames, start, end, gene_id) %>%
-  filter(n > 1 & grepl("_1$", name)) %>%
-  dplyr::select(-n)
+df.ensembl.gtf.for.exon
 
-# non-redundency dataset
-df.promoter.rn7.no.dup <- df.promoter.rn7 %>%
-  add_count(seqnames, start, end, gene_id) %>%
-  filter(n == 1) %>%
-  dplyr::select(-n)
+# adding exon information from ENSEMBL and RefSeq
+df.promoter.rn7.exon_id <- df.promoter.rn7.raw %>% # seqnames   start     end width strand name     score gene_id
+  mutate(gene_id = if_else(str_detect(name, "AABR07053687"), "ENSRNOG00000015756", gene_id)) %>% 
+  dplyr::rename(promoter_id = name) %>% 
+  mutate(gene_name = str_split_n(promoter_id, '_', 1)) %>% 
+  left_join(df.ensembl.gtf.for.exon %>% dplyr::select(gene_id, ensembl_exon_id), by = "gene_id") %>% 
+  left_join(df.refgene.gtf.for.exon %>% dplyr::select(gene_name, refseq_exon_id), by = "gene_name")
 
-df.promoter.rn7.dedup <- bind_rows(df.promoter.rn7.no.dup, df.promoter.rn7.dup.only._1)
-df.promoter.rn7.dedup.core <- df.promoter.rn7.dedup %>% 
+# integrity check
+df.promoter.rn7.exon_id %>% filter(!is.na(ensembl_exon_id) & !is.na(refseq_exon_id)) # both 10,068
+df.promoter.rn7.exon_id %>% filter(is.na(ensembl_exon_id) & is.na(refseq_exon_id)) # none 445
+df.promoter.rn7.exon_id %>% filter(is.na(ensembl_exon_id) & !is.na(refseq_exon_id)) # RefSeq only 533
+df.promoter.rn7.exon_id %>% filter(!is.na(ensembl_exon_id) & is.na(refseq_exon_id)) # ENSEMBL only 1487
+
+
+df.promoter.rn7.exon_id %>% dim() # 12533
+df.promoter.rn7.exon_id %>% head()
+
+df.promoter.rn7.exon_id %>% add_count(promoter_id) %>% filter(n > 1) # 0
+df.promoter.rn7.exon_id %>% add_count(gene_id) %>% filter(n > 1) # 1,060
+df.promoter.rn7.exon_id %>% add_count(seqnames, start, end, gene_id) %>% filter(n > 1) # 8
+
+# Deduplication: keep only _1 promoters when seqnames, start, end, gene_id are identical
+df.promoter.rn7 <- df.promoter.rn7.exon_id %>% 
+  add_count(seqnames, start, end, gene_id, name = "dup_count") %>% 
+  filter(dup_count == 1 | str_detect(promoter_id, "_1$")) %>% 
+  dplyr::select(-dup_count)
+
+df.promoter.rn7 # seqnames   start     end width strand promoter_id  score gene_id ensembl_exon_id refseq_exon_id gene_name
+df.promoter.rn7 %>% dim() # 12,529 (removed 4 duplicates)
+df.promoter.rn7 %>% add_count(seqnames, start, end, gene_id) %>% filter(n > 1) # 0
+
+# df.promoter.rn7 (dups)
+df.promoter.rn7.core <- df.promoter.rn7 %>% 
   dplyr::rename(tss_start = start, tss_end = end) %>% 
   mutate(
       start = tss_start - 40,
       end   = tss_start + 40
     ) %>% 
-  mutate(promoter.id = str_c(seqnames,':', start,':', end, ':', name, ':', gene_id, center = start, length = end - start))
-    
-df.promoter.rn7.dedup.core # 12,529
-df.promoter.rn7.dedup.core %>% head()
+  mutate(promoter.id = str_c(seqnames,':', start,':', end, ':', gene_id, ':', gene_name, ':', seqnames, ':', tss_start, ':', tss_end))
+df.promoter.rn7.core
 
 df.promoter.rn7.GR <- GRanges(
-  seqnames = df.promoter.rn7.dedup.core$seqnames,
+  seqnames = df.promoter.rn7.core$seqnames,
   ranges = IRanges(
-    start = df.promoter.rn7.dedup.core$start, 
-    end = df.promoter.rn7.dedup.core$end)
+    start = df.promoter.rn7.core$start, 
+    end = df.promoter.rn7.core$end)
 )
 # metadata
-mcols(df.promoter.rn7.GR) <- df.promoter.rn7.dedup.core[, c("promoter.id", "gene_id")]
+mcols(df.promoter.rn7.GR) <- df.promoter.rn7.core[, c("promoter.id", "gene_id", "gene_name", "ensembl_exon_id", "refseq_exon_id")]
 
 ########################
 # 4. promoter
@@ -1768,18 +1881,18 @@ combining_and_save_plots(plot.ctcf.dens, plot.tss.dens, plot.promoter.dens, "den
 ##########################################################
 ##########################################################
 
-df.tss.ucsc %>% head(3) # chr  start    end        gene_id                          tss.id
+df.tss.ensembl %>% head(3) # chr  start    end        gene_id             gene_name             tss.id
 df.promoter.rn7 %>% head(3) # chr     start     end gene_id length  center promoter.id 
 df.promoter.rn7 <- df.promoter.rn7.dedup.core %>% dplyr::select(-starts_with("tss")) %>% dplyr::rename(chr = seqnames)
 df.promoter.rn7
-df.gene_tss_and_pro <- bind_rows(df.tss.ucsc %>% 
-                                  dplyr::select(chr, start, end, gene_id, tss.id) %>%
+df.gene_tss_and_pro <- bind_rows(df.tss.ensembl %>% 
+                                  dplyr::select(chr, start, end, gene_id, gene_name, tss.id) %>%
                                   mutate(across(c(start, end), as.numeric)) %>%
                                   mutate(component = "tss") %>%
                                   dplyr::rename(component_id = tss.id) %>%
                                   mutate(component_id = str_c(component_id, component, sep='|')),
                                 df.promoter.rn7 %>% 
-                                  dplyr::select(chr, start, end, gene_id, promoter.id) %>%
+                                  dplyr::select(chr, start, end, gene_id, gene_name, promoter.id) %>%
                                   mutate(across(c(start, end), as.numeric)) %>%
                                   mutate(component = "pro") %>%
                                   dplyr::rename(component_id = promoter.id) %>%
@@ -1791,6 +1904,7 @@ df.gene_tss_and_pro %>% dim() # 29507  // 34183| 34254
 df.gene_tss_and_pro.GR <- GRanges(seqnames=df.gene_tss_and_pro$chr,
                                   ranges=IRanges(start=df.gene_tss_and_pro$start, end=df.gene_tss_and_pro$end),
                                   gene_id=df.gene_tss_and_pro$gene_id,
+                                  gene_name=df.gene_tss_and_pro$gene_name,
                                   component_id=df.gene_tss_and_pro$component_id,
                                   component=df.gene_tss_and_pro$component)
 
@@ -1830,7 +1944,9 @@ df_up <- data.frame(
     loop.id = mcols(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR)[queryHits, "loop.id"],
     resolution = mcols(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR)[queryHits, "resolution"],
     gene_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "gene_id"],
+    gene_name = mcols(df.gene_tss_and_pro.GR)[subjectHits, "gene_name"],
     component = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component"],
+    component_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component_id"],
     WHERE = "UP"
   )
 
@@ -1845,7 +1961,9 @@ df_down <- data.frame(
     loop.id = mcols(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR)[queryHits, "loop.id"],
     resolution = mcols(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR)[queryHits, "resolution"],
     gene_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "gene_id"],
+    gene_name = mcols(df.gene_tss_and_pro.GR)[subjectHits, "gene_name"],
     component = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component"],
+    component_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component_id"],
     WHERE = "DOWN"
   )
 
@@ -1888,8 +2006,57 @@ ggplot(df.final.up.down.tss.pro.nearest, aes(y = distance)) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 
+df.final.up.down.tss.pro.nearest %>% dim() # 62038
+df.final.up.down.tss.pro.nearest %>% head()
 
-df.final.up.down.tss.pro.nearest %>% 
+# getting cases per loop with minimum distance including 0
+df.final.up.down.tss.pro.nearest.only.one.anchor <- df.final.up.down.tss.pro.nearest %>%
+  group_by(loop.id) %>%
+  filter(if (all(distance == 0)) {
+    TRUE   
+  } else {
+    distance == min(distance)  
+  }) %>%
+  ungroup()
+
+df.final.up.down.tss.pro.nearest.only.one.anchor %>% dim() # 33399/62038 = 31019 * 2 (2380 are 0 in both/28639 are only one in either one of 2 anchors)
+df.final.up.down.tss.pro.nearest.only.one.anchor %>% head() 
+df.final.up.down.tss.pro.nearest.only.one.anchor %>% count(loop.id) %>% 
+  count(n)
+df.final.up.down.tss.pro.nearest.only.one.anchor %>% 
+  add_count(loop.id) %>% 
+  filter(n == 1) %>% # 18,669
+  count(component) # pro        11256|tss       17383
+
+# overlapping in both anchors
+df.final.up.down.tss.pro.nearest.only.one.anchor.both <- df.final.up.down.tss.pro.nearest.only.one.anchor %>% 
+  add_count(loop.id) %>% 
+  filter(n == 2) %>% 
+  arrange(loop.id)
+
+missing_229 <- df.final.up.down.tss.pro.nearest.only.one.anchor.both  %>% # 4760
+  # count(component) # pro        2909 tss        1851
+  filter(component == 'pro') %>% 
+  left_join(df.ensembl.gtf.for.exon, by = ('gene_name')) %>%  # 401
+  filter(is.na(exon_number)) %>% 
+  dplyr::select(gene_id.x, gene_name) %>% # 401
+  left_join(df.refgene.gtf.parsed.exon.number, by = ('gene_name')) %>% 
+  filter(is.na(exon_number)) %>% # 229
+  dplyr::rename(gene_id = gene_id.x)
+
+missing_229
+missing_229 %>% distinct(gene_id.x)
+
+
+df.ensembl.gtf.for.exon
+
+left_join(df.ensembl.gtf.for.exon, by = ('gene_id')) %>% 
+  filter(is.na(exon_number))
+df.refgene.gtf.parsed.exon.number
+
+df.ensembl.gtf.for.exon
+df.final.up.down.tss.pro.nearest.only.one.anchor %>% 
+# df.final.up.down.tss.pro.nearest %>% 
   ggplot(aes(x = log2(distance + 1))) +
   geom_histogram(binwidth = 1) +   
   labs(
@@ -1900,11 +2067,57 @@ df.final.up.down.tss.pro.nearest %>%
   theme_minimal() +
   facet_wrap(~resolution)
 
-
 get_distance <- function(x) {
   distance <- 2^x - 1
   return(distance)
 }
+
+df.final.up.down.tss.pro.nearest %>% dim()
+
+df.final.up.down.tss.pro.nearest.gene.location <- df.final.up.down.tss.pro.nearest %>% 
+  left_join(df.ensembl.gtf.for.exon, by = "gene_id") %>% 
+  mutate(loop_parts = str_split(loop.id, "_")) %>%
+  mutate(
+    chr1 = map_chr(loop_parts, 1),
+    x1   = as.numeric(map_chr(loop_parts, 2)),
+    x2   = as.numeric(map_chr(loop_parts, 3)),
+    chr2 = map_chr(loop_parts, 4),
+    y1   = as.numeric(map_chr(loop_parts, 5)),
+    y2   = as.numeric(map_chr(loop_parts, 6)),
+    anchor_distance = as.numeric(map_chr(loop_parts, 7))
+  ) %>%
+  mutate(
+    x_mid = (x1 + x2) / 2,
+    y_mid = (y1 + y2) / 2
+  ) %>%
+  mutate(location = start >= x1 & end <= y2)
+
+df.final.up.down.tss.pro.nearest.gene.location.functional <- df.final.up.down.tss.pro.nearest.gene.location %>% 
+  group_by(loop.id) %>%
+  mutate(
+    functional = case_when(
+      all(distance == 0) ~ "ambiguous",                     # both 0
+      any(distance == 0) ~ "highly",                       # one 0
+      TRUE              ~ "unfunctional"                   # neither 0
+    )
+  ) %>%
+  ungroup()
+
+df.final.up.down.tss.pro.nearest.gene.location.functional %>% 
+  filter(functional == 'ambiguous') %>% 
+  filter(count(location)
+  filter(distance < get_distance(15)) %>% 
+  count(location)
+  head()
+# 1    FALSE 34873
+# 2     TRUE 25478
+# 3       NA  1687
+  
+  %>% 
+  filter(is.na(exon_number)) %>% # 1687 from 100% promoter
+  count(component)
+  dim()
+  head()
 
 # func 12.
 approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5, top_n_genes = 70, print_top_n = 50) {
@@ -1952,12 +2165,21 @@ approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5
 }
 # func 12 END
 
-get_distance(0)   # 0:       gprofiler: https://biit.cs.ut.ee/gplink/l/aLDYW6PA7QD
-get_distance(15)  # 32767:   gprofiler: https://biit.cs.ut.ee/gplink/l/ae6cRE94rQa
-get_distance(20)  # 1048575: gprofiler: https://biit.cs.ut.ee/gplink/l/awPCWBYS9RJ
+get_distance(0)   # 0:       gprofiler: https://biit.cs.ut.ee/gplink/l/aLDYW6PA7QD| https://biit.cs.ut.ee/gplink/l/ajrmuiTFCQJ
+get_distance(15)  # 32767:   gprofiler: https://biit.cs.ut.ee/gplink/l/ae6cRE94rQa| https://biit.cs.ut.ee/gplink/l/abVmsUcaRQ8
+get_distance(20)  # 1048575: gprofiler: https://biit.cs.ut.ee/gplink/l/awPCWBYS9RJ| https://biit.cs.ut.ee/gplink/l/alXrPBsdGRv
+
+df.final.up.down.tss.pro.nearest.only.one.anchor %>% filter(distance == 0) %>%  count(gene_id) # 6697
+
+df.final.up.down.tss.pro.nearest <- df.final.up.down.tss.pro.nearest.only.one.anchor %>% filter(distance != 0)
+df.final.up.down.tss.pro.nearest.only.one.anchor %>% filter(distance == 0) %>% add_count(loop.id) %>% filter(n > 1) %>% 
+  count(component)
+  count(resolution)
+
+df.final.up.down.tss.pro.nearest
 
 approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = get_distance(0), top_n_genes = 70, print_top_n = 50)
-approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = get_distance(15), top_n_genes = 70, print_top_n = 50)
+approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest %>% filter(distance != 0), threshold_distance = get_distance(15), top_n_genes = 20, print_top_n = 20)
 approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = get_distance(20), top_n_genes = 70, print_top_n = 50)
 
 
