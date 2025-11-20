@@ -35,22 +35,18 @@ options(scipen = 999)
 getwd()
 
 # Linux
-# setwd('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\workshop\\2023_NIH_meeting\\loop_N_tss') # nolint: commented_code_linter.
+# setwd('C:\\Users\\panju\\Dropbox (UTHSC GGI)\\Gateway_to_Hao\\workshop\\2023_NIH_meeting\\loop_N_tss') 
 # setwd('./Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss')
 # setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/enhancer_atlas2.0/all_species/neuron')
 setwd("~/Desktop/temp/enhancer/dropbox_enhancer_doosan")
 setwd("/home/pkim/dropbox/Gateway_to_Hao/enhancer/r_files")
-# source(file.path("/home/pkim/dropbox/Gateway_to_Hao/project_common_code/", "variables.R"))  # No variables used
-# source(file.path("/home/pkim/dropbox/Gateway_to_Hao/project_common_code/", "funcs.R"))  # Functions moved to utils_functions.R
 
 getwd()
 
 # Mac
 setwd("~/dropbox/Gateway_to_Hao/enhancer/r_files")
 getwd()
-# source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "variables.R"))  # No variables used
-# source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "funcs.R"))  # Functions moved to utils_functions.R
-source("utils_functions.R")  # Load utility functions
+source("utils_functions.R")  # Load all utility functions
 
 ####################################
 # Sequencing stats ###### Figure 1.a
@@ -115,52 +111,7 @@ sequencing_basic_stats <- ggplot(seq.data_melted, aes(x = Strain, y = Percentage
 
 sequencing_basic_stats
 
-# func 1. saving figures
-saving_plot_dual <- function(plot_obj,
-                           filename_base,
-                           output_dir = "./figures",
-                           width_in = 11,
-                           height_in = 8.5,
-                           scale_x = 0.6,
-                           scale_y = 0.6,
-                           dpi = 300,
-                           bg = "white") {
-  if (!dir.exists(output_dir)) {
-    dir.create(output_dir, recursive = TRUE)
-  }
-
-  # path
-  pdf_path <- file.path(output_dir, paste0(filename_base, ".pdf"))
-  png_path <- file.path(output_dir, paste0(filename_base, ".png"))
-
-  # size calculation
-  final_width <- width_in * scale_x
-  final_height <- height_in * scale_y
-
-  # PDF
-  ggsave(
-    filename = pdf_path,
-    plot = plot_obj,
-    device = "pdf",
-    width = final_width,
-    height = final_height,
-    units = "in"
-  )
-
-  # PNG
-  ggsave(
-    filename = png_path,
-    plot = plot_obj,
-    device = "png",
-    width = final_width,
-    height = final_height,
-    units = "in",
-    dpi = dpi
-  )
-}
-# func 1. END
-
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = sequencing_basic_stats,
   filename_base = "sequencing_basic_stats_F1a",
   output_dir = "./figures/submission/lt2mb",
@@ -184,7 +135,7 @@ loop.file.list = fs::dir_ls("~/dropbox/Gateway_to_Hao/enhancer/data/loops", rege
 loop.file.list
 
 # BED fild for loops
-df.init.loop.bed <- init.bedpe.df(loop.file.list, 'loops') %>% 
+df.init.loop.bed <- init.bedpe.df(loop.file.list, 'loops') %>%  # utils_functions.R
   filter(!str_detect(X.chr1, "^#"))
 # %>% #58,992
 #   view()
@@ -220,7 +171,7 @@ df.loop.deep.sample.all <- df.init.loop.bed %>%
     TRUE ~ NA
   )) %>% 
   mutate(end.distance = x2 - x1) %>% 
-  mutate(resolution = convert_to_resolution(end.distance)) %>%  # Using utility function
+  mutate(resolution = convert_to_resolution(end.distance)) %>%  # Using utility function # utils_functions.R
   mutate(loop.id = str_c(X.chr1, '_', x1, '_', x2, '_', chr2, '_', y1, '_', y2, '_', end.distance)) %>% # loop.id
   mutate(sample.loop.id = str_c(strain, '_', loop.id)) %>% #sample.loop.id
   dplyr::select(sample, strain, X.chr1, x1, x2, chr2, y1, y2, distance, end.distance, resolution, loop.id, sample.loop.id) %>% 
@@ -304,7 +255,7 @@ common_combined_plot <- arrangeGrob(
   nrow = 3
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = common_combined_plot,
   filename_base = "common_loops_heatmap_percentage_bw_strains_S3",
   output_dir = "./figures/submission/lt2mb",
@@ -363,7 +314,7 @@ shared_loops_by_resolution <- ggplot(plot_df, aes(x = resolution, y = mean_share
 
 shared_loops_by_resolution
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = shared_loops_by_resolution,
   filename_base = "shared_loops_by_resolution_F3a",
   output_dir = "./figures/submission/lt2mb",
@@ -403,7 +354,7 @@ network_plot_for_shared_loops <- ggraph(network_graph, layout = "fr") +  # fr: f
 
 network_plot_for_shared_loops
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = network_plot_for_shared_loops,
   filename_base = "network_plot_for_shared_loops_S2",
   output_dir = "./figures/submission/lt2mb"
@@ -507,7 +458,7 @@ line_graph_for_loops_per_depth <- ggplot(df_long_for_plot, aes(x = Depth, y = nu
 
 line_graph_for_loops_per_depth 
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = line_graph_for_loops_per_depth,
   filename_base = "line_graph_for_loops_per_depth_hao_w_new_label_F1b",
   output_dir = "./figures/submission/lt2mb"
@@ -518,7 +469,7 @@ figure1_combined <- sequencing_basic_stats + line_graph_for_loops_per_depth +
 
 figure1_combined
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = figure1_combined,
   filename_base = "figure1_combined_F1",
   output_dir = "./figures/submission/lt2mb",
@@ -552,7 +503,7 @@ df_chr_loop_counts_fig <- ggplot(df_chr_loop_counts, aes(x = chr1, y = n_loops, 
 
 df_chr_loop_counts_fig
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = df_chr_loop_counts_fig,
   filename_base = "loop_counts_per_chr_F2",
   output_dir = "./figures/submission/lt2mb"
@@ -578,7 +529,7 @@ df.DISTINCT.loop.deep.sample.all <- df.loop.deep.sample.all %>%
   distinct() %>% 
   separate(loop.id, into = c("chr1", "x1", "x2", "chr2", "y1", "y2", "end.distance"), sep = "_", remove = FALSE, convert = TRUE) %>% 
   mutate(distance = y2 - x2) %>%
-  mutate(resolution = convert_to_resolution(end.distance)) %>%  # Using utility function
+  mutate(resolution = convert_to_resolution(end.distance)) %>%  # Using utility function # utils_functions.R
   mutate(x0 = x1, x3 = x2, y0 = y1, y3 = y2) %>%                                # x0, x3, y0, y3
 left_join(chromosome_data, by = c('chr1' = 'chr')) %>%                          # chromosome length info
 dplyr::rename(chr.end.coord = end)
@@ -597,51 +548,6 @@ df.DISTINCT.loop.deep.sample.all %>%
 # 1. Loop
 # 1-3. Loop data preprocessing: Creating GRange Obj. from df.DISTINCT.loop.deep.sample.all (whole, up, down)
 ########################
-
-# func 2. creating GRange Obj.
-creating_granges <- function(df, direction = NULL, chr.col = "chr1", metadata.cols = NULL, use_anchor = FALSE) {
-  # Determine start and end columns based on direction and anchor usage
-  if (is.null(direction)) {
-    # Overall loop (padded)
-    start.col <- "x0"
-    end.col <- "y3"
-  } else if (direction == "up") {
-    if (use_anchor) {
-      # Upstream anchor coordinates
-      start.col <- "x1"
-      end.col <- "x2"
-    } else {
-      # Upstream padded
-      start.col <- "x0"
-      end.col <- "x3"
-    }
-  } else if (direction == "down") {
-    if (use_anchor) {
-      # Downstream anchor coordinates
-      start.col <- "y1"
-      end.col <- "y2"
-    } else {
-      # Downstream padded
-      start.col <- "y0"
-      end.col <- "y3"
-    }
-  } else {
-    stop("Invalid direction. Use 'up', 'down', or leave NULL for overall.")
-  }
-  
-  gr <- GRanges(
-    seqnames = df[[chr.col]],
-    ranges = IRanges(start = as.integer(df[[start.col]]), end = as.integer(df[[end.col]]))
-  )
-  
-  if (is.null(metadata.cols)) {
-    metadata.cols <- setdiff(names(df), c(chr.col, start.col, end.col))
-  }
-  
-  mcols(gr) <- df[, metadata.cols, drop = FALSE]
-  return(gr)
-}
-# func 2 END
 
 ########################
 # 1. Loop
@@ -782,7 +688,7 @@ mcols(df.DISTINCT.ctcf.2nd.fimo.GR)$ctcf_pos <- df.DISTINCT.fimo.2nd.trial.ctcf$
 OVERALL.df.DISTINCT.loop.deep.sample.all <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping.lt.2mb ###################### 30928    16
 
 OVERALL.df.DISTINCT.loop.deep.sample.all %>% head(3)
-OVERALL.df.DISTINCT.loop.deep.sample.all.GR <- creating_granges(OVERALL.df.DISTINCT.loop.deep.sample.all)
+OVERALL.df.DISTINCT.loop.deep.sample.all.GR <- creating_granges(OVERALL.df.DISTINCT.loop.deep.sample.all) # utils_functions.R
 
 index.distinct.ctcf.w.OVERALL.whole.loop <- findOverlaps(
   df.DISTINCT.ctcf.2nd.fimo.GR, 
@@ -824,148 +730,10 @@ relative.pos.df.ctcf.dist.result %>% head(3)
 # 2-3. overall distribution of CTCF on loops: figures
 # 2-3-1. by CHROMOSOME
 ########################
+plot.ctcf.hist <- plot_histogram(relative.pos.df.ctcf.dist.result) # utils_functions.R
+plot.ctcf.dens <- plot_density(relative.pos.df.ctcf.dist.result) # utils_functions.R
 
-# func 3. merging figures into one for the overall distribution of CTCF on loops
-merging_pdf_pages_to_single_image <- function(pdf_path, output_pdf_path, output_png_path, dpi = 150, stack = TRUE) {
-  # Step 1: checking page count
-  n_pages <- pdf_info(pdf_path)$pages
-  # Step 2: converting each page to image
-  pdf_images <- lapply(1:n_pages, function(p) {
-    image_read(pdf_render_page(pdf_path, page = p, dpi = dpi))
-  })
-  # Step 3: merging images vertically
-  merged_img <- image_append(do.call(c, pdf_images), stack = stack)
-  
-  # Step 4: generating output paths
-  base_path <- file_path_sans_ext(pdf_path)
-  output_pdf_path <- paste0(base_path, "_merged.pdf")
-  output_png_path <- paste0(base_path, "_merged.png")
-  
-  # Step 5: saving PDF and PNG
-  image_write(merged_img, path = output_pdf_path, format = "pdf")
-  image_write(merged_img, path = output_png_path, format = "png")
-  
-  return(list(pdf = output_pdf_path, png = output_png_path))
-}
-# func 3 END
-
-# func 4. checking component distribution by chromosome
-checking_component_distribution <- function(data, component_name, output_dir = "./figures/submission/lt2mb") {
-  
-  chromosomes <- c(1:20, "X", "Y")
-  plot_list <- list()
-  
-  for (chr in chromosomes) {
-    tryCatch({
-      message("START: Processing chromosome: ", chr)
-      
-      data_chr <- data %>% 
-        filter(str_detect(loop.id, paste0("_chr", chr, "_")))
-      
-      # Density plot
-      plot_dens <- data_chr %>%
-        ggplot(aes(x = value)) +
-        geom_density(fill = "skyblue", color = "black", alpha = 0.5) +
-        ylim(c(0,1)) +
-        labs(
-          title = paste0("Density of ", toupper(component_name), " Found over Loop on Chr", chr),
-          x = "Relative Position to Loop",
-          y = "Density"
-        ) +
-        theme(plot.title = element_text(hjust = 0.5))
-      
-      # Histogram
-      plot_hist <- data_chr %>%
-        ggplot(aes(x = value)) +
-        geom_histogram(fill = "skyblue", color = "black", alpha = 0.5, bins = 200) +
-        labs(
-          title = paste0("Histogram of ", toupper(component_name), " Found over Loop on Chr", chr),
-          x = "Relative Position to Loop",
-          y = "Count"
-        ) +
-        theme(plot.title = element_text(hjust = 0.5))
-      
-      # merging density & histogram
-      combined_plot <- plot_hist + plot_dens
-      plot_list[[chr]] <- combined_plot
-      
-      message("END: Processing chromosome: ", chr)
-      
-    }, error = function(e) {
-      message("Error processing chromosome: ", chr)
-      message("Error message: ", e$message)
-    })
-  }
-
-  pdf_path <- file.path(output_dir, paste0("overall_distribution_of_", component_name, "_by_chromosome_wo_capping_lt2mb.pdf"))
-  png_path <- paste0(file_path_sans_ext(pdf_path), ".png")
-  
-  # saving PDF
-  pdf(pdf_path, width = 11*0.8, height = 8.5*0.8)
-  num_plots <- length(plot_list)
-  plots_per_page <- 4
-  
-  for (i in seq(1, num_plots, by = plots_per_page)) {
-    end_idx <- min(i + plots_per_page - 1, num_plots)
-    page_plots <- plot_list[i:end_idx]
-    combined_page <- plot_grid(plotlist = page_plots, ncol = 1, nrow = 4)
-    print(combined_page)
-  }
-
-  dev.off()
-  
-  # converting PDF → PNG 
-  merging_pdf_pages_to_single_image(pdf_path, output_pdf_path = pdf_path, output_png_path = png_path)
-  
-  message("Completed processing for: ", toupper(component_name))
-}
-# func 4 END
-
-checking_component_distribution(relative.pos.df.ctcf.dist.result, "ctcf")
-
-relative.pos.df.ctcf.dist.result %>% head()
-
-########################
-# 2. CTCF
-# 2-3. overall distribution of CTCF on loops: figures
-# 2-3-2. by resolution
-########################
-# func 5. plot_histogram for overall distribution
-plot_histogram <- function(df, xvar = value, xlab = "Relative Position to Loop", ylab = "Count") {
-  ggplot(df, aes(x = {{ xvar }})) +
-    geom_histogram(fill = "skyblue", color = "grey70", alpha = 0.7, bins = 200, linewidth = 0.1) +
-    labs(x = xlab, y = ylab) +
-    theme(plot.title = element_text(hjust = 0.5))
-}
-# func 5 END
-
-# func 6. plot_density for overall distribution
-plot_density <- function(df, xvar = value, groupvar = loop.res,
-                         xlab = "Relative Position to Loop", ylab = "Density",
-                         colors = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")) {
-  ggplot(df, aes(x = {{ xvar }}, color = {{ groupvar }}, fill = {{ groupvar }})) +
-    geom_density(alpha = 0.3) +
-    ylim(c(0, 0.75)) +
-    scale_color_manual(values = colors) +
-    scale_fill_manual(values = colors) +
-    labs(x = xlab, y = ylab, color = "Resolution", fill = "Resolution") +
-    theme(plot.title = element_text(hjust = 0.5))
-}
-# func 6 END
-
-# func 7. saving histogram & desity plot combined
-saving_combined_plot <- function(plot_left, plot_right, filename, width = 11 * 0.8, height = 8.5 * 0.4) {
-  pdf(file = filename, width = width, height = height)
-  combined_plot <- plot_left | plot_right
-  print(combined_plot)
-  dev.off()
-}
-# func 7 END
-
-plot.ctcf.hist <- plot_histogram(relative.pos.df.ctcf.dist.result)
-plot.ctcf.dens <- plot_density(relative.pos.df.ctcf.dist.result)
-
-saving_combined_plot(plot.ctcf.hist, plot.ctcf.dens,
+saving_combined_plot(plot.ctcf.hist, plot.ctcf.dens, # utils_functions.R
                    "figures/submission/lt2mb/overall_distribution_of_CTCF_by_resolution_wo_capping_lt2mb.pdf")
 
 ########################
@@ -975,7 +743,7 @@ saving_combined_plot(plot.ctcf.hist, plot.ctcf.dens,
 # 2-4-3. data processing for getting information of CTCF at ends in loops 
 ########################
 df.DISTINCT.loop.deep.sample.all.lt.2mb # 31019
-df.DISTINCT.loop.deep.sample.all.up.GR   <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb, direction = "up")
+df.DISTINCT.loop.deep.sample.all.up.GR   <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb, direction = "up") # utils_functions.R
 df.DISTINCT.loop.deep.sample.all.up.GR # 31773/ 31019
 
 # 1. CTCF + UPSTREAM (df.DISTINCT.loop.deep.sample.all.lt.2mb, df.DISTINCT.fimo.2nd.trial.ctcf)
@@ -1009,7 +777,7 @@ df.overlapping.CTCF.w.UPSTREAM.result %>% count(end.up.distance)
 # 2           10000 444448  # 2           10000 442386
 # 3           25000 779431  # 3           25000 761323
 
-df.DISTINCT.loop.deep.sample.all.down.GR   <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb, direction = "down")
+df.DISTINCT.loop.deep.sample.all.down.GR   <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb, direction = "down") # utils_functions.R
 df.DISTINCT.loop.deep.sample.all.down.GR
 
 # 2. CTCF + DOWNSTREAM (df.DISTINCT.loop.deep.sample.all.lt.2mb, df.DISTINCT.fimo.2nd.trial.ctcf)
@@ -1050,10 +818,10 @@ df.overlapping.CTCF.w.BOTH.result <- bind_rows(df.overlapping.CTCF.w.UPSTREAM.re
                                                  mutate(loop.id = down.loop.id, end.distance = end.down.distance) %>% 
                                                  mutate(case.id = ctcf.loop.down.id) %>% 
                                                  dplyr::select(-c(down.loop.id, end.down.distance, ctcf.loop.down.id))) %>% 
-  mutate(chr = ifelse(WHERE == "UP", str_split_n(loop.id, '_', 1), str_split_n(loop.id, '_', 4))) %>% 
+  mutate(chr = ifelse(WHERE == "UP", str_split_n(loop.id, '_', 1), str_split_n(loop.id, '_', 4))) %>%  # utils_functions.R
   mutate(chr = factor(chr, levels = c(paste0("chr", 1:20), "chrX", "chrY"))) %>%
   mutate(WHERE = fct_relevel(WHERE, "UP", "DOWN")) %>% 
-  mutate(resolution = convert_to_resolution(end.distance))  # Using utility function
+  mutate(resolution = convert_to_resolution(end.distance))  # Using utility function # utils_functions.R
 
 df.overlapping.CTCF.w.BOTH.result %>% dim() # sub.4 any: 2814516 |.4 lt2mb 2775892 
 df.overlapping.CTCF.w.BOTH.result %>% colnames() # "distance" "resolution" "ctcf.id" "WHERE" "loop.id" "end.distance" "case.id" "chr"
@@ -1144,7 +912,7 @@ both_ctcf_ids # 29,978
 ###############
 ###############
 
-ctcf.stats.by.resolution <- calculate_grouped_stats(
+ctcf.stats.by.resolution <- calculate_grouped_stats( # utils_functions.R
   df.ctcf.counts, 
   value_col = "ctcf_count", 
   group_cols = c("WHERE", "resolution")
@@ -1240,13 +1008,13 @@ df.refgene.gtf.for.exon.raw <- df.refgene.gtf %>%
   filter(chr %in% c(paste0("chr", 1:20), "chrX", "chrY"))
 
 # checking attribute keys
-refgene.exon.attribute.keys <- get_attribute_keys(df.refgene.gtf.for.exon.raw$attribute)
+refgene.exon.attribute.keys <- get_attribute_keys(df.refgene.gtf.for.exon.raw$attribute) # utils_functions.R
 refgene.exon.attribute.keys
 # [1] "exon_id"       "exon_number"   "gene_id"       "gene_name"     "transcript_id"
 
 # adding columns from attribute
 df.refgene.gtf.for.exon.attribute <- df.refgene.gtf.for.exon.raw %>% 
-  bind_cols(df.refgene.gtf.for.exon.raw$attribute %>% map_dfr(~extracting_attributes(.x, keys = refgene.exon.attribute.keys))) %>%
+  bind_cols(df.refgene.gtf.for.exon.raw$attribute %>% map_dfr(~extracting_attributes(.x, keys = refgene.exon.attribute.keys))) %>% # utils_functions.R
   dplyr::select(-c(source, feature, attribute, score, frame))
 
 df.refgene.gtf.for.exon.attribute # 174,505
@@ -1291,42 +1059,6 @@ df.ensembl.gtf %>% dplyr::select(X9) %>% head(3) # attribute
 colnames(df.ensembl.gtf) <- c("chr", "source", "feature", "start", "end", 
                    "score", "strand", "frame", "attribute")
 
-# func 8-1. get attribute keys from GTF attribute column
-get_attribute_keys <- function(attribute_vector) {
-  attribute_vector %>%                           
-    strsplit(";") %>%                             
-    unlist() %>%                                  
-    trimws() %>%                                  
-    str_extract("^[^ ]+") %>%                     
-    unique() %>%                                   
-    sort()
-}
-# func 8-1 END
-
-# func 8-2. extracting attribute keys and values dynamically
-extracting_attributes <- function(attr_string, keys = NULL) {
-  # If keys are not provided, extract them from the attribute string
-  if (is.null(keys)) {
-    keys <- get_attribute_keys(attr_string)
-  }
-  
-  # Helper function to safely extract a value for a given key
-  safe_extract <- function(key, string) {
-    match <- str_match(string, paste0(key, ' "([^"]*)?"'))[,2]
-    if (is.na(match) || trimws(match) == "") return(NA_character_) else return(match)
-  }
-  
-  # Create a named list of extracted values
-  result <- setNames(
-    lapply(keys, function(k) safe_extract(k, attr_string)),
-    keys
-  )
-  
-  # Convert to tibble
-  as_tibble(result)
-}
-# func 8-2 END
-
 #################################################### 
 # retrieving tss data
 #################################################### 
@@ -1344,7 +1076,7 @@ df.ensembl.gtf.for.tss %>% filter(str_detect(attribute, 'ENSRNOG00000042691'))
 df.ensembl.gtf.for.tss # 42,925
 
 # checking attribute keys
-tss.attribute.keys <- get_attribute_keys(df.ensembl.gtf.for.tss$attribute)
+tss.attribute.keys <- get_attribute_keys(df.ensembl.gtf.for.tss$attribute) # utils_functions.R
 tss.attribute.keys              
 #  [1] "exon_number"                  "gene_biotype"                
 #  [3] "gene_id"                      "gene_name"                   
@@ -1356,7 +1088,7 @@ tss.attribute.keys
 
 # adding columns from attribute
 df.ensembl.gtf.for.tss.attribute <- df.ensembl.gtf.for.tss %>% 
-  bind_cols(df.ensembl.gtf.for.tss$attribute %>% map_dfr(~extracting_attributes(.x, keys = tss.attribute.keys))) %>%
+  bind_cols(df.ensembl.gtf.for.tss$attribute %>% map_dfr(~extracting_attributes(.x, keys = tss.attribute.keys))) %>% # utils_functions.R
   dplyr::select(-c(source, feature, attribute, score, frame, exon_number)) 
 
 df.ensembl.gtf.for.tss.attribute
@@ -1415,7 +1147,7 @@ df.ensembl.gtf.for.exon.raw <- df.ensembl.gtf %>%
   mutate(chr = str_c("chr", chr))
 
 # checking attribute keys
-exon.attribute.keys <- get_attribute_keys(df.ensembl.gtf.for.exon.raw$attribute)
+exon.attribute.keys <- get_attribute_keys(df.ensembl.gtf.for.exon.raw$attribute) # utils_functions.R
 exon.attribute.keys      
 
 #  [1] "exon_id"                      "exon_number"                 
@@ -1429,7 +1161,7 @@ exon.attribute.keys
 
 # adding columns from attribute
 df.ensembl.gtf.for.exon.attribute <- df.ensembl.gtf.for.exon.raw %>% 
-  bind_cols(df.ensembl.gtf.for.exon.raw$attribute %>% map_dfr(~extracting_attributes(.x, keys = exon.attribute.keys))) %>%
+  bind_cols(df.ensembl.gtf.for.exon.raw$attribute %>% map_dfr(~extracting_attributes(.x, keys = exon.attribute.keys))) %>% # utils_functions.R
   dplyr::select(-c(source, feature, attribute, score, frame)) 
 
 df.ensembl.gtf.for.exon.attribute # 526,204
@@ -1543,7 +1275,7 @@ relative.pos.df.tss.dist.result %>% head()
 # 3-3-1. by CHROMOSOME
 ########################
 
-checking_component_distribution(relative.pos.df.tss.dist.result, "tss")
+checking_component_distribution(relative.pos.df.tss.dist.result, "tss") # utils_functions.R
 
 relative.pos.df.tss.dist.result %>% head()
 
@@ -1553,10 +1285,10 @@ relative.pos.df.tss.dist.result %>% head()
 # 3-3-2. by resolution
 ########################
 
-plot.tss.hist <- plot_histogram(relative.pos.df.tss.dist.result)
-plot.tss.dens <- plot_density(relative.pos.df.tss.dist.result)
+plot.tss.hist <- plot_histogram(relative.pos.df.tss.dist.result) # utils_functions.R
+plot.tss.dens <- plot_density(relative.pos.df.tss.dist.result) # utils_functions.R
 
-saving_combined_plot(plot.tss.hist, plot.tss.dens,
+saving_combined_plot(plot.tss.hist, plot.tss.dens, # utils_functions.R
                    "figures/submission/lt2mb/overall_distribution_of_TSS_by_resolution_wo_capping_lt2mb_ENSEMBL.pdf")
                    
 ########################
@@ -1568,49 +1300,6 @@ saving_combined_plot(plot.tss.hist, plot.tss.dens,
 df.DISTINCT.loop.deep.sample.all # 31773
 df.DISTINCT.loop.deep.sample.all.lt.2mb  %>% dim()# 31019
 df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(2) # 31019
-
-# func 9. Computing inner distance statistics
-computing_inner_distance_stats <- function(df) {
-  df <- df %>% mutate(inner.distance = y0 - x3)
-  
-  # quantile
-  ylim_vals <- quantile(df$inner.distance, c(0.05, 0.95), na.rm = TRUE)
-  
-  # min & median
-  stats <- df %>%
-    summarise(
-      min_val = min(inner.distance, na.rm = TRUE),
-      median_val = median(inner.distance, na.rm = TRUE)
-    )
-  
-  # return: list
-  list(ylim_vals = ylim_vals, stats = stats)
-}
-# func 9 END
-
-# func 10. Plotting inner distance boxplot
-plotting_inner_distance_boxplot <- function(df, ylim_vals, stats, title_text) {
-  df %>%
-    mutate(inner.distance = y0 - x3) %>%
-    ggplot(aes(y = inner.distance)) +
-    geom_boxplot(outlier.shape = NA, fill = "#4C9F70", color = "black") +
-    geom_hline(yintercept = stats$min_val, linetype = "dashed", color = "blue", linewidth = 0.6) +
-    geom_hline(yintercept = stats$median_val, linetype = "dotted", color = "red", linewidth = 0.8) +
-    annotate("text", x = 0.2, y = stats$min_val, label = paste0("Min: ", stats$min_val), color = "blue", hjust = 0) +
-    annotate("text", x = 0.2, y = stats$median_val, label = paste0("Median: ", stats$median_val), color = "red", hjust = 0) +
-    coord_cartesian(ylim = ylim_vals) +
-    labs(
-      title = title_text,
-      y = "Inner Distance (bp)",
-      x = ""
-    ) +
-    theme(
-      axis.text.x = element_text(angle = 0, hjust = 1),
-      plot.title = element_text(hjust = 0.5),
-      legend.position = "bottom"
-    )
-}
-# func 10 END
 
 ########################
 # 4. promoter
@@ -1705,7 +1394,7 @@ df.ensembl.gtf.for.exon
 df.promoter.rn7.exon_id <- df.promoter.rn7.raw %>% # seqnames   start     end width strand name     score gene_id
   mutate(gene_id = if_else(str_detect(name, "AABR07053687"), "ENSRNOG00000015756", gene_id)) %>% 
   dplyr::rename(promoter_id = name) %>% 
-  mutate(gene_name = str_split_n(promoter_id, '_', 1)) %>% 
+  mutate(gene_name = str_split_n(promoter_id, '_', 1)) %>%  # utils_functions.R
   left_join(df.ensembl.gtf.for.exon %>% dplyr::select(gene_id, ensembl_exon_id), by = "gene_id") %>% 
   left_join(df.refgene.gtf.for.exon %>% dplyr::select(gene_name, refseq_exon_id), by = "gene_name")
 
@@ -1808,7 +1497,7 @@ relative.pos.df.promoter.dist.result %>% dim() # any: 264932(dedups) // w/o capp
 # 4-3-1. by CHROMOSOME
 ########################
 
-checking_component_distribution(relative.pos.df.promoter.dist.result, "promoter")
+checking_component_distribution(relative.pos.df.promoter.dist.result, "promoter") # utils_functions.R
 
 relative.pos.df.promoter.dist.result %>% head()
 
@@ -1818,10 +1507,10 @@ relative.pos.df.promoter.dist.result %>% head()
 # 4-3-2. by resolution
 ########################
 
-plot.promoter.hist <- plot_histogram(relative.pos.df.promoter.dist.result)
-plot.promoter.dens <- plot_density(relative.pos.df.promoter.dist.result)
+plot.promoter.hist <- plot_histogram(relative.pos.df.promoter.dist.result) # utils_functions.R
+plot.promoter.dens <- plot_density(relative.pos.df.promoter.dist.result) # utils_functions.R
 
-saving_combined_plot(plot.promoter.hist, plot.promoter.dens,
+saving_combined_plot(plot.promoter.hist, plot.promoter.dens, # utils_functions.R
                    "figures/submission/lt2mb/overall_distribution_of_promoter_by_resolution_wo_capping_lt2mb_ENSEMBL.pdf")
 
 #########################################
@@ -1830,41 +1519,8 @@ saving_combined_plot(plot.promoter.hist, plot.promoter.dens,
 #########################################
 #########################################
 
-# func 11
-combining_and_save_plots <- function(p1, p2, p3,
-                                   filename = "histogram_combined_all.png",
-                                   output_dir = "./figures/submission/lt2mb",
-                                   width = 11, height = 8.5, dpi = 300) {
-  # base theme
-  base_theme <- theme_bw(base_size = 12) +
-    theme(plot.title.position = "plot",
-          panel.grid.minor = element_blank())
-  
-  # theme
-  p1 <- p1 + base_theme
-  p2 <- p2 + base_theme
-  p3 <- p3 + base_theme
-  
-  # combining plots
-  fig_combined <- (p1 | p2 | p3) +
-    plot_layout(ncol = 3, guides = "collect", widths = c(1, 1, 1)) &
-    theme(legend.position = "bottom",
-          legend.margin = margin(2, 6, 2, 6),
-          plot.tag = element_text(face = "bold", size = 12))
-  
-  # adding tag
-  fig_combined <- fig_combined +
-    plot_annotation(tag_levels = "a")
-  
-  # saving
-  ggsave(file.path(output_dir, filename), fig_combined, width = width, height = height, dpi = dpi, bg = "white")
-  
-  # return(fig_combined)
-}
-# func 11 END
-
-combining_and_save_plots(plot.ctcf.hist, plot.tss.hist, plot.promoter.hist, "histogram_combined_all_ENSEMBL.png")
-combining_and_save_plots(plot.ctcf.dens, plot.tss.dens, plot.promoter.dens, "density_combined_all_ENSEMBL.png")
+combining_and_save_plots(plot.ctcf.hist, plot.tss.hist, plot.promoter.hist, "histogram_combined_all_ENSEMBL.png") # utils_functions.R
+combining_and_save_plots(plot.ctcf.dens, plot.tss.dens, plot.promoter.dens, "density_combined_all_ENSEMBL.png") # utils_functions.R
 
 ##########################################################
 ##########################################################
@@ -1924,8 +1580,8 @@ df.DISTINCT.loop.deep.sample.all.lt.2mb.prep <- df.DISTINCT.loop.deep.sample.all
   mutate(mid_x = floor((x0 + x3) / 2), mid_y = floor((y0 + y3) / 2))
 
 # Create GRanges for UP and DOWN anchors using creating_granges function
-df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep, direction = "up", use_anchor = TRUE)
-df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep, direction = "down", use_anchor = TRUE)
+df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep, direction = "up", use_anchor = TRUE) # utils_functions.R
+df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep, direction = "down", use_anchor = TRUE) # utils_functions.R
 
 hits_up <- distanceToNearest(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR, df.gene_tss_and_pro.GR)
 hits_up
@@ -2022,63 +1678,6 @@ df.final.up.down.tss.pro.nearest.filtered %>% head()
 df.final.up.down.tss.pro.nearest.filtered %>% count(loop.id) %>% 
   count(n)
 
-# func 17. adding loop validity column (clear vs vague)
-adding_loop_validity <- function(df) {
-  df %>%
-    add_count(loop.id, name = "n_per_loop") %>%
-    mutate(loop_validity = ifelse(n_per_loop == 1, "clear", "vague")) %>%
-    dplyr::select(-n_per_loop)
-}
-# func 17 END
-
-# func 18. checking exon functionality within loop boundaries
-checking_exon_functionality <- function(loop_id, ensembl_exon_id, refseq_exon_id) {
-  # Extract loop coordinates from loop.id
-  # Format: chr_x1_x2_chr_y1_y2_resolution
-  loop_parts <- str_split(loop_id, "_")[[1]]
-  chr <- loop_parts[1]
-  x1 <- as.numeric(loop_parts[2])
-  y2 <- as.numeric(loop_parts[6])
-  
-  # Determine which exon ID to use (prefer ENSEMBL)
-  exon_id <- if (!is.na(ensembl_exon_id)) {
-    ensembl_exon_id
-  } else if (!is.na(refseq_exon_id)) {
-    refseq_exon_id
-  } else {
-    NA_character_
-  }
-  
-  # If no exon data, return "unclear"
-  if (is.na(exon_id)) {
-    return("unclear")
-  }
-  
-  # Extract exon coordinates (first 3 values: chr:start:end)
-  exon_parts <- str_split(exon_id, ":")[[1]]
-  exon_chr <- exon_parts[1]
-  exon_start <- as.numeric(exon_parts[2])
-  exon_end <- as.numeric(exon_parts[3])
-  
-  # Check if exon is within loop boundaries
-  # Exon is functional if it's between x1 and y2 on the same chromosome
-  if (exon_chr == chr && exon_start >= x1 && exon_end <= y2) {
-    return("functional")
-  } else {
-    return("unfunctional")
-  }
-}
-# func 18 END
-
-# func 19. adding functionality column
-adding_functionality <- function(df) {
-  df %>%
-    rowwise() %>%
-    mutate(functionality = checking_exon_functionality(loop.id, ensembl_exon_id, refseq_exon_id)) %>%
-    ungroup()
-}
-# func 19 END
-
 ###############################################################################################
 # columns:
 # loop_validity: the number of overlapping: 1 overlapping or 2 overlapping: clear or vague
@@ -2087,8 +1686,8 @@ adding_functionality <- function(df) {
 
 # Apply both functions to the filtered dataset
 df.final.up.down.tss.pro.nearest.filtered.validity.functionality <- df.final.up.down.tss.pro.nearest.filtered %>%
-  adding_loop_validity() %>%
-  adding_functionality()
+  adding_loop_validity() %>% # utils_functions.R
+  adding_functionality() # utils_functions.R
 
 df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>% head()
 df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>% count(loop_validity)
@@ -2096,36 +1695,9 @@ df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>% count(funct
 
 df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>% count(loop_validity, functionality)
 
-# func 20. adding final decision column for vague cases
-adding_final_decision <- function(df) {
-  df %>%
-    group_by(loop.id) %>%
-    mutate(final = case_when(
-      # For clear cases (only 1 row per loop.id)
-      loop_validity == "clear" ~ "decided",
-      
-      # For vague cases (2 rows per loop.id), check functionality
-      loop_validity == "vague" ~ {
-        functional_count <- sum(functionality == "functional", na.rm = TRUE)
-        
-        if (functional_count == 2) {
-          "undecidable"  # Both UP and DOWN are functional
-        } else if (functional_count == 1) {
-          "decidable"    # Only one (UP or DOWN) is functional
-        } else {
-          "FALSE"        # Neither is functional
-        }
-      },
-      
-      TRUE ~ NA_character_
-    )) %>%
-    ungroup()
-}
-# func 20 END
-
 # Apply the function
 df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final <- df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>%
-  adding_final_decision()
+  adding_final_decision() # utils_functions.R
 
 df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final
 
@@ -2201,11 +1773,6 @@ df.final.up.down.tss.pro.nearest.only.one.anchor %>%
   theme_minimal() +
   facet_wrap(~resolution)
 
-get_distance <- function(x) {
-  distance <- 2^x - 1
-  return(distance)
-}
-
 df.final.up.down.tss.pro.nearest %>% dim()
 
 df.final.up.down.tss.pro.nearest.gene.location <- df.final.up.down.tss.pro.nearest %>% 
@@ -2240,7 +1807,7 @@ df.final.up.down.tss.pro.nearest.gene.location.functional <- df.final.up.down.ts
 df.final.up.down.tss.pro.nearest.gene.location.functional %>% 
   filter(functional == 'ambiguous') %>% 
   filter(count(location)
-  filter(distance < get_distance(15)) %>% 
+  filter(distance < get_distance(15)) %>%  # utils_functions.R
   count(location)
   head()
 # 1    FALSE 34873
@@ -2253,55 +1820,9 @@ df.final.up.down.tss.pro.nearest.gene.location.functional %>%
   dim()
   head()
 
-# func 12.
-approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5, top_n_genes = 70, print_top_n = 50) {
-
-  # Task 1: Filtering and top N genes by loop count
-  df.filtered <- df %>% filter(distance <= threshold_distance)
-# dim(df.filtered) # 31019
-  df.gene_loop_count <- df.filtered %>%
-    count(gene_id, sort = TRUE)
-
-  df.top_genes <- df.gene_loop_count %>%
-    slice_max(n, n = top_n_genes) %>%
-    arrange(n)
-
-  plot <- ggplot(df.top_genes, aes(x = reorder(gene_id, n), y = n)) +
-    geom_bar(stat = "identity", fill = "#1F78B4") +
-    geom_text(aes(label = n), vjust = -0.3, color = "red", size = 3) +
-    coord_flip() +
-    labs(
-      title = paste("Top", top_n_genes, "Genes by Number of Loops (distance <=", threshold_distance, ")"),
-      x = "Gene",
-      y = "Number of Loops"
-    ) +
-    theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5))
-
-  print(plot)
-
-  # Task 2: Percentage of loops retained
-  total_loops <- df %>% distinct(loop.id)
-  filtered_loops <- df.filtered %>% distinct(loop.id)
-
-  percent_retained <- round((nrow(filtered_loops) / nrow(total_loops)) * 100, 2)
-  message("total loops: ", nrow(total_loops), " ")
-  message("filtered_loops: ", nrow(filtered_loops), " ")
-  message("Filtered loops retain ", percent_retained, "% of total loops")
-
-  # Task 3: Print top genes
-  top_genes <- df.gene_loop_count %>%
-    slice_max(n, n = print_top_n) %>%
-    pull(gene_id)
-
-  cat("Top", print_top_n, "genes:\n")
-  cat(top_genes, sep = "\n")
-}
-# func 12 END
-
-get_distance(0)   # 0:       gprofiler: https://biit.cs.ut.ee/gplink/l/aLDYW6PA7QD| https://biit.cs.ut.ee/gplink/l/ajrmuiTFCQJ
-get_distance(15)  # 32767:   gprofiler: https://biit.cs.ut.ee/gplink/l/ae6cRE94rQa| https://biit.cs.ut.ee/gplink/l/abVmsUcaRQ8
-get_distance(20)  # 1048575: gprofiler: https://biit.cs.ut.ee/gplink/l/awPCWBYS9RJ| https://biit.cs.ut.ee/gplink/l/alXrPBsdGRv
+get_distance(0)   # 0:       gprofiler: https://biit.cs.ut.ee/gplink/l/aLDYW6PA7QD| https://biit.cs.ut.ee/gplink/l/ajrmuiTFCQJ # utils_functions.R
+get_distance(15)  # 32767:   gprofiler: https://biit.cs.ut.ee/gplink/l/ae6cRE94rQa| https://biit.cs.ut.ee/gplink/l/abVmsUcaRQ8 # utils_functions.R
+get_distance(20)  # 1048575: gprofiler: https://biit.cs.ut.ee/gplink/l/awPCWBYS9RJ| https://biit.cs.ut.ee/gplink/l/alXrPBsdGRv # utils_functions.R
 
 df.final.up.down.tss.pro.nearest.only.one.anchor %>% filter(distance == 0) %>%  count(gene_id) # 6697
 
@@ -2312,9 +1833,9 @@ df.final.up.down.tss.pro.nearest.only.one.anchor %>% filter(distance == 0) %>% a
 
 df.final.up.down.tss.pro.nearest
 
-approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = get_distance(0), top_n_genes = 70, print_top_n = 50)
-approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest %>% filter(distance != 0), threshold_distance = get_distance(15), top_n_genes = 20, print_top_n = 20)
-approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = get_distance(20), top_n_genes = 70, print_top_n = 50)
+approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = get_distance(0), top_n_genes = 70, print_top_n = 50) # utils_functions.R
+approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest %>% filter(distance != 0), threshold_distance = get_distance(15), top_n_genes = 20, print_top_n = 20) # utils_functions.R
+approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = get_distance(20), top_n_genes = 70, print_top_n = 50) # utils_functions.R
 
 
 mean(df.final.up.down.tss.pro.nearest$distance) # 109537.7// midpoint, ENSEMBL61564.34// span, ENSEMBL 55191.25| 55118
@@ -2323,7 +1844,7 @@ threshold_distance <- approach2.stats$Median # 28943.5// midpoint, ENSEMBL 23377
 threshold_distance <- approach2.stats$Q1 # 8807// midpoint, ENSEMBL 7422 //  span, ENSEMBL 514.25| 512.25
 threshold_distance <- 10000 # 2k:46.36%, 3k:49.2%, 5k:54.33%, 10k: 63.87%
 threshold_distance
-approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = threshold_distance, top_n_genes = 70, print_top_n = 50)
+approach_2nd_analyze_loops_by_threshold(df.final.up.down.tss.pro.nearest, threshold_distance = threshold_distance, top_n_genes = 70, print_top_n = 50) # utils_functions.R
 # ENSEMBL point: https://biit.cs.ut.ee/gplink/l/aEqIdfCD3TD
 # ENSEMBL span: https://biit.cs.ut.ee/gplink/l/aDqh-aFfbQP
 df.final.up.down.tss.pro.nearest %>% head()
@@ -2479,10 +2000,10 @@ df.overlapping.tss_and_pro.w.BOTH.result <- bind_rows(df.overlapping.tss_and_pro
                                                  mutate(loop.id = down.loop.id, end.distance = end.down.distance) %>% 
                                                  mutate(case.id = tss_and_pro.loop.down.id) %>% 
                                                  dplyr::select(-c(down.loop.id, end.down.distance, tss_and_pro.loop.down.id))) %>% 
-  mutate(chr = ifelse(WHERE == "UP", str_split_n(loop.id, '_', 1), str_split_n(loop.id, '_', 4))) %>% 
+  mutate(chr = ifelse(WHERE == "UP", str_split_n(loop.id, '_', 1), str_split_n(loop.id, '_', 4))) %>%  # utils_functions.R
   mutate(chr = factor(chr, levels = c(paste0("chr", 1:20), "chrX", "chrY"))) %>%
   mutate(WHERE = fct_relevel(WHERE, "UP", "DOWN")) %>% 
-  mutate(resolution = convert_to_resolution(end.distance))  # Using utility function
+  mutate(resolution = convert_to_resolution(end.distance))  # Using utility function # utils_functions.R
 
 df.overlapping.tss_and_pro.w.BOTH.result %>% dim() # 25477
 df.overlapping.tss_and_pro.w.BOTH.result %>% colnames() # [1] "distance"     "resolution"   "gene.id"      "component.id" "component"  "WHERE"        "loop.id"      "end.distance" "case.id"      "chr" 
@@ -2553,7 +2074,7 @@ df.final.loop.dataset.tss.unique <- df.final.loop.dataset.tss %>%
   filter(str_starts(case, "u.")) %>% 
   dplyr::select(loop.id, case.id, WHERE, tss.gene_id) %>% 
   mutate(case.id = str_c(case.id, "TSS", sep = '|')) %>% 
-  mutate(gene.id = str_split_n(tss.gene_id, '\\|', 1)) %>%
+  mutate(gene.id = str_split_n(tss.gene_id, '\\|', 1)) %>% # utils_functions.R
   dplyr::rename(case.where.id = tss.gene_id)
 
 # view()
@@ -2563,7 +2084,7 @@ df.final.loop.dataset.promoter.unique <- df.final.loop.dataset.promoter %>%
   filter(str_starts(case, "u.")) %>% 
   dplyr::select(loop.id, case.id, WHERE, promoter.gene_id) %>% 
   mutate(case.id = str_c(case.id, "promoter", sep = '|')) %>% 
-  mutate(gene.id = str_split_n(promoter.gene_id, '\\|', 1)) %>%
+  mutate(gene.id = str_split_n(promoter.gene_id, '\\|', 1)) %>% # utils_functions.R
   dplyr::rename(case.where.id = promoter.gene_id)
 # colnames()
 # head()
@@ -2645,7 +2166,7 @@ the_number_of_genes_per_loops <- ggplot(loop_gene_counts_all, aes(x = n_genes)) 
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = the_number_of_genes_per_loops,
   output_dir = "./figures/submission/lt2mb",
   filename_base = "the_number_of_genes_per_loops")
@@ -2688,66 +2209,11 @@ gene_density <- df_binned %>%
 
 head(gene_density)
 
-process_feature_bins <- function(feature_df, chromosome_ends, bin_size = 1e6, label = "Feature") {
-  options(scipen = 999)
-  
-  # col type
-  chromosome_ends <- chromosome_ends %>% mutate(chr = str_remove(as.character(chr), 'chr'))
-  feature_df$chr <- as.character(feature_df$chr)
-  
-  result <- list()
-  
-  valid_chromosomes <- as.character(c(1:20, "X", "Y"))
-  feature_df <- feature_df %>% mutate(chr = str_remove(chr, 'chr')) %>% filter(chr %in% valid_chromosomes)
-  
-  for (current_chr in unique(feature_df$chr)) {
-    chr_data <- feature_df %>% filter(chr == current_chr)
-    chr_end <- chromosome_ends %>% filter(chr == current_chr) %>% pull(end)
-    
-    if (length(chr_end) != 1 || !is.finite(chr_end) || chr_end < bin_size) {
-      warning(paste("No valid end position for", current_chr, "- skipping"))
-      next
-    }
-    
-    # interval: Start = End+1
-    bin_edges <- seq(1, chr_end, by = bin_size)
-    if (length(bin_edges) < 2) {
-      warning(paste("Not enough bin edges for", current_chr, "- skipping"))
-      next
-    }
-    bins <- data.frame(
-      start = bin_edges[-length(bin_edges)],
-      end = bin_edges[-1] -1
-    )
-    
-    if (tail(bins$end, 1) < chr_end) {
-      bins <- rbind(bins, data.frame(start = bins$end[nrow(bins)] + 1, end = chr_end))
-    }
-    
-    bins <- bins %>%
-      mutate(chr = current_chr,
-             Value = 0,
-             Feature = label)
-    
-    for (i in 1:nrow(bins)) {
-      bins$Value[i] <- sum(
-        chr_data$start >= bins$start[i] & chr_data$start <= bins$end[i],
-        na.rm = TRUE
-      )
-    }
-    
-    result[[current_chr]] <- bins
-  }
-  
-  final <- bind_rows(result)
-  final <- final %>%
-    dplyr::select(chr, start, end, Value, Feature)
-  
-  return(final)
-}
+
+
 
 getwd()
-ctcf_density <- process_feature_bins(df_ctcf_ideogram, chromosome_data, bin_size, label = "CTCF") %>% dplyr::select(-last_col()) # color = "#E41A1C"
+ctcf_density <- process_feature_bins(df_ctcf_ideogram, chromosome_data, bin_size, label = "CTCF") %>% dplyr::select(-last_col()) # color = "#E41A1C" # utils_functions.R
 ctcf_density
 
 ideogram(
@@ -2772,32 +2238,6 @@ rsvg_png(svg_file, png_file)
 # threshold value visualization
 ################################################################################################
 ################################################################################################
-# func 13. filtering loops by threshold
-plotting_and_filtering_summary <- function(df_counts, count_col, output_prefix) {
-
-  # 1. hitogram
-  p.hist <- ggplot(df_counts, aes(x = log2(.data[[count_col]]))) +
-    geom_histogram() +
-    facet_wrap(~WHERE + resolution, scales = "free_y") +
-    labs(
-      y = "Count"
-    )
-
-  #   geom_histogram() +
-  #   facet_wrap(~WHERE + resolution, scales = "free_y")
-
-  # 2. PDF
-  pdf_path <- paste0("./figures/submission/lt2mb/histogram_number_of_", output_prefix, "_within_ends_of_loops_by_resolution_end.pdf")
-  pdf(file = pdf_path, width = 11 * 0.8, height = 8.5 * 0.8)
-  print(p.hist)
-  dev.off()
-
-  # 3. png
-  png_path <- paste0("./figures/submission/lt2mb/histogram_number_of_", output_prefix, "_within_ends_of_loops_by_resolution_end.png")
-  ggsave(filename = png_path, plot = p.hist, width = 11 * 0.8, height = 8.5 * 0.8, dpi = 300)
-}
-# func 13 END
-
 # 4-1. CTCF
 df.ctcf.counts
 df.ctcf.counts %>%
@@ -2805,7 +2245,7 @@ df.ctcf.counts %>%
   summarise(max_ctcf = max(ctcf_count), .groups = "drop")
 
 
-df.ctcf.filtered <- plotting_and_filtering_summary(
+df.ctcf.filtered <- plotting_and_filtering_summary( # utils_functions.R
   df_counts = df.ctcf.counts,
   count_col = "ctcf_count",
   output_prefix = "ctcf"
@@ -2828,7 +2268,7 @@ df.loops.above.ctcf.threshold
 
 final.loops.from.ctcf.step <- df.loops.above.ctcf.threshold %>% 
   distinct(loop.id) %>% 
-  mutate(end.distance = str_split_n(loop.id, '_', 7)) %>% 
+  mutate(end.distance = str_split_n(loop.id, '_', 7)) %>%  # utils_functions.R
   mutate(resolution = case_when(
     end.distance == 5000 ~ "5K",
     end.distance == 10000 ~ "10K",
@@ -2857,7 +2297,7 @@ df.tss_and_pro.counts %>%
   summarise(max_ctcf = max(tss_and_pro_count), .groups = "drop")
 
 
-df.tss_and_pro.filtered <- plotting_and_filtering_summary(
+df.tss_and_pro.filtered <- plotting_and_filtering_summary( # utils_functions.R
   df_counts = df.tss_and_pro.counts,
   count_col = "tss_and_pro_count",
   output_prefix = "tss_and_pro"
@@ -2873,83 +2313,25 @@ tss_and_pro.stats.by.resolution
 final.loops.from.promoter.step$loop.id
 final.loops.from.tss.step$loop.id
 
-# func 14. venn plot
-create_venn_plot <- function(ctcf_data, promoter_data, tss_data, ctcf_label) {
-  
-  ctcf_loops <- str_extract(ctcf_data$loop.id, "^(?:[^_]+_){6}[^_]+")
-  promoter_loops <- str_extract(promoter_data$loop.id, "^(?:[^_]+_){6}[^_]+")
-  tss_loops <- str_extract(tss_data$loop.id, "^(?:[^_]+_){6}[^_]+")
-  
-  venn_data <- list(
-    CTCF = ctcf_loops,
-    Promoter = promoter_loops,
-    TSS = tss_loops
-  )
-  
-  ctcf_count <- length(unique(ctcf_loops))
-  promoter_count <- length(unique(promoter_loops))
-  tss_count <- length(unique(tss_loops))
-  
-  venn_plot <- ggvenn(
-    venn_data, 
-    fill_color = c("#f8766d", "#629bfe", "#32ba36"),
-    show_elements = FALSE  
-  ) 
-  
-  venn_plot <- venn_plot +
-    annotate("text", x = -1.5, y = 1.5, label = paste("CTCF:", ctcf_count), color = "#f8766d") +
-    annotate("text", x = 1.55, y = 1.5, label = paste("Promoter:", promoter_count), color = "#629bfe") +
-    annotate("text", x = 0, y = -1.7, label = paste("TSS:", tss_count), color = "#32ba36")
-  
-  
-  return(venn_plot)
-}
-# func 14. END
-
-venn_plot_submission <- create_venn_plot(final.loops.from.ctcf.step, final.loops.from.promoter.step, final.loops.from.tss.step, "CTCF")
+venn_plot_submission <- create_venn_plot(final.loops.from.ctcf.step, final.loops.from.promoter.step, final.loops.from.tss.step, "CTCF") # utils_functions.R
 venn_plot_submission
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = venn_plot_submission,
   filename_base = "ctcf_vs_promoter_tss_venn_diagrams_approach2_lt_2mb_final",
   output_dir = "./figures/submission/lt2mb",
   scale_x = 1,
   scale_y = 1)
+
 ####################################
 # functional loop extraction
 ####################################
-
-# func 15. extracting common loops
-extract_overlapping_loops <- function(ctcf_data, promoter_data, tss_data) {
-  
-  ctcf_loops <- unique(str_extract(ctcf_data$loop.id, "^(?:[^_]+_){6}[^_]+"))
-  promoter_loops <- unique(str_extract(promoter_data$loop.id, "^(?:[^_]+_){6}[^_]+"))
-  tss_loops <- unique(str_extract(tss_data$loop.id, "^(?:[^_]+_){6}[^_]+"))
-  
-  # 1. CTCF .vs Promoter (NONE TSS)
-  ctcf_promoter_overlap <- intersect(ctcf_loops, promoter_loops)
-  ctcf_promoter_only <- setdiff(ctcf_promoter_overlap, tss_loops)
-  
-  # 2. CTCF .vs TSS (NONE Promoter)
-  ctcf_tss_overlap <- intersect(ctcf_loops, tss_loops)
-  ctcf_tss_only <- setdiff(ctcf_tss_overlap, promoter_loops)
-  
-  # 3. CTCF, Promoter, TSS
-  ctcf_promoter_tss_overlap <- Reduce(intersect, list(ctcf_loops, promoter_loops, tss_loops))
-  
-  return(list(
-    ctcf_promoter_only = ctcf_promoter_only,
-    ctcf_tss_only = ctcf_tss_only,
-    ctcf_promoter_tss_overlap = ctcf_promoter_tss_overlap
-  ))
-}
-# func 15. END
 
 final.loops.from.ctcf.step %>% dim()# sub.4 any, either 6: 25,620// span ENSEMBL 25268
 final.loops.from.tss.step %>% dim() # sub.4 dedups any, either: 27,518// 13407// span ENSEMBL  17810// 17107
 final.loops.from.promoter.step %>% dim() # sub.4 dedups any, either: 25,156// span ENSEMBL  13209// 13912
 
-overlapping_loops <- extract_overlapping_loops(
+overlapping_loops <- extract_overlapping_loops( # utils_functions.R
   ctcf_data = final.loops.from.ctcf.step,
   promoter_data = final.loops.from.promoter.step,
   tss_data = final.loops.from.tss.step
@@ -2974,7 +2356,7 @@ df.final.loop # 23640/31773(0.7440279) sub.4 any, either 6// 11526/31019(lt2mb) 
 df.final.loop %>% head()
 df.final.loop %>% dim() # 15598: 5656 + 7980 + 1962
 
-df.final.loop %>% mutate(resolution = str_split_n(loop.id, '_', 7)) %>% count(resolution)
+df.final.loop %>% mutate(resolution = str_split_n(loop.id, '_', 7)) %>% count(resolution) # utils_functions.R
 # resolution       n  resolution    n     resolution    n 
 # 1      10000  86751      10000 5656     1      10000 6968
 # 2      25000 111442      25000 7980     2      25000 8617
@@ -3007,7 +2389,7 @@ df.circos.final.loop <- df.final.loop %>%
   relocate(chr1, x1, x2, chr2, y1, y2, end.distance, .after = loop.id) %>% 
   mutate(y12 = (y2 + y1)/2, x12 = (x2 + x1)/2) %>% 
   mutate(distance = abs(y12 - x12)) %>% 
-  resolution = convert_to_resolution(end.distance))
+  resolution = convert_to_resolution(end.distance)) # utils_functions.R
 df.circos.final.loop %>% head()
 
 # Log transform the distance to highlight small distances
@@ -3077,34 +2459,10 @@ legend("bottomright", legend = resolution_levels, fill = resolution_colors, titl
 # Clear global plot
 circos.clear()
 
-# func 16. plot per chromosome
-plot_circos_for_chromosome <- function(chr) {
-  df_filtered <- subset(df.circos.input.log.final.loop, chr1_clean == chr)
-  
-  if (nrow(df_filtered) > 0) {
-    chromosomes_to_display <- unique(c(df_filtered$chr1, df_filtered$chr2))
-    
-    circos.par(gap.degree = 25)
-    circos.initializeWithIdeogram(species = "rn7", chromosome.index = chromosomes_to_display)
-    
-    for (i in 1:nrow(df_filtered)) {
-      circos.genomicLink(
-        region1 = df_filtered[i, c("chr1", "midx", "midx")],
-        region2 = df_filtered[i, c("chr2", "midy", "midy")],
-        col = resolution_colors[as.character(df_filtered$resolution[i])],
-        h = df_filtered$height[i],
-        border = "black"
-      )
-    }
-    circos.clear()
-  }
-}
-# func 16 END
-
 # Plot per chromosome
 unique_chromosomes <- levels(df.circos.input.log.final.loop$chr1_clean)
 for (chr in unique_chromosomes) {
-  plot_circos_for_chromosome(chr)
+  plot_circos_for_chromosome(chr) # utils_functions.R
 }
 
 dev.off()
@@ -3126,7 +2484,7 @@ plot_b <- ggdraw() +
 combined_plot <- plot_grid(plot_a, plot_b, nrow = 1)
 
 # 5. Save as PNG
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   output_dir = "./figures/submission/lt2mb",
   filename_base = "circos_first_two_panels_F8.ENSEMBL",
   plot_obj = combined_plot,
@@ -3398,39 +2756,39 @@ print(plot_category_hist_log)
 print(plot_category_boxplot)
 
 # Save plots
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_overall_hist_linear,
   filename_base = "gene_inside_distance_dist_overall_linear",
   output_dir = "./figures/submission/lt2mb"
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_overall_hist_log,
   filename_base = "gene_inside_distance_dist_overall_log",
   output_dir = "./figures/submission/lt2mb"
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_overall_boxplot,
   filename_base = "gene_inside_distance_dist_overall_boxplot",
   output_dir = "./figures/submission/lt2mb"
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_category_hist_linear,
   filename_base = "gene_inside_distance_dist_by_category_linear",
   output_dir = "./figures/submission/lt2mb",
   height_in = 10
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_category_hist_log,
   filename_base = "gene_inside_distance_dist_by_category_log",
   output_dir = "./figures/submission/lt2mb",
   height_in = 10
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_category_boxplot,
   filename_base = "gene_inside_distance_dist_by_category_boxplot",
   output_dir = "./figures/submission/lt2mb"
@@ -3672,39 +3030,39 @@ print(plot_scatter_up_down_log)
 print(plot_diff_violin)
 
 # Save plots
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_diff_hist_linear,
   filename_base = "distance_diff_by_pattern_linear",
   output_dir = "./figures/submission/lt2mb",
   height_in = 8
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_diff_hist_log,
   filename_base = "distance_diff_by_pattern_log",
   output_dir = "./figures/submission/lt2mb",
   height_in = 8
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_diff_boxplot,
   filename_base = "distance_diff_by_pattern_boxplot",
   output_dir = "./figures/submission/lt2mb"
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_scatter_up_down,
   filename_base = "distance_up_vs_down_scatter",
   output_dir = "./figures/submission/lt2mb"
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_scatter_up_down_log,
   filename_base = "distance_up_vs_down_scatter_log",
   output_dir = "./figures/submission/lt2mb"
 )
 
-saving_plot_dual(
+saving_plot_dual( # utils_functions.R
   plot_obj = plot_diff_violin,
   filename_base = "distance_diff_by_pattern_violin",
   output_dir = "./figures/submission/lt2mb"
