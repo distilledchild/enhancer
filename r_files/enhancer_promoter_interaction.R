@@ -40,16 +40,17 @@ getwd()
 # setwd('~/Desktop/temp/enhancer/dropbox_enhancer_doosan/data/enhancer_atlas2.0/all_species/neuron')
 setwd("~/Desktop/temp/enhancer/dropbox_enhancer_doosan")
 setwd("/home/pkim/dropbox/Gateway_to_Hao/enhancer/r_files")
-source(file.path("/home/pkim/dropbox/Gateway_to_Hao/project_common_code/", "variables.R"))
-source(file.path("/home/pkim/dropbox/Gateway_to_Hao/project_common_code/", "funcs.R"))
+# source(file.path("/home/pkim/dropbox/Gateway_to_Hao/project_common_code/", "variables.R"))  # No variables used
+# source(file.path("/home/pkim/dropbox/Gateway_to_Hao/project_common_code/", "funcs.R"))  # Functions moved to utils_functions.R
 
 getwd()
 
 # Mac
 setwd("~/dropbox/Gateway_to_Hao/enhancer/r_files")
 getwd()
-source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "variables.R"))
-source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "funcs.R"))
+# source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "variables.R"))  # No variables used
+# source(file.path("~/dropbox/Gateway_to_Hao/project_common_code/", "funcs.R"))  # Functions moved to utils_functions.R
+source("utils_functions.R")  # Load utility functions
 
 ####################################
 # Sequencing stats ###### Figure 1.a
@@ -219,13 +220,7 @@ df.loop.deep.sample.all <- df.init.loop.bed %>%
     TRUE ~ NA
   )) %>% 
   mutate(end.distance = x2 - x1) %>% 
-  mutate(resolution = case_when(
-    end.distance == 5000 ~ "5K",
-    end.distance == 10000 ~ "10K",
-    end.distance == 25000 ~ "25K",
-    TRUE ~ NA
-  )) %>% 
-  mutate(resolution = factor(resolution, levels = c("5K", "10K", "25K"))) %>%
+  mutate(resolution = convert_to_resolution(end.distance)) %>%  # Using utility function
   mutate(loop.id = str_c(X.chr1, '_', x1, '_', x2, '_', chr2, '_', y1, '_', y2, '_', end.distance)) %>% # loop.id
   mutate(sample.loop.id = str_c(strain, '_', loop.id)) %>% #sample.loop.id
   dplyr::select(sample, strain, X.chr1, x1, x2, chr2, y1, y2, distance, end.distance, resolution, loop.id, sample.loop.id) %>% 
@@ -583,13 +578,7 @@ df.DISTINCT.loop.deep.sample.all <- df.loop.deep.sample.all %>%
   distinct() %>% 
   separate(loop.id, into = c("chr1", "x1", "x2", "chr2", "y1", "y2", "end.distance"), sep = "_", remove = FALSE, convert = TRUE) %>% 
   mutate(distance = y2 - x2) %>%
-  mutate(resolution = case_when(
-    end.distance == 5000 ~ "5K",
-    end.distance == 10000 ~ "10K",
-    end.distance == 25000 ~ "25K",
-    TRUE ~ NA
-  )) %>% 
-  mutate(resolution = factor(resolution, levels = c("5K", "10K", "25K"))) %>% 
+  mutate(resolution = convert_to_resolution(end.distance)) %>%  # Using utility function
   mutate(x0 = x1, x3 = x2, y0 = y1, y3 = y2) %>%                                # x0, x3, y0, y3
 left_join(chromosome_data, by = c('chr1' = 'chr')) %>%                          # chromosome length info
 dplyr::rename(chr.end.coord = end)
@@ -1064,13 +1053,7 @@ df.overlapping.CTCF.w.BOTH.result <- bind_rows(df.overlapping.CTCF.w.UPSTREAM.re
   mutate(chr = ifelse(WHERE == "UP", str_split_n(loop.id, '_', 1), str_split_n(loop.id, '_', 4))) %>% 
   mutate(chr = factor(chr, levels = c(paste0("chr", 1:20), "chrX", "chrY"))) %>%
   mutate(WHERE = fct_relevel(WHERE, "UP", "DOWN")) %>% 
-  mutate(resolution = case_when(
-    end.distance == 5000 ~ "5K",
-    end.distance == 10000 ~ "10K",
-    end.distance == 25000 ~ "25K",
-    TRUE ~ NA
-  )) %>% 
-  mutate(resolution = fct_relevel(resolution, "5K", "10K", "25K"))
+  mutate(resolution = convert_to_resolution(end.distance))  # Using utility function
 
 df.overlapping.CTCF.w.BOTH.result %>% dim() # sub.4 any: 2814516 |.4 lt2mb 2775892 
 df.overlapping.CTCF.w.BOTH.result %>% colnames() # "distance" "resolution" "ctcf.id" "WHERE" "loop.id" "end.distance" "case.id" "chr"
@@ -1161,19 +1144,11 @@ both_ctcf_ids # 29,978
 ###############
 ###############
 
-ctcf.stats.by.resolution <- df.ctcf.counts %>%
-  # group_by(resolution) %>%
-  group_by(WHERE, resolution) %>%
-  summarise(
-    Min = min(ctcf_count),
-    Q1 = quantile(ctcf_count, 0.25, na.rm = TRUE),
-    Median = median(ctcf_count, na.rm = TRUE),
-    Q3 = quantile(ctcf_count, 0.75, na.rm = TRUE),
-    Mean = mean(ctcf_count, na.rm = TRUE),
-    SD = sd(ctcf_count, na.rm = TRUE),
-    Max = max(ctcf_count),
-    .groups = 'drop'
-  )
+ctcf.stats.by.resolution <- calculate_grouped_stats(
+  df.ctcf.counts, 
+  value_col = "ctcf_count", 
+  group_cols = c("WHERE", "resolution")
+)  # Using utility function
 ctcf.stats.by.resolution
 
 ### lt2mb, any
@@ -2507,13 +2482,7 @@ df.overlapping.tss_and_pro.w.BOTH.result <- bind_rows(df.overlapping.tss_and_pro
   mutate(chr = ifelse(WHERE == "UP", str_split_n(loop.id, '_', 1), str_split_n(loop.id, '_', 4))) %>% 
   mutate(chr = factor(chr, levels = c(paste0("chr", 1:20), "chrX", "chrY"))) %>%
   mutate(WHERE = fct_relevel(WHERE, "UP", "DOWN")) %>% 
-  mutate(resolution = case_when(
-    end.distance == 5000 ~ "5K",
-    end.distance == 10000 ~ "10K",
-    end.distance == 25000 ~ "25K",
-    TRUE ~ NA
-  )) %>% 
-  mutate(resolution = fct_relevel(resolution, "5K", "10K", "25K"))
+  mutate(resolution = convert_to_resolution(end.distance))  # Using utility function
 
 df.overlapping.tss_and_pro.w.BOTH.result %>% dim() # 25477
 df.overlapping.tss_and_pro.w.BOTH.result %>% colnames() # [1] "distance"     "resolution"   "gene.id"      "component.id" "component"  "WHERE"        "loop.id"      "end.distance" "case.id"      "chr" 
@@ -3038,13 +3007,7 @@ df.circos.final.loop <- df.final.loop %>%
   relocate(chr1, x1, x2, chr2, y1, y2, end.distance, .after = loop.id) %>% 
   mutate(y12 = (y2 + y1)/2, x12 = (x2 + x1)/2) %>% 
   mutate(distance = abs(y12 - x12)) %>% 
-  mutate(resolution = case_when(
-    end.distance == 5000 ~ "5K",
-    end.distance == 10000 ~ "10K",
-    end.distance == 25000 ~ "25K",
-    TRUE ~ NA
-  ),
-  resolution = factor(resolution, levels = c("5K", "10K", "25K")))
+  resolution = convert_to_resolution(end.distance))
 df.circos.final.loop %>% head()
 
 # Log transform the distance to highlight small distances
