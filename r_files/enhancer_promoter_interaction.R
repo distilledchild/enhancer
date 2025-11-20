@@ -610,16 +610,32 @@ df.DISTINCT.loop.deep.sample.all %>%
 ########################
 
 # func 2. creating GRange Obj.
-creating_granges <- function(df, direction = NULL, chr.col = "chr1", metadata.cols = NULL) {
+creating_granges <- function(df, direction = NULL, chr.col = "chr1", metadata.cols = NULL, use_anchor = FALSE) {
+  # Determine start and end columns based on direction and anchor usage
   if (is.null(direction)) {
+    # Overall loop (padded)
     start.col <- "x0"
     end.col <- "y3"
   } else if (direction == "up") {
-    start.col <- "x0"
-    end.col <- "x3"
+    if (use_anchor) {
+      # Upstream anchor coordinates
+      start.col <- "x1"
+      end.col <- "x2"
+    } else {
+      # Upstream padded
+      start.col <- "x0"
+      end.col <- "x3"
+    }
   } else if (direction == "down") {
-    start.col <- "y0"
-    end.col <- "y3"
+    if (use_anchor) {
+      # Downstream anchor coordinates
+      start.col <- "y1"
+      end.col <- "y2"
+    } else {
+      # Downstream padded
+      start.col <- "y0"
+      end.col <- "y3"
+    }
   } else {
     stop("Invalid direction. Use 'up', 'down', or leave NULL for overall.")
   }
@@ -1743,30 +1759,30 @@ df.promoter.rn7 %>% dim() # 12,529 (removed 4 duplicates)
 df.promoter.rn7 %>% add_count(seqnames, start, end, gene_id) %>% filter(n > 1) # 0
 
 # df.promoter.rn7 (dups)
-df.promoter.rn7.core <- df.promoter.rn7 %>% 
+df.promoter.rn7.epd <- df.promoter.rn7 %>% 
   dplyr::rename(tss_start = start, tss_end = end) %>% 
   mutate(
       start = tss_start - 40,
       end   = tss_start + 40
     ) %>% 
   mutate(promoter.id = str_c(seqnames,':', start,':', end, ':', gene_id, ':', gene_name, ':', seqnames, ':', tss_start, ':', tss_end))
-df.promoter.rn7.core
+df.promoter.rn7.epd
 
-df.promoter.rn7.GR <- GRanges(
-  seqnames = df.promoter.rn7.core$seqnames,
+df.promoter.rn7.epd.GR <- GRanges(
+  seqnames = df.promoter.rn7.epd$seqnames,
   ranges = IRanges(
-    start = df.promoter.rn7.core$start, 
-    end = df.promoter.rn7.core$end)
+    start = df.promoter.rn7.epd$start, 
+    end = df.promoter.rn7.epd$end)
 )
 # metadata
-mcols(df.promoter.rn7.GR) <- df.promoter.rn7.core[, c("promoter.id", "gene_id", "gene_name", "ensembl_exon_id", "refseq_exon_id")]
+mcols(df.promoter.rn7.epd.GR) <- df.promoter.rn7.epd[, c("promoter.id", "gene_id", "gene_name", "ensembl_exon_id", "refseq_exon_id")]
 
 ########################
 # 4. promoter
 # 4-3. overall distribution of promoter on loops
 ########################
 index.promoter.w.OVERALL.whole.loop <- findOverlaps(
-  df.promoter.rn7.GR, 
+  df.promoter.rn7.epd.GR, 
   OVERALL.df.DISTINCT.loop.deep.sample.all.GR, 
   type = "any",
   select = "all"
@@ -1781,10 +1797,10 @@ df.promoter.dist.result <- data.frame(
   loop.start = OVERALL.df.DISTINCT.loop.deep.sample.all$x0[OVERALL.loop.for.promoter.hits],
   loop.end = OVERALL.df.DISTINCT.loop.deep.sample.all$y3[OVERALL.loop.for.promoter.hits],
   loop.res = OVERALL.df.DISTINCT.loop.deep.sample.all$resolution[OVERALL.loop.for.promoter.hits],
-  promoter_id = df.promoter.rn7.dedup.core$promoter.id[OVERALL.promoter.on.loop.hits],
-  promoter_start = df.promoter.rn7.dedup.core$start[OVERALL.promoter.on.loop.hits],
-  promoter_end = df.promoter.rn7.dedup.core$end[OVERALL.promoter.on.loop.hits],
-  promoter_gene_id = df.promoter.rn7.dedup.core$gene_id[OVERALL.promoter.on.loop.hits]
+  promoter_id = df.promoter.rn7.epd$promoter.id[OVERALL.promoter.on.loop.hits],
+  promoter_start = df.promoter.rn7.epd$start[OVERALL.promoter.on.loop.hits],
+  promoter_end = df.promoter.rn7.epd$end[OVERALL.promoter.on.loop.hits],
+  promoter_gene_id = df.promoter.rn7.epd$gene_id[OVERALL.promoter.on.loop.hits]
 ) %>% 
   mutate(across(where(is.numeric), ~ format(., scientific = FALSE)))
 
@@ -1881,34 +1897,50 @@ combining_and_save_plots(plot.ctcf.dens, plot.tss.dens, plot.promoter.dens, "den
 ##########################################################
 ##########################################################
 
-df.tss.ensembl %>% head(3) # chr  start    end        gene_id             gene_name             tss.id
-df.promoter.rn7 %>% head(3) # chr     start     end gene_id length  center promoter.id 
-df.promoter.rn7 <- df.promoter.rn7.dedup.core %>% dplyr::select(-starts_with("tss")) %>% dplyr::rename(chr = seqnames)
-df.promoter.rn7
-df.gene_tss_and_pro <- bind_rows(df.tss.ensembl %>% 
-                                  dplyr::select(chr, start, end, gene_id, gene_name, tss.id) %>%
-                                  mutate(across(c(start, end), as.numeric)) %>%
-                                  mutate(component = "tss") %>%
-                                  dplyr::rename(component_id = tss.id) %>%
-                                  mutate(component_id = str_c(component_id, component, sep='|')),
-                                df.promoter.rn7 %>% 
-                                  dplyr::select(chr, start, end, gene_id, gene_name, promoter.id) %>%
-                                  mutate(across(c(start, end), as.numeric)) %>%
-                                  mutate(component = "pro") %>%
-                                  dplyr::rename(component_id = promoter.id) %>%
-                                  mutate(component_id = str_c(component_id, component, sep='|')))
+##########################################################
+# 5. Combining TSS and Promoter datasets with exon information
+##########################################################
+
+# Prepare TSS data
+df.tss.ensembl %>% head(3) # chr start end strand gene_id gene_name tss.id ensembl_exon_id refseq_exon_id
+
+# Prepare Promoter data (already has exon information)
+df.promoter.rn7.epd %>% head(3) # seqnames start end width strand promoter_id score gene_id gene_name ensembl_exon_id refseq_exon_id
+
+# Combine TSS and Promoter datasets
+df.gene_tss_and_pro <- bind_rows(
+  df.tss.ensembl %>% 
+    dplyr::select(chr, start, end, gene_id, gene_name, tss.id, ensembl_exon_id, refseq_exon_id) %>%
+    mutate(across(c(start, end), as.numeric)) %>%
+    mutate(component = "tss") %>%
+    dplyr::rename(component_id = tss.id) %>%
+    mutate(component_id = str_c(component_id, component, sep='|')),
+  df.promoter.rn7.epd %>% 
+    dplyr::rename(chr = seqnames) %>%
+    mutate(promoter.id = str_c(chr, ':', start, ':', end, ':', gene_id, ':', gene_name)) %>%
+    dplyr::select(chr, start, end, gene_id, gene_name, promoter.id, ensembl_exon_id, refseq_exon_id) %>%
+    mutate(across(c(start, end), as.numeric)) %>%
+    mutate(component = "pro") %>%
+    dplyr::rename(component_id = promoter.id) %>%
+    mutate(component_id = str_c(component_id, component, sep='|'))
+)
 
 df.gene_tss_and_pro %>% head(3)
-df.gene_tss_and_pro %>% dim() # 29507  // 34183| 34254
+df.gene_tss_and_pro %>% dim() # TSS: 21,725 + Promoter: 12,529 = 34,254
 
-df.gene_tss_and_pro.GR <- GRanges(seqnames=df.gene_tss_and_pro$chr,
-                                  ranges=IRanges(start=df.gene_tss_and_pro$start, end=df.gene_tss_and_pro$end),
-                                  gene_id=df.gene_tss_and_pro$gene_id,
-                                  gene_name=df.gene_tss_and_pro$gene_name,
-                                  component_id=df.gene_tss_and_pro$component_id,
-                                  component=df.gene_tss_and_pro$component)
+# Create GRanges object with exon information
+df.gene_tss_and_pro.GR <- GRanges(
+  seqnames = df.gene_tss_and_pro$chr,
+  ranges = IRanges(start = df.gene_tss_and_pro$start, end = df.gene_tss_and_pro$end),
+  gene_id = df.gene_tss_and_pro$gene_id,
+  gene_name = df.gene_tss_and_pro$gene_name,
+  component_id = df.gene_tss_and_pro$component_id,
+  component = df.gene_tss_and_pro$component,
+  ensembl_exon_id = df.gene_tss_and_pro$ensembl_exon_id,
+  refseq_exon_id = df.gene_tss_and_pro$refseq_exon_id
+)
 
-df.gene_tss_and_pro.GR # 29507// 34183| 34254
+df.gene_tss_and_pro.GR # 34,254
 
 df.DISTINCT.loop.deep.sample.all.lt.2mb %>% dim() # 31019
 df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(3)
@@ -1916,22 +1948,9 @@ df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(3)
 df.DISTINCT.loop.deep.sample.all.lt.2mb.prep <- df.DISTINCT.loop.deep.sample.all.lt.2mb %>% 
   mutate(mid_x = floor((x0 + x3) / 2), mid_y = floor((y0 + y3) / 2))
 
-df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR <- GRanges(
-  seqnames = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$chr1,
-  ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$x1, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$x2),
-  strand = "*",
-  loop.id = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$loop.id,
-  distance = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$distance,
-  resolution = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$resolution
-)
-df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR <- GRanges(
-  seqnames = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$chr1,
-  ranges = IRanges(start = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$y1, end = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$y2),
-  strand = "*",
-  loop.id = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$loop.id,
-  distance = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$distance,
-  resolution = df.DISTINCT.loop.deep.sample.all.lt.2mb.prep$resolution
-)
+# Create GRanges for UP and DOWN anchors using creating_granges function
+df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep, direction = "up", use_anchor = TRUE)
+df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.DOWN.GR <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep, direction = "down", use_anchor = TRUE)
 
 hits_up <- distanceToNearest(df.DISTINCT.loop.deep.sample.all.lt.2mb.prep.UP.GR, df.gene_tss_and_pro.GR)
 hits_up
@@ -1947,6 +1966,8 @@ df_up <- data.frame(
     gene_name = mcols(df.gene_tss_and_pro.GR)[subjectHits, "gene_name"],
     component = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component"],
     component_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component_id"],
+    ensembl_exon_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "ensembl_exon_id"],
+    refseq_exon_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "refseq_exon_id"],
     WHERE = "UP"
   )
 
@@ -1964,6 +1985,8 @@ df_down <- data.frame(
     gene_name = mcols(df.gene_tss_and_pro.GR)[subjectHits, "gene_name"],
     component = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component"],
     component_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "component_id"],
+    ensembl_exon_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "ensembl_exon_id"],
+    refseq_exon_id = mcols(df.gene_tss_and_pro.GR)[subjectHits, "refseq_exon_id"],
     WHERE = "DOWN"
   )
 
@@ -2010,7 +2033,7 @@ df.final.up.down.tss.pro.nearest %>% dim() # 62038
 df.final.up.down.tss.pro.nearest %>% head()
 
 # getting cases per loop with minimum distance including 0
-df.final.up.down.tss.pro.nearest.only.one.anchor <- df.final.up.down.tss.pro.nearest %>%
+df.final.up.down.tss.pro.nearest.filtered <- df.final.up.down.tss.pro.nearest %>%
   group_by(loop.id) %>%
   filter(if (all(distance == 0)) {
     TRUE   
@@ -2019,20 +2042,156 @@ df.final.up.down.tss.pro.nearest.only.one.anchor <- df.final.up.down.tss.pro.nea
   }) %>%
   ungroup()
 
-df.final.up.down.tss.pro.nearest.only.one.anchor %>% dim() # 33399/62038 = 31019 * 2 (2380 are 0 in both/28639 are only one in either one of 2 anchors)
-df.final.up.down.tss.pro.nearest.only.one.anchor %>% head() 
-df.final.up.down.tss.pro.nearest.only.one.anchor %>% count(loop.id) %>% 
+df.final.up.down.tss.pro.nearest.filtered %>% dim() # 33399/62038 = 31019 * 2 (2380 are 0 in both/28639 are only one in either one of 2 anchors)
+df.final.up.down.tss.pro.nearest.filtered %>% head() 
+df.final.up.down.tss.pro.nearest.filtered %>% count(loop.id) %>% 
   count(n)
-df.final.up.down.tss.pro.nearest.only.one.anchor %>% 
-  add_count(loop.id) %>% 
-  filter(n == 1) %>% # 18,669
-  count(component) # pro        11256|tss       17383
+
+# func 17. adding loop validity column (clear vs vague)
+adding_loop_validity <- function(df) {
+  df %>%
+    add_count(loop.id, name = "n_per_loop") %>%
+    mutate(loop_validity = ifelse(n_per_loop == 1, "clear", "vague")) %>%
+    dplyr::select(-n_per_loop)
+}
+# func 17 END
+
+# func 18. checking exon functionality within loop boundaries
+checking_exon_functionality <- function(loop_id, ensembl_exon_id, refseq_exon_id) {
+  # Extract loop coordinates from loop.id
+  # Format: chr_x1_x2_chr_y1_y2_resolution
+  loop_parts <- str_split(loop_id, "_")[[1]]
+  chr <- loop_parts[1]
+  x1 <- as.numeric(loop_parts[2])
+  y2 <- as.numeric(loop_parts[6])
+  
+  # Determine which exon ID to use (prefer ENSEMBL)
+  exon_id <- if (!is.na(ensembl_exon_id)) {
+    ensembl_exon_id
+  } else if (!is.na(refseq_exon_id)) {
+    refseq_exon_id
+  } else {
+    NA_character_
+  }
+  
+  # If no exon data, return "unclear"
+  if (is.na(exon_id)) {
+    return("unclear")
+  }
+  
+  # Extract exon coordinates (first 3 values: chr:start:end)
+  exon_parts <- str_split(exon_id, ":")[[1]]
+  exon_chr <- exon_parts[1]
+  exon_start <- as.numeric(exon_parts[2])
+  exon_end <- as.numeric(exon_parts[3])
+  
+  # Check if exon is within loop boundaries
+  # Exon is functional if it's between x1 and y2 on the same chromosome
+  if (exon_chr == chr && exon_start >= x1 && exon_end <= y2) {
+    return("functional")
+  } else {
+    return("unfunctional")
+  }
+}
+# func 18 END
+
+# func 19. adding functionality column
+adding_functionality <- function(df) {
+  df %>%
+    rowwise() %>%
+    mutate(functionality = checking_exon_functionality(loop.id, ensembl_exon_id, refseq_exon_id)) %>%
+    ungroup()
+}
+# func 19 END
+
+###############################################################################################
+# columns:
+# loop_validity: the number of overlapping: 1 overlapping or 2 overlapping: clear or vague
+# functionality: target gene location: functional, unfunctional, unclear
+###############################################################################################
+
+# Apply both functions to the filtered dataset
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality <- df.final.up.down.tss.pro.nearest.filtered %>%
+  adding_loop_validity() %>%
+  adding_functionality()
+
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>% head()
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>% count(loop_validity)
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>% count(functionality)
+
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>% count(loop_validity, functionality)
+
+# func 20. adding final decision column for vague cases
+adding_final_decision <- function(df) {
+  df %>%
+    group_by(loop.id) %>%
+    mutate(final = case_when(
+      # For clear cases (only 1 row per loop.id)
+      loop_validity == "clear" ~ "decided",
+      
+      # For vague cases (2 rows per loop.id), check functionality
+      loop_validity == "vague" ~ {
+        functional_count <- sum(functionality == "functional", na.rm = TRUE)
+        
+        if (functional_count == 2) {
+          "undecidable"  # Both UP and DOWN are functional
+        } else if (functional_count == 1) {
+          "decidable"    # Only one (UP or DOWN) is functional
+        } else {
+          "FALSE"        # Neither is functional
+        }
+      },
+      
+      TRUE ~ NA_character_
+    )) %>%
+    ungroup()
+}
+# func 20 END
+
+# Apply the function
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final <- df.final.up.down.tss.pro.nearest.filtered.validity.functionality %>%
+  adding_final_decision()
+
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final
+
+# Check the results
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final %>% count(loop_validity, final)
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final %>% count(final, functionality)
+df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final %>% 
+  filter(loop_validity == "vague") %>% 
+  count(final, functionality)
+
+df.final.up.down.tss.pro.nearest.filtered.only.one.anchor <- df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final %>% 
+  filter(loop_validity == "clear") # Only keep clear cases
+df.final.up.down.tss.pro.nearest.filtered.only.one.anchor
+
+# Extract functional loops from clear and vague cases
+# 1. Clear + functional + decided
+df.functional.clear <- df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final %>%
+  filter(loop_validity == "clear" & functionality == "functional" & final == "decided")
+df.functional.clear # 11,636
+
+# 2. Vague + functional + decidable
+df.functional.vague.decidable <- df.final.up.down.tss.pro.nearest.filtered.validity.functionality.final %>%
+  filter(loop_validity == "vague" & functionality == "functional" & final == "decidable")
+df.functional.vague.decidable # 1,086
+
+# Combined: all functional loops (clear decided + vague decidable)
+df.functional.loops <- bind_rows(
+  df.functional.clear,
+  df.functional.vague.decidable
+)
+
+df.functional.clear %>% dim()
+df.functional.vague.decidable %>% dim()
+df.functional.loops %>% dim()
 
 # overlapping in both anchors
 df.final.up.down.tss.pro.nearest.only.one.anchor.both <- df.final.up.down.tss.pro.nearest.only.one.anchor %>% 
   add_count(loop.id) %>% 
   filter(n == 2) %>% 
   arrange(loop.id)
+df.final.up.down.tss.pro.nearest.only.one.anchor.both
 
 missing_229 <- df.final.up.down.tss.pro.nearest.only.one.anchor.both  %>% # 4760
   # count(component) # pro        2909 tss        1851
@@ -3010,4 +3169,580 @@ saving_plot_dual(
   plot_obj = combined_plot,
   scale_x = 1,
   scale_y = 1
+)
+
+################################################################################
+# Gene Location-based Filtering and Distance Distribution Analysis
+# Goal: 1. Filter loops - remove cases where gene is OUTSIDE loop
+#       2. Visualize distance distribution after filtering
+#       3. Categorize by loop.id row counts (2 rows, 1 row, 0 rows)
+################################################################################
+
+# Step 1: Add gene location information
+df.with.loop.coords <- df.final.up.down.tss.pro.nearest %>%
+  mutate(loop_parts = str_split(loop.id, "_")) %>%
+  mutate(
+    chr1 = map_chr(loop_parts, 1),
+    x1   = as.numeric(map_chr(loop_parts, 2)),
+    x2   = as.numeric(map_chr(loop_parts, 3)),
+    chr2 = map_chr(loop_parts, 4),
+    y1   = as.numeric(map_chr(loop_parts, 5)),
+    y2   = as.numeric(map_chr(loop_parts, 6)),
+    anchor_distance = as.numeric(map_chr(loop_parts, 7))
+  ) %>%
+  dplyr::select(-loop_parts)
+
+cat("Original data rows:", nrow(df.with.loop.coords), "\n") # 62038
+cat("Unique loops:", n_distinct(df.with.loop.coords$loop.id), "\n\n") # 31019
+
+# Join with gene boundaries
+df.with.gene.location <- df.with.loop.coords %>%
+  left_join(
+    df.ensembl.gtf.for.exon %>% 
+      group_by(gene_id) %>%
+      summarise(
+        gene_start = min(start),
+        gene_end = max(end),
+        gene_chr = dplyr::first(chr),
+        .groups = "drop"
+      ),
+    by = "gene_id"
+  ) %>%
+  mutate(gene_inside_loop = !is.na(gene_start) & 
+                            chr1 == gene_chr &
+                            gene_start >= x1 & 
+                            gene_end <= y2)
+
+cat("Before filtering:\n")
+cat("  Total rows:", nrow(df.with.gene.location), "\n") # 62038
+cat("  Rows with gene info:", sum(!is.na(df.with.gene.location$gene_start)), "\n") # 60351
+cat("  Genes INSIDE loop:", sum(df.with.gene.location$gene_inside_loop, na.rm = TRUE), "\n") # 25478
+cat("  Genes OUTSIDE loop:", sum(df.with.gene.location$gene_inside_loop == FALSE, na.rm = TRUE), "\n\n") # 34873
+
+# Step 2: Filter - Keep only genes INSIDE loop
+df.gene.inside.only <- df.with.gene.location %>%
+  filter(gene_inside_loop == TRUE)
+
+cat("After filtering:\n")
+cat("  Total rows:", nrow(df.gene.inside.only), "\n") # 25,478
+cat("  Unique loops:", n_distinct(df.gene.inside.only$loop.id), "\n\n") # 18,796
+
+# Step 3: Classify loops by remaining row counts
+loop_row_counts <- df.gene.inside.only %>%
+  count(loop.id, name = "rows_remaining")
+
+original_loop_ids <- unique(df.with.gene.location$loop.id)
+
+loop_classification <- tibble(loop.id = original_loop_ids) %>%
+  left_join(loop_row_counts, by = "loop.id") %>%
+  mutate(rows_remaining = replace_na(rows_remaining, 0)) %>%
+  mutate(category = case_when(
+    rows_remaining == 2 ~ "Both_UP_DOWN_inside",
+    rows_remaining == 1 ~ "Only_one_inside",
+    rows_remaining == 0 ~ "Both_outside_removed"
+  ))
+
+cat("\nLoop Classification Summary:\n")
+loop_classification %>%
+  count(category) %>%
+  mutate(percentage = round(n / sum(n) * 100, 2)) %>%
+  arrange(desc(n)) %>%
+  print()
+
+df.gene.inside.with.category <- df.gene.inside.only %>%
+  left_join(loop_classification %>% dplyr::select(loop.id, category), by = "loop.id")
+
+# Step 4: Distance statistics
+overall_stats <- df.gene.inside.only %>%
+  summarise(
+    min = min(distance),
+    Q1 = quantile(distance, 0.25),
+    median = median(distance),
+    mean = mean(distance),
+    Q3 = quantile(distance, 0.75),
+    max = max(distance)
+  )
+
+cat("\nOverall Distance Statistics (genes inside loop):\n")
+print(overall_stats)
+
+category_stats <- df.gene.inside.with.category %>%
+  group_by(category) %>%
+  summarise(
+    n = n(),
+    min = min(distance),
+    Q1 = quantile(distance, 0.25),
+    median = median(distance),
+    mean = mean(distance),
+    Q3 = quantile(distance, 0.75),
+    max = max(distance),
+    .groups = "drop"
+  )
+
+cat("\nDistance Statistics by Category:\n")
+print(category_stats)
+
+# Step 5: Visualizations
+# Plot 1: Overall histogram (linear scale)
+plot_overall_hist_linear <- ggplot(df.gene.inside.only, aes(x = distance/1000)) +
+  geom_histogram(bins = 50, fill = "#2E86AB", color = "white", alpha = 0.8) +
+  geom_vline(xintercept = overall_stats$median/1000, 
+             linetype = "dashed", color = "#E63946", linewidth = 1.2) +
+  geom_vline(xintercept = overall_stats$mean/1000, 
+             linetype = "dotted", color = "#F77F00", linewidth = 1.2) +
+  annotate("text", x = overall_stats$median/1000, y = Inf,
+           label = paste0("Median: ", round(overall_stats$median/1000, 1), " kb"),
+           hjust = -0.1, vjust = 1.5, color = "#E63946", fontface = "bold") +
+  annotate("text", x = overall_stats$mean/1000, y = Inf,
+           label = paste0("Mean: ", round(overall_stats$mean/1000, 1), " kb"),
+           hjust = -0.1, vjust = 3, color = "#F77F00", fontface = "bold") +
+  labs(
+    title = "Distance Distribution (Genes Inside Loop Only)",
+    subtitle = paste0("n = ", format(nrow(df.gene.inside.only), big.mark = ","), " rows"),
+    x = "Distance from Anchor (kb)",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    plot.subtitle = element_text(hjust = 0.5, size = 10, color = "gray30")
+  )
+plot_overall_hist_linear
+# Plot 2: Overall histogram (log scale)
+plot_overall_hist_log <- ggplot(df.gene.inside.only, aes(x = distance + 1)) +
+  geom_histogram(bins = 50, fill = "#A23B72", color = "white", alpha = 0.8) +
+  scale_x_log10(labels = label_number(scale_cut = cut_short_scale())) +
+  geom_vline(xintercept = overall_stats$median, 
+             linetype = "dashed", color = "#E63946", linewidth = 1.2) +
+  labs(
+    title = "Distance Distribution (Log Scale)",
+    subtitle = "Genes inside loop only",
+    x = "Distance from Anchor (bp, log10)",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    plot.subtitle = element_text(hjust = 0.5, size = 10, color = "gray30")
+  )
+plot_overall_hist_log
+# Plot 3: Boxplot
+plot_overall_boxplot <- ggplot(df.gene.inside.only, aes(y = distance/1000)) +
+  geom_boxplot(fill = "#50C878", color = "#1B5E20", 
+               outlier.color = "#E63946", outlier.alpha = 0.5) +
+  geom_hline(yintercept = overall_stats$Q1/1000, 
+             linetype = "dashed", color = "blue", alpha = 0.7) +
+  geom_hline(yintercept = overall_stats$median/1000, 
+             linetype = "dashed", color = "darkgreen", alpha = 0.7) +
+  geom_hline(yintercept = overall_stats$Q3/1000, 
+             linetype = "dashed", color = "purple", alpha = 0.7) +
+  annotate("text", x = 1.3, y = overall_stats$Q1/1000, 
+           label = paste0("Q1: ", round(overall_stats$Q1/1000, 1), " kb"), 
+           color = "blue", hjust = 0) +
+  annotate("text", x = 1.3, y = overall_stats$median/1000, 
+           label = paste0("Median: ", round(overall_stats$median/1000, 1), " kb"), 
+           color = "darkgreen", hjust = 0) +
+  annotate("text", x = 1.3, y = overall_stats$Q3/1000, 
+           label = paste0("Q3: ", round(overall_stats$Q3/1000, 1), " kb"), 
+           color = "purple", hjust = 0) +
+  labs(
+    title = "Distance Distribution (Boxplot)",
+    y = "Distance from Anchor (kb)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank()
+  )
+plot_overall_boxplot
+# Plot 4: Histogram by category (linear)
+plot_category_hist_linear <- ggplot(df.gene.inside.with.category, 
+                                    aes(x = distance/1000, fill = category)) +
+  geom_histogram(bins = 40, color = "white", alpha = 0.8) +
+  facet_wrap(~category, ncol = 1, scales = "free_y") +
+  scale_fill_manual(values = c(
+    "Both_UP_DOWN_inside" = "#2E86AB",
+    "Only_one_inside" = "#F77F00"
+  )) +
+  geom_vline(data = category_stats, 
+             aes(xintercept = median/1000), 
+             linetype = "dashed", color = "red", linewidth = 1) +
+  labs(
+    title = "Distance Distribution by Loop Category",
+    subtitle = "After filtering genes outside loop",
+    x = "Distance from Anchor (kb)",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    plot.subtitle = element_text(hjust = 0.5, size = 10, color = "gray30"),
+    legend.position = "none",
+    strip.text = element_text(face = "bold", size = 11)
+  )
+plot_category_hist_linear
+# Plot 5: Histogram by category (log)
+plot_category_hist_log <- ggplot(df.gene.inside.with.category, 
+                                 aes(x = distance + 1, fill = category)) +
+  geom_histogram(bins = 40, color = "white", alpha = 0.8) +
+  facet_wrap(~category, ncol = 1, scales = "free_y") +
+  scale_x_log10(labels = label_number(scale_cut = cut_short_scale())) +
+  scale_fill_manual(values = c(
+    "Both_UP_DOWN_inside" = "#2E86AB",
+    "Only_one_inside" = "#F77F00"
+  )) +
+  labs(
+    title = "Distance Distribution by Category (Log Scale)",
+    x = "Distance from Anchor (bp, log10)",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    legend.position = "none",
+    strip.text = element_text(face = "bold", size = 11)
+  )
+plot_category_hist_log
+# Plot 6: Boxplot by category
+plot_category_boxplot <- ggplot(df.gene.inside.with.category, 
+                                aes(x = category, y = distance/1000, fill = category)) +
+  geom_boxplot(outlier.alpha = 0.3, outlier.size = 1) +
+  scale_fill_manual(values = c(
+    "Both_UP_DOWN_inside" = "#2E86AB",
+    "Only_one_inside" = "#F77F00"
+  )) +
+  labs(
+    title = "Distance Comparison by Category",
+    x = "Loop Category",
+    y = "Distance from Anchor (kb)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    legend.position = "none",
+    axis.text.x = element_text(angle = 15, hjust = 1)
+  ) +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 3, 
+               fill = "red", color = "darkred")
+plot_category_boxplot
+# Display plots
+print(plot_overall_hist_linear)
+print(plot_overall_hist_log)
+print(plot_overall_boxplot)
+print(plot_category_hist_linear)
+print(plot_category_hist_log)
+print(plot_category_boxplot)
+
+# Save plots
+saving_plot_dual(
+  plot_obj = plot_overall_hist_linear,
+  filename_base = "gene_inside_distance_dist_overall_linear",
+  output_dir = "./figures/submission/lt2mb"
+)
+
+saving_plot_dual(
+  plot_obj = plot_overall_hist_log,
+  filename_base = "gene_inside_distance_dist_overall_log",
+  output_dir = "./figures/submission/lt2mb"
+)
+
+saving_plot_dual(
+  plot_obj = plot_overall_boxplot,
+  filename_base = "gene_inside_distance_dist_overall_boxplot",
+  output_dir = "./figures/submission/lt2mb"
+)
+
+saving_plot_dual(
+  plot_obj = plot_category_hist_linear,
+  filename_base = "gene_inside_distance_dist_by_category_linear",
+  output_dir = "./figures/submission/lt2mb",
+  height_in = 10
+)
+
+saving_plot_dual(
+  plot_obj = plot_category_hist_log,
+  filename_base = "gene_inside_distance_dist_by_category_log",
+  output_dir = "./figures/submission/lt2mb",
+  height_in = 10
+)
+
+saving_plot_dual(
+  plot_obj = plot_category_boxplot,
+  filename_base = "gene_inside_distance_dist_by_category_boxplot",
+  output_dir = "./figures/submission/lt2mb"
+)
+
+################################################################################
+# Analysis of Loops with 2 Rows (Both UP and DOWN inside loop)
+# Task 1: Count rows by distance pattern (0-0, 0-!0, !0-!0)
+# Task 2: Visualize distance difference distribution by pattern
+################################################################################
+# Step 1: Extract loops with 2 rows (Both_UP_DOWN_inside)
+df.both.up.down.inside <- df.gene.inside.with.category %>%
+  filter(category == "Both_UP_DOWN_inside")
+
+cat("Loops with both UP and DOWN inside:\n")
+cat("  Total rows:", nrow(df.both.up.down.inside), "\n") # 13364
+cat("  Unique loops:", n_distinct(df.both.up.down.inside$loop.id), "\n\n") # 6682
+
+# Step 2: Reshape to wide format for distance comparison
+df.both.wide <- df.both.up.down.inside %>%
+  dplyr::select(loop.id, WHERE, distance, resolution, component, gene_id, gene_name) %>%
+  pivot_wider(
+    id_cols = c(loop.id, resolution),
+    names_from = WHERE,
+    values_from = c(distance, component, gene_id, gene_name),
+    names_sep = "_"
+  )
+
+cat("Wide format data created\n")
+cat("  Rows:", nrow(df.both.wide), "\n\n") # 6682
+
+# Step 3: Classify by distance pattern
+df.both.classified <- df.both.wide %>%
+  mutate(
+    distance_pattern = case_when(
+      distance_UP == 0 & distance_DOWN == 0 ~ "0-0",
+      (distance_UP == 0 & distance_DOWN != 0) | 
+      (distance_UP != 0 & distance_DOWN == 0) ~ "0-!0",
+      distance_UP != 0 & distance_DOWN != 0 ~ "!0-!0",
+      TRUE ~ "other"
+    )
+  ) %>%
+  mutate(
+    distance_diff = abs(distance_UP - distance_DOWN),
+    min_distance = pmin(distance_UP, distance_DOWN),
+    max_distance = pmax(distance_UP, distance_DOWN)
+  )
+
+# Task 1: Count rows by pattern
+pattern_counts <- df.both.classified %>%
+  count(distance_pattern) %>%
+  mutate(percentage = round(n / sum(n) * 100, 2)) %>%
+  arrange(desc(n))
+
+print(pattern_counts)
+
+cat("\nDetailed breakdown:\n")
+cat("  0-0   (both distances = 0):", 
+    sum(df.both.classified$distance_pattern == "0-0"), "loops\n") # 1190
+cat("  0-!0  (one distance = 0, other != 0):", 
+    sum(df.both.classified$distance_pattern == "0-!0"), "loops\n") # 1070
+cat("  !0-!0 (both distances != 0):", 
+    sum(df.both.classified$distance_pattern == "!0-!0"), "loops\n\n") # 4422
+
+# Additional statistics per pattern
+distance_stats_by_pattern <- df.both.classified %>%
+  group_by(distance_pattern) %>%
+  summarise(
+    n = n(),
+    mean_UP = mean(distance_UP),
+    median_UP = median(distance_UP),
+    mean_DOWN = mean(distance_DOWN),
+    median_DOWN = median(distance_DOWN),
+    mean_diff = mean(distance_diff),
+    median_diff = median(distance_diff),
+    .groups = "drop"
+  )
+
+print(distance_stats_by_pattern)
+
+# Task 2: Visualize distance difference distribution
+# Remove 0-0 pattern for difference analysis (difference is always 0)
+df.both.for.diff <- df.both.classified %>%
+  filter(distance_pattern != "0-0")
+
+cat("Analyzing distance differences (excluding 0-0 pattern):\n")
+cat("  Total loops:", nrow(df.both.for.diff), "\n\n") # 5492
+
+# Plot 1: Distance difference histogram by pattern (linear scale)
+plot_diff_hist_linear <- ggplot(df.both.for.diff, 
+                                aes(x = distance_diff/1000, fill = distance_pattern)) +
+  geom_histogram(bins = 50, color = "white", alpha = 0.8) +
+  facet_wrap(~distance_pattern, ncol = 1, scales = "free_y") +
+  scale_fill_manual(values = c(
+    "0-!0" = "#E63946",
+    "!0-!0" = "#2E86AB"
+  )) +
+  labs(
+    title = "Distance Difference Distribution by Pattern",
+    subtitle = "Absolute difference between UP and DOWN distances",
+    x = "Distance Difference (kb)",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    plot.subtitle = element_text(hjust = 0.5, size = 10, color = "gray30"),
+    legend.position = "none",
+    strip.text = element_text(face = "bold", size = 11)
+  )
+
+# Plot 2: Distance difference histogram by pattern (log scale)
+plot_diff_hist_log <- ggplot(df.both.for.diff, 
+                             aes(x = distance_diff + 1, fill = distance_pattern)) +
+  geom_histogram(bins = 50, color = "white", alpha = 0.8) +
+  facet_wrap(~distance_pattern, ncol = 1, scales = "free_y") +
+  scale_x_log10(labels = label_number(scale_cut = cut_short_scale())) +
+  scale_fill_manual(values = c(
+    "0-!0" = "#E63946",
+    "!0-!0" = "#2E86AB"
+  )) +
+  labs(
+    title = "Distance Difference Distribution (Log Scale)",
+    subtitle = "Absolute difference between UP and DOWN distances",
+    x = "Distance Difference (bp, log10)",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    plot.subtitle = element_text(hjust = 0.5, size = 10, color = "gray30"),
+    legend.position = "none",
+    strip.text = element_text(face = "bold", size = 11)
+  )
+
+# Plot 3: Boxplot comparison
+plot_diff_boxplot <- ggplot(df.both.for.diff, 
+                            aes(x = distance_pattern, y = distance_diff/1000, 
+                                fill = distance_pattern)) +
+  geom_boxplot(outlier.alpha = 0.3, outlier.size = 1) +
+  scale_fill_manual(values = c(
+    "0-!0" = "#E63946",
+    "!0-!0" = "#2E86AB"
+  )) +
+  labs(
+    title = "Distance Difference Comparison by Pattern",
+    x = "Distance Pattern",
+    y = "Distance Difference (kb)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    legend.position = "none"
+  ) +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 4, 
+               fill = "yellow", color = "darkred")
+
+# Plot 4: Scatter plot - UP vs DOWN distances
+plot_scatter_up_down <- ggplot(df.both.classified, 
+                               aes(x = distance_UP/1000, y = distance_DOWN/1000, 
+                                   color = distance_pattern)) +
+  geom_point(alpha = 0.5, size = 2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", 
+              color = "black", linewidth = 1) +
+  scale_color_manual(values = c(
+    "0-0" = "#50C878",
+    "0-!0" = "#E63946",
+    "!0-!0" = "#2E86AB"
+  )) +
+  labs(
+    title = "UP vs DOWN Distance Comparison",
+    subtitle = "Dashed line represents equal distances",
+    x = "UP Distance (kb)",
+    y = "DOWN Distance (kb)",
+    color = "Pattern"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    plot.subtitle = element_text(hjust = 0.5, size = 10, color = "gray30"),
+    legend.position = "bottom"
+  )
+
+# Plot 5: Scatter plot (log scale)
+plot_scatter_up_down_log <- ggplot(df.both.classified, 
+                                   aes(x = distance_UP + 1, y = distance_DOWN + 1, 
+                                       color = distance_pattern)) +
+  geom_point(alpha = 0.5, size = 2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", 
+              color = "black", linewidth = 1) +
+  scale_x_log10(labels = label_number(scale_cut = cut_short_scale())) +
+  scale_y_log10(labels = label_number(scale_cut = cut_short_scale())) +
+  scale_color_manual(values = c(
+    "0-0" = "#50C878",
+    "0-!0" = "#E63946",
+    "!0-!0" = "#2E86AB"
+  )) +
+  labs(
+    title = "UP vs DOWN Distance Comparison (Log Scale)",
+    subtitle = "Dashed line represents equal distances",
+    x = "UP Distance (bp, log10)",
+    y = "DOWN Distance (bp, log10)",
+    color = "Pattern"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    plot.subtitle = element_text(hjust = 0.5, size = 10, color = "gray30"),
+    legend.position = "bottom"
+  )
+
+# Plot 6: Violin plot for distance difference
+plot_diff_violin <- ggplot(df.both.for.diff, 
+                           aes(x = distance_pattern, y = distance_diff/1000, 
+                               fill = distance_pattern)) +
+  geom_violin(alpha = 0.7, trim = FALSE) +
+  geom_boxplot(width = 0.2, fill = "white", alpha = 0.8, outlier.alpha = 0.3) +
+  scale_fill_manual(values = c(
+    "0-!0" = "#E63946",
+    "!0-!0" = "#2E86AB"
+  )) +
+  labs(
+    title = "Distance Difference Distribution (Violin Plot)",
+    x = "Distance Pattern",
+    y = "Distance Difference (kb)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    legend.position = "none"
+  )
+
+# Display plots
+print(plot_diff_hist_linear)
+print(plot_diff_hist_log)
+print(plot_diff_boxplot)
+print(plot_scatter_up_down)
+print(plot_scatter_up_down_log)
+print(plot_diff_violin)
+
+# Save plots
+saving_plot_dual(
+  plot_obj = plot_diff_hist_linear,
+  filename_base = "distance_diff_by_pattern_linear",
+  output_dir = "./figures/submission/lt2mb",
+  height_in = 8
+)
+
+saving_plot_dual(
+  plot_obj = plot_diff_hist_log,
+  filename_base = "distance_diff_by_pattern_log",
+  output_dir = "./figures/submission/lt2mb",
+  height_in = 8
+)
+
+saving_plot_dual(
+  plot_obj = plot_diff_boxplot,
+  filename_base = "distance_diff_by_pattern_boxplot",
+  output_dir = "./figures/submission/lt2mb"
+)
+
+saving_plot_dual(
+  plot_obj = plot_scatter_up_down,
+  filename_base = "distance_up_vs_down_scatter",
+  output_dir = "./figures/submission/lt2mb"
+)
+
+saving_plot_dual(
+  plot_obj = plot_scatter_up_down_log,
+  filename_base = "distance_up_vs_down_scatter_log",
+  output_dir = "./figures/submission/lt2mb"
+)
+
+saving_plot_dual(
+  plot_obj = plot_diff_violin,
+  filename_base = "distance_diff_by_pattern_violin",
+  output_dir = "./figures/submission/lt2mb"
 )
