@@ -566,40 +566,59 @@ bind_up_down_results <- function(df_up, df_down,
 #' @param chr.col Name of chromosome column
 #' @param metadata.cols Metadata columns to include
 #' @param use_anchor Whether to use anchor coordinates
+#' @param point Whether to create GRanges at midpoint
 #' @return GRanges object
-creating_granges <- function(df, direction = NULL, chr.col = "chr1", metadata.cols = NULL, use_anchor = FALSE) {
-    # Determine start and end columns based on direction and anchor usage
+creating_granges <- function(df, direction = NULL, chr.col = "chr1",
+                             metadata.cols = NULL, use_anchor = FALSE,
+                             point = FALSE) {
+    # ---- 1. Determine start/end columns ----
     if (is.null(direction)) {
-        # Overall loop (padded)
         start.col <- "x0"
         end.col <- "y3"
     } else if (direction == "up") {
         if (use_anchor) {
-            # Upstream anchor coordinates
             start.col <- "x1"
             end.col <- "x2"
         } else {
-            # Upstream padded
             start.col <- "x0"
             end.col <- "x3"
         }
     } else if (direction == "down") {
         if (use_anchor) {
-            # Downstream anchor coordinates
             start.col <- "y1"
             end.col <- "y2"
         } else {
-            # Downstream padded
             start.col <- "y0"
             end.col <- "y3"
         }
     } else {
-        stop("Invalid direction. Use 'up', 'down', or leave NULL for overall.")
+        stop("Invalid direction. Use 'up', 'down', or NULL.")
     }
 
+    # ---- 2. POINT MODE: create GRanges at midpoint ----
+    if (point) {
+        midpoint <- as.integer((df[[start.col]] + df[[end.col]]) / 2)
+
+        gr <- GRanges(
+            seqnames = df[[chr.col]],
+            ranges = IRanges(start = midpoint, end = midpoint)
+        )
+
+        if (is.null(metadata.cols)) {
+            metadata.cols <- setdiff(names(df), c(chr.col, start.col, end.col))
+        }
+
+        mcols(gr) <- df[, metadata.cols, drop = FALSE]
+        return(gr)
+    }
+
+    # ---- 3. RANGE MODE ----
     gr <- GRanges(
         seqnames = df[[chr.col]],
-        ranges = IRanges(start = as.integer(df[[start.col]]), end = as.integer(df[[end.col]]))
+        ranges = IRanges(
+            start = as.integer(df[[start.col]]),
+            end = as.integer(df[[end.col]])
+        )
     )
 
     if (is.null(metadata.cols)) {
@@ -736,56 +755,53 @@ adding_loop_validity <- function(df) {
         dplyr::select(-n_per_loop)
 }
 
-#' Check exon functionality within loop boundaries
-#' @param loop_id Loop ID string
-#' @param ensembl_exon_id ENSEMBL exon ID
-#' @param refseq_exon_id RefSeq exon ID
-#' @return Character: "functional", "unfunctional", or "unclear"
-checking_exon_functionality <- function(loop_id, ensembl_exon_id, refseq_exon_id) {
-    # Extract loop coordinates from loop.id
-    # Format: chr_x1_x2_chr_y1_y2_resolution
-    loop_parts <- str_split(loop_id, "_")[[1]]
-    chr <- loop_parts[1]
-    x1 <- as.numeric(loop_parts[2])
-    y2 <- as.numeric(loop_parts[6])
-
-    # Determine which exon ID to use (prefer ENSEMBL)
-    exon_id <- if (!is.na(ensembl_exon_id)) {
-        ensembl_exon_id
-    } else if (!is.na(refseq_exon_id)) {
-        refseq_exon_id
-    } else {
-        NA_character_
-    }
-
-    # If no exon data, return "unclear"
-    if (is.na(exon_id)) {
-        return("unclear")
-    }
-
-    # Extract exon coordinates (first 3 values: chr:start:end)
-    exon_parts <- str_split(exon_id, ":")[[1]]
-    exon_chr <- exon_parts[1]
-    exon_start <- as.numeric(exon_parts[2])
-    exon_end <- as.numeric(exon_parts[3])
-
-    # Check if exon is within loop boundaries
-    # Exon is functional if it's between x1 and y2 on the same chromosome
-    if (exon_chr == chr && exon_start >= x1 && exon_end <= y2) {
-        return("functional")
-    } else {
-        return("unfunctional")
-    }
-}
-
-#' Add functionality column to data frame
-#' @param df Data frame with loop.id and exon ID columns
-#' @return Data frame with functionality column added
-adding_functionality <- function(df) {
+#' Add gene location pattern column
+#' @param df Data frame with loop.id, gene_chr, gene_start, gene_end columns
+#' @return Data frame with loop coordinates and gene_LOC pattern column added
+#' @details
+#' Parses loop.id to extract coordinates and determines if gene is inside or outside loop
+#' gene_LOC values:
+#' - "2_INS": Both anchors have genes inside loop
+#' - "INS_OUT": One anchor has gene inside, one outside
+#' - "2_OUT": Both anchors have genes outside loop
+adding_gene_location_pattern <- function(df) {
     df %>%
-        rowwise() %>%
-        mutate(functionality = checking_exon_functionality(loop.id, ensembl_exon_id, refseq_exon_id)) %>%
-        ungroup()
+        mutate(
+            # Parse loop.id: chr_x1_x2_chr_y1_y2_resolution
+            loop_parts = str_split(loop.id, "_"),
+            chr1 = map_chr(loop_parts, 1),
+            x1 = as.numeric(map_chr(loop_parts, 2)),
+            x2 = as.numeric(map_chr(loop_parts, 3)),
+            chr2 = map_chr(loop_parts, 4),
+            y1 = as.numeric(map_chr(loop_parts, 5)),
+            y2 = as.numeric(map_chr(loop_parts, 6)),
+
+            # Calculate midpoints
+            mid_x = (x1 + x2) / 2,
+            mid_y = (y1 + y2) / 2,
+
+            # Check if gene is inside loop (between x1 and y2)
+            gene_inside = case_when(
+                is.na(gene_chr) | is.na(gene_start) | is.na(gene_end) ~ NA,
+                gene_chr == chr1 & gene_start >= x1 & gene_end <= y2 ~ TRUE,
+                TRUE ~ FALSE
+            )
+        ) %>%
+        dplyr::select(-loop_parts) %>%
+        # Add gene_LOC pattern per loop
+        group_by(loop.id) %>%
+        mutate(
+            n_inside = sum(gene_inside == TRUE, na.rm = TRUE),
+            n_outside = sum(gene_inside == FALSE, na.rm = TRUE),
+            gene_LOC = case_when(
+                n_inside == 2 ~ "2_INS", # Both anchors have genes inside
+                n_inside == 1 & n_outside == 1 ~ "INS_OUT", # One inside, one outside
+                n_outside == 2 ~ "2_OUT", # Both anchors have genes outside
+                TRUE ~ NA_character_
+            )
+        ) %>%
+        ungroup() %>%
+        dplyr::select(-c(n_inside, n_outside))
 }
 
 #' Add final decision column for vague cases
@@ -813,6 +829,94 @@ adding_final_decision <- function(df) {
             TRUE ~ NA_character_
         )) %>%
         ungroup()
+}
+
+#' Add TSS/Promoter location pattern column
+#' @param df Data frame with loop.id and distance columns
+#' @return Data frame with TSS_PRO_LOC column added
+#' @details
+#' TSS_PRO_LOC values:
+#' - "0_0": Both anchors have distance = 0 (TSS/Promoter overlaps both anchors)
+#' - "0_S": One anchor has distance = 0, the other has distance > 0
+#' - "S_S": Both anchors have distance > 0 (TSS/Promoter separated from both anchors)
+adding_tss_pro_location_pattern <- function(df) {
+    df %>%
+        group_by(loop.id) %>%
+        mutate(
+            n_zero_distance = sum(distance == 0),
+            TSS_PRO_LOC = case_when(
+                n_zero_distance == 2 ~ "0_0", # Both anchors overlap (distance = 0)
+                n_zero_distance == 1 ~ "0_S", # One anchor overlaps, one separated
+                n_zero_distance == 0 ~ "S_S", # Both anchors separated (distance > 0)
+                TRUE ~ NA_character_
+            )
+        ) %>%
+        ungroup() %>%
+        dplyr::select(-n_zero_distance)
+}
+
+#' Extract gene coordinates from exon IDs
+#' @param df Data frame with ensembl_exon_id and refseq_exon_id columns
+#' @return Data frame with gene_chr, gene_start, gene_end, and gene_coord_source columns added
+#' @details
+#' Extracts chr, start, end from exon IDs (format: chr:start:end:gene_name:gene_id:exon_number)
+#' Priority: ENSEMBL first, RefSeq as fallback
+#' gene_coord_source tracks which source was used: "both", "ensembl", "refseq", or "none"
+adding_gene_coord_from_exon_ids <- function(df) {
+    df %>%
+        mutate(
+            # Extract from ENSEMBL exon ID (format: chr:start:end:gene_name:gene_id:exon_number)
+            ensembl_chr = if_else(!is.na(ensembl_exon_id), str_split_n(ensembl_exon_id, ":", 1), NA_character_),
+            ensembl_start = if_else(!is.na(ensembl_exon_id), as.numeric(str_split_n(ensembl_exon_id, ":", 2)), NA_real_),
+            ensembl_end = if_else(!is.na(ensembl_exon_id), as.numeric(str_split_n(ensembl_exon_id, ":", 3)), NA_real_),
+
+            # Extract from RefSeq exon ID (format: chr:start:end:gene_name:gene_name:exon_number)
+            refseq_chr = if_else(!is.na(refseq_exon_id), str_split_n(refseq_exon_id, ":", 1), NA_character_),
+            refseq_start = if_else(!is.na(refseq_exon_id), as.numeric(str_split_n(refseq_exon_id, ":", 2)), NA_real_),
+            refseq_end = if_else(!is.na(refseq_exon_id), as.numeric(str_split_n(refseq_exon_id, ":", 3)), NA_real_),
+
+            # Priority: Use ENSEMBL if available, otherwise use RefSeq
+            gene_chr = if_else(!is.na(ensembl_chr), ensembl_chr, refseq_chr),
+            gene_start = if_else(!is.na(ensembl_start), ensembl_start, refseq_start),
+            gene_end = if_else(!is.na(ensembl_end), ensembl_end, refseq_end),
+
+            # Track which source was used
+            gene_coord_source = case_when(
+                !is.na(ensembl_chr) & !is.na(refseq_chr) ~ "both",
+                !is.na(ensembl_chr) ~ "ensembl",
+                !is.na(refseq_chr) ~ "refseq",
+                TRUE ~ "none"
+            )
+        ) %>%
+        # Remove only intermediate columns, keep gene_chr, gene_start, gene_end
+        dplyr::select(-c(
+            ensembl_chr, ensembl_start, ensembl_end,
+            refseq_chr, refseq_start, refseq_end
+        ))
+}
+
+#' Add gene NA pattern column
+#' @param df Data frame with loop.id and gene_chr columns
+#' @return Data frame with gene_NA_pattern column added
+#' @details
+#' gene_NA_pattern values:
+#' - "2_NA": Both anchors have NA gene coordinates
+#' - "1_NA": One anchor has NA gene coordinates
+#' - "0_NA": Both anchors have valid gene coordinates
+adding_gene_na_pattern <- function(df) {
+    df %>%
+        group_by(loop.id) %>%
+        mutate(
+            n_na_gene = sum(is.na(gene_chr)),
+            gene_NA_pattern = case_when(
+                n_na_gene == 2 ~ "2_NA", # Both anchors have NA
+                n_na_gene == 1 ~ "1_NA", # One anchor has NA
+                n_na_gene == 0 ~ "0_NA", # Both anchors have valid coordinates
+                TRUE ~ NA_character_
+            )
+        ) %>%
+        ungroup() %>%
+        dplyr::select(-n_na_gene)
 }
 
 ################################################################################
