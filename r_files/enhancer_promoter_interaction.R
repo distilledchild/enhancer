@@ -29,6 +29,7 @@ library("rsvg")
 library("rtracklayer")
 
 options(tibble.width = Inf)
+options(tibble.print_max = Inf)
 options(tibble.max_extra_cols = Inf)
 options(scipen = 999)
 
@@ -52,16 +53,16 @@ source("~/Desktop/playground/enhancer/r_files/utils_functions.R")  # Load all ut
 # -> OVERALL.df.DISTINCT.loop.deep.sample.all : OBJECT to be used for the distribution of sth over loops
 # x0, y3, new_distance, new.loop.id
 ########################
-# loops only less than 2mb: 31019 from DISTINCT loops
+# loading all DISTINCT loops
 cache_file_distinct_loop <- "../data/df.DISTINCT.loop.deep.sample.all.rds"
-df.DISTINCT.loop.deep.sample.all <- readRDS(cache_file_distinct_loop)
-df.DISTINCT.loop.deep.sample.all.lt.2mb <- df.DISTINCT.loop.deep.sample.all %>% 
-  filter(distance < 2000000) # 31019/31773, only use less than 2mb
-df.DISTINCT.loop.deep.sample.all.lt.2mb %>% dim() # 31019 (31773 - 754 (longer than 2mb))
-df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(3)
+df.DISTINCT.loop.deep.sample.all <- readRDS(cache_file_distinct_loop)            # 31,773
+df.DISTINCT.loop.deep.sample.all.lt.2mb <- df.DISTINCT.loop.deep.sample.all %>%  # 31,019: less than 2mb
+  filter(distance < 2000000)                                                     # 31,019/31,773, only use less than 2mb
+df.DISTINCT.loop.deep.sample.all.lt.2mb %>% dim()                                # 31,019 (31,773 - 754 (longer than 2mb))
+df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(2)
 
-# padding 1 distance with all loops: 31773
-OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance <- df.DISTINCT.loop.deep.sample.all %>% # 31773
+# padding 1 distance with all loops: 31,773
+OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance <- df.DISTINCT.loop.deep.sample.all %>% # 31,773
   mutate(x0 = ifelse(mid_x - distance < 0, 0, mid_x - distance), 
          y3 = ifelse(mid_y + distance > chr.end.coord, chr.end.coord, mid_y + distance))   # 1 distance for padding
 
@@ -151,36 +152,32 @@ ctcf.stats.by.resolution
 ########################
 # 3. TSS
 ########################
+####################################################
+# retrieving TSS data from Ensembl GTF             : df.ensembl.gtf.for.tss.DISTINCT.geneid
+####################################################
 df.ensembl.gtf.for.tss.DISTINCT.geneid <- readRDS("../data/df_ensembl_gtf_for_tss_DISTINCT_geneid.rds")
-df.ensembl.gtf.for.tss.DISTINCT.geneid
+df.ensembl.gtf.for.tss.DISTINCT.geneid %>% head(2)
+df.ensembl.gtf.for.tss.DISTINCT.geneid %>% dim() # 21,725
 #################################################### 
-# retrieving exon data 1 from RefSeq GTF
+# retrieving EXON data 1 from RefSeq GTF           : df.refgene.gtf.for.exon
 #################################################### 
-# CACHING: df.refgene.gtf.for.exon processing
 df.refgene.gtf.for.exon <- readRDS("../data/df_refgene_gtf_for_exon.rds")
 df.refgene.gtf.for.exon %>% head(2)
+df.refgene.gtf.for.exon %>% dim() # 17,488
 ####################################################
-# retrieving exon data 2 from Ensembl GTF
+# retrieving EXON data 2 from Ensembl GTF           : df.tss.ensembl
 ####################################################
 df.ensembl.gtf.for.exon.attribute <- readRDS("../data/df_ensembl_gtf_for_exon_attribute.rds")
 df.tss.ensembl <- readRDS("../data/df.tss.ensembl.rds")
-df.tss.ensembl %>% colnames() # "chr"             "start"           "end"             "strand"         "gene_id"         "gene_name"       "tss.id"          "ensembl_exon_id", "refseq_exon_id"
+df.tss.ensembl %>% colnames() # "chr", "start", "end", "strand", "gene_id", "gene_name", "tss.id", "ensembl_exon_id", "refseq_exon_id"
 df.tss.ensembl %>% head(2)
-########################
-# 3. TSS
-# 3-4. Distribution of TSS at each end in a loop: for the number of TSS used in filtering valid loops: figures
-# so, the object should be used one WITH padding on df.DISTINCT.loop.deep.sample.all: 1/2 distance for OUTER & 1/4 distance for INNER
-# 3-4-1. adding padding at each end, x12 & y12
-########################
-df.DISTINCT.loop.deep.sample.all # 31,773
-df.DISTINCT.loop.deep.sample.all.lt.2mb  %>% dim()# 31,019
-df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(2) # 31,019
+df.tss.ensembl %>% dim() # 21,725
 
 ########################
 # 4. promoter from EPD
 ########################
 df.promoter.rn7.epd <- readRDS("../data/df.promoter.rn7.epd.rds")
-df.promoter.rn7.epd %>% head(3) # seqnames, start, end, width, strand, promoter_id, score, gene_id, gene_name, ensembl_exon_id, refseq_exon_id, promoter.id
+df.promoter.rn7.epd %>% head(2) # seqnames, start, end, width, strand, promoter_id, score, gene_id, gene_name, ensembl_exon_id, refseq_exon_id, promoter.id
 df.promoter.rn7.epd.GR <- GRanges(
     seqnames = df.promoter.rn7.epd$seqnames,
     ranges = IRanges(
@@ -203,8 +200,8 @@ mcols(df.promoter.rn7.epd.GR) <- df.promoter.rn7.epd[, c("promoter.id", "gene_id
 ##########################################################
 
 # Prepare TSS data & Promoter data (already has exon information)
-df.tss.ensembl %>% head(3) # chr start end strand gene_id gene_name tss.id ensembl_exon_id refseq_exon_id
-df.promoter.rn7.epd %>% head(3) # seqnames start end width strand promoter_id score gene_id gene_name ensembl_exon_id refseq_exon_id
+df.tss.ensembl %>% head(2)       #      chr, start, end,        strand, gene_id, gene_name, tss.id,             ensembl_exon_id, refseq_exon_id
+df.promoter.rn7.epd %>% head(2)  # seqnames, start, end, width, strand, gene_id, gene_name, promoter_id, score, ensembl_exon_id, refseq_exon_id
 
 # Combine TSS and Promoter datasets
 df.gene_tss_and_pro <- bind_rows(
@@ -224,12 +221,12 @@ df.gene_tss_and_pro <- bind_rows(
     mutate(component_id = str_c(component_id, component, sep='|'))
 )
 
-df.gene_tss_and_pro %>% head(3)
+df.gene_tss_and_pro %>% head(10)
 df.gene_tss_and_pro %>% dim() # TSS: 21,725 + Promoter: 12,529 = 34,254
 df.gene_tss_and_pro_prep <- df.gene_tss_and_pro %>% 
   mutate(gene_id = coalesce(ensembl_exon_id, refseq_exon_id)) %>% # priority: ensembl_exon_id > refseq_exon_id
   mutate(gene_chr = str_split_n(gene_id, ":",1), gene_start = str_split_n(gene_id, ":",2), gene_end = str_split_n(gene_id, ":",3))
-df.gene_tss_and_pro_prep %>% head(3)
+df.gene_tss_and_pro_prep %>% head(2)
 df.gene_tss_and_pro_prep %>% dim()
 
 # Create GRanges object with exon information
@@ -253,10 +250,10 @@ df.gene_tss_and_pro.GR <- GRanges(
 df.gene_tss_and_pro.GR # 34,254
 
 df.DISTINCT.loop.deep.sample.all.lt.2mb %>% dim() # 31,019
-df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(3)
+df.DISTINCT.loop.deep.sample.all.lt.2mb %>% head(2)
 colnames(df.DISTINCT.loop.deep.sample.all.lt.2mb) # "loop.id" "chr1" "x1" "x2" "chr2" "y1" "y2" "end.distance" "distance" "resolution" "x0" "x3" "y0" "y3" "mid_x" "mid_y" "mid_loop" "chr.end.coord" "start" "case"         
 
-# Create GRanges for UP and DOWN anchors using creating_granges function
+# Create GRanges for UP and DOWN anchors using creating_granges function (PARAM: point = TRUE)
 df.DISTINCT.loop.deep.sample.all.lt.2mb.UP.point.GR <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb, 
   direction = "up", use_anchor = TRUE, point = TRUE) # utils_functions.R
 df.DISTINCT.loop.deep.sample.all.lt.2mb.DOWN.point.GR <- creating_granges(df.DISTINCT.loop.deep.sample.all.lt.2mb, 
@@ -342,6 +339,7 @@ if (file.exists(cache_file_directional)) {
   
   # Combine DOWN results
   down_results_df <- bind_rows(down_results_list)
+  down_results_df
   
   message("UP hits: ", nrow(up_results_df), ", DOWN hits: ", nrow(down_results_df)) 
   # Midpoint in anchor (select all) and midpoint in loop- UP hits: 31,045, DOWN hits: 31,066
@@ -409,10 +407,9 @@ if (file.exists(cache_file_directional)) {
   # Save to cache
   saveRDS(df.final.up.down.directional, cache_file_directional)
 }
-# TODO: 둘중에 하나만 리턴하는거 우선순위 정하기
-# df.final.up.down.directional <- readRDS("../data/df_final_up_down_mid_mid_directional.rds")
+
 df.final.up.down.directional %>% dim() # 72,772// point: 62,070/ mid mid:62,111
-df.final.up.down.directional %>% head(3)
+df.final.up.down.directional %>% head(2)
 df.final.up.down.directional.point <- df.final.up.down.directional %>%
   add_count(loop.id, name = "loop.count") %>%      # loop.count 추가
   # filter(loop.count > 2) %>%                        # loop.count가 2 이상인 행만.  in point: 400
@@ -421,16 +418,35 @@ df.final.up.down.directional.point <- df.final.up.down.directional %>%
   # ungroup()
   group_by(loop.id, WHERE) %>%
   filter(distance == min(distance)) %>% 
-  slice_min(distance, with_ties = FALSE) %>%
+  slice_min(distance, with_ties = FALSE) %>% # FALSE
   ungroup() # 62,070 // 61,936// 61974: 62038 = 31019 * 2
 
-df.final.up.down.directional.point %>% dim() # 61,974 // 61,936// mid mid: 61,974: 62038 = 31019 * 2
-df.final.up.down.directional.point %>% head(3)
 
-df.final.up.down.directional.point %>% 
-  count(loop.id) %>% 
-  filter(n != 2) %>% 
-  count(n) # n(1) = 64
+df.final.up.down.directional.point %>% dim() # 61,974 // 61,936// mid mid: 62,111 with_ties = TRUE: 62038 = 31019 * 2
+df.final.up.down.directional.point %>% head(2)
+
+df.final.up.down.directional.point 
+
+
+
+#%>% 
+  add_count(loop.id, WHERE, name = "loop.where") %>% 
+  filter(loop.where > 1) 
+  
+  
+  
+  
+  %>% 
+  filter(!is.na(gene_chr) & !is.na(gene_start) & !is.na(gene_end)) %>%  # 먼저 NA 
+  group_by(loop.id, WHERE) %>%
+  filter(n_distinct(paste(gene_chr, gene_start, gene_end, sep = "_")) > 1) %>%  # gene이 서로 다른 경우
+  ungroup() %>%
+  arrange(loop.id, WHERE) %>% 
+  print(n = Inf)
+# count(loop.where) 
+# loop.where     n
+# 1          2   270
+# 2          3     3
 
 colnames(df.final.up.down.directional.point)
 #  [1] "distance"        "loop.id"         "loop.mid"        "loop_chr"       
@@ -555,16 +571,16 @@ distribution.all.cases.distance
 approach_2nd_analyze_loops_by_threshold(df.final.up.down.directional.point.decision %>% 
   filter(classification == "One_OK") %>% 
   dplyr::rename(gene_id_id = gene_id) %>% 
-  # mutate(gene_id = str_split_n(str_split_n(component_id, ":",6), "|",1)),
-  mutate(gene_id = str_split_n(str_split_n(component_id, ":",6), '\\|',1)),
-  # mutate(gene_id = str_split_n(component_id, ":",6)),
+  mutate(gene_id = str_split_n(str_split_n(component_id, ":",6), '\\|',1)) %>% view(),
   threshold_distance = 66692, 
   top_n_genes = 70, 
   print_top_n = 50) # utils_functions.R
 
-distribution.OK.distance.q3 %>% dim()
-distribution.OK.distance.q3 %>% distinct(loop.id) %>% count()
-distribution.OK.distance.q3 %>% head(2)
+  
+# distribution.OK.distance.q3 %>% dim()
+# distribution.OK.distance.q3 %>% distinct(loop.id) %>% count()
+# distribution.OK.distance.q3 %>% head(2)
+
 
 ###################################
 # 2. TWO OK case in either anchor
@@ -680,7 +696,6 @@ df.final.up.down.directional.point.decision %>% count(classification)
 # 1 Both_FAIL      30498
 # 2 Both_OK         7602
 # 3 One_OK         23874
-df.final.up.down.directional.point.decision.one.OK.filtered  %>% distinct(loop.id) %>% count() # 11,937
 
 
 df.final.up.down.directional.point.decision.one.OK.filtered <- df.final.up.down.directional.point.decision %>% 
@@ -688,6 +703,7 @@ df.final.up.down.directional.point.decision.one.OK.filtered <- df.final.up.down.
   group_by(loop.id) %>%
   filter(UP == "OK" | DOWN == "OK") %>%   # UP 또는 DOWN 중 OK인 행만 선택
   ungroup()
+df.final.up.down.directional.point.decision.one.OK.filtered  %>% distinct(loop.id) %>% count() # 11,937
 df.final.up.down.directional.point.decision.one.OK.filtered # 11,937
 df.final.up.down.directional.point.decision.both.OK.filtered.lt.Q3 <- df.final.up.down.directional.point.decision.both.OK.filtered %>% 
   filter(distance < stats_decision$Q3) # 3,730
@@ -699,15 +715,27 @@ df.final.up.down.directional.point.decision.COMBINED.OK.filtered %>% dim() # 15,
 df.final.up.down.directional.point.decision.COMBINED.OK.filtered %>% head(2)
 df.final.up.down.directional.point.decision.COMBINED.OK.filtered %>% count(loop.id) # 15,667 PASS!
 
+df.final.up.down.directional.point.decision.COMBINED.OK.filtered  %>% 
+  head(2)
+
 approach_2nd_analyze_loops_by_threshold(df.final.up.down.directional.point.decision.COMBINED.OK.filtered %>% 
-  filter(classification == "One_OK") %>% 
+  # filter(classification == "One_OK") %>% 
   dplyr::rename(gene_id_id = gene_id) %>% 
-  mutate(gene_id = str_split_n(component_id, ":",5)), 
+  mutate(gene_id = str_split_n(str_split_n(component_id, ":",6), '\\|',1)),
+  # mutate(gene_id = str_split_n(component_id, ":",6)), 
   threshold_distance = 66692, 
   top_n_genes = 70, 
   print_top_n = 50) # utils_functions.R
 
-# filtered_loops/total loops: 10480/11937 (87.79%)
+approach_2nd_analyze_loops_by_threshold(df.final.up.down.directional.point.decision.COMBINED.OK.filtered %>% 
+  # filter(classification == "One_OK") %>% 
+  dplyr::rename(gene_id_id = gene_id) %>% 
+  # mutate(gene_id = str_split_n(str_split_n(component_id, ":",6), "|",1)),
+  mutate(gene_id = str_split_n(str_split_n(component_id, ":",6), '\\|',1)),
+  # mutate(gene_id = str_split_n(component_id, ":",6)),
+  threshold_distance = 66692, 
+  top_n_genes = 70, 
+  print_top_n = 50) # utils_functions.R
 
 
 df.final.up.down.directional.point.decision.COMBINED.OK.filtered %>% 
@@ -716,6 +744,10 @@ df.final.up.down.directional.point.decision.COMBINED.OK.filtered %>%
 # 2 tss       10891
 
 
+
+
+1 OK has the largets number of NAs BUT NOT in COMBINED DataFrame ?? irreasonable
+1 OK 11000ish 
 
 ######################################################################
 ######################################################################

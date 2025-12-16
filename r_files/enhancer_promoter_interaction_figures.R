@@ -191,7 +191,7 @@ if (file.exists(cache_file_loop_deep_sample_all)) {
     saveRDS(df.loop.deep.sample.all, cache_file_loop_deep_sample_all)
 }
 
-df.loop.deep.sample.all  %>% dim() # 51300 + 7692 = 58992
+df.loop.deep.sample.all %>% dim() # 51300 + 7692 = 58992
 df.loop.deep.sample.all %>% head(3)
 df.loop.deep.sample.all %>% count(strain)
 
@@ -601,26 +601,26 @@ df.DISTINCT.loop.deep.sample.all %>% count(resolution) # 31773/58992
 ########################
 
 df.DISTINCT.loop.deep.sample.all.lt.2mb.stats <- df.DISTINCT.loop.deep.sample.all.lt.2mb %>%
-  summarise(
-    Q1 = quantile(distance, 0.25), # 150,000
-    Median = median(distance), # 195,000
-    Q3 = quantile(distance, 0.75) # 375,000 (<-> 2,000,000)
-  )
+    summarise(
+        Q1 = quantile(distance, 0.25), # 150,000
+        Median = median(distance), # 195,000
+        Q3 = quantile(distance, 0.75) # 375,000 (<-> 2,000,000)
+    )
 
 ggplot(df.DISTINCT.loop.deep.sample.all.lt.2mb, aes(y = distance)) +
-  geom_boxplot(fill = "skyblue", color = "darkblue") +
-  # Q1, Median, Q3
-  geom_text(data = df.DISTINCT.loop.deep.sample.all.lt.2mb.stats, aes(x = 0, y = Q1, label = paste0("Q1: ", round(Q1))), hjust = 0) +
-  geom_text(data = df.DISTINCT.loop.deep.sample.all.lt.2mb.stats, aes(x = 0, y = Median, label = paste0("Median: ", round(Median))), hjust = 0) +
-  geom_text(data = df.DISTINCT.loop.deep.sample.all.lt.2mb.stats, aes(x = 0, y = Q3, label = paste0("Q3: ", round(Q3))), hjust = 0) +
-  labs(
-    y = "Loop Length (bp)",
-    title = "Distribution of Loop Length"
-  ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5)  # title centering
-  )
+    geom_boxplot(fill = "skyblue", color = "darkblue") +
+    # Q1, Median, Q3
+    geom_text(data = df.DISTINCT.loop.deep.sample.all.lt.2mb.stats, aes(x = 0, y = Q1, label = paste0("Q1: ", round(Q1))), hjust = 0) +
+    geom_text(data = df.DISTINCT.loop.deep.sample.all.lt.2mb.stats, aes(x = 0, y = Median, label = paste0("Median: ", round(Median))), hjust = 0) +
+    geom_text(data = df.DISTINCT.loop.deep.sample.all.lt.2mb.stats, aes(x = 0, y = Q3, label = paste0("Q3: ", round(Q3))), hjust = 0) +
+    labs(
+        y = "Loop Length (bp)",
+        title = "Distribution of Loop Length"
+    ) +
+    theme_minimal() +
+    theme(
+        plot.title = element_text(hjust = 0.5) # title centering
+    )
 
 ########################
 # 2. CTCF
@@ -1096,6 +1096,9 @@ if (file.exists(cache_file_ensembl_tss)) {
     saveRDS(df.ensembl.gtf.for.tss.DISTINCT.geneid, cache_file_ensembl_tss)
 }
 
+df.ensembl.gtf.for.tss.DISTINCT.geneid %>% dim() # 21,725
+df.ensembl.gtf.for.tss.DISTINCT.geneid %>% head(2)
+
 ####################################################
 # retrieving exon data 2 from Ensembl GTF
 ####################################################
@@ -1134,7 +1137,7 @@ if (file.exists(cache_file)) {
     message("Saving result to cache: ", cache_file)
     saveRDS(df.ensembl.gtf.for.exon.attribute, cache_file)
 }
-df.ensembl.gtf.for.exon.attribute # 526,204
+# 526,204
 
 # CACHING for df.tss.ensembl
 cache_file_tss_ensembl <- "../data/df.tss.ensembl.rds"
@@ -1168,6 +1171,8 @@ if (file.exists(cache_file_tss_ensembl)) {
 
     saveRDS(df.tss.ensembl, cache_file_tss_ensembl)
 }
+df.tss.ensembl %>% dim() # 21,725
+df.tss.ensembl %>% head(2)
 
 # GRanges Obj.: df.tss.ensembl.GR: chr   start     end gene_id                      tss.id
 df.tss.ensembl.GR <- GRanges(
@@ -1288,100 +1293,100 @@ if (file.exists(cache_file_promoter_epd)) {
 } else {
     message("Processing and caching df.promoter.rn7.epd...")
 
-############################
-# promoter resource 2
-############################
-# Download: https://epd.expasy.org/ftp/epdnew/R_norvegicus/
-# CACHING: df.Rn_EPDnew_001_rn7 processing
-cache_file_epd_rn7 <- "../data/df_Rn_EPDnew_001_rn7.rds"
+    ############################
+    # promoter resource 2
+    ############################
+    # Download: https://epd.expasy.org/ftp/epdnew/R_norvegicus/
+    # CACHING: df.Rn_EPDnew_001_rn7 processing
+    cache_file_epd_rn7 <- "../data/df_Rn_EPDnew_001_rn7.rds"
 
-if (file.exists(cache_file_epd_rn7)) {
-    message("Loading cached EPD rn7 data from: ", cache_file_epd_rn7)
-    df.Rn_EPDnew_001_rn7 <- readRDS(cache_file_epd_rn7)
-} else {
-    message("Processing EPD rn7 data...")
-    Rn_EPDnew_001_rn6.bed.raw <- read.table("~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6.bed", sep = " ") %>%
-        dplyr::rename(
-            seqnames = V1,
-            start = V7,
-            name = V4,
-            score = V5,
-            strand = V6
+    if (file.exists(cache_file_epd_rn7)) {
+        message("Loading cached EPD rn7 data from: ", cache_file_epd_rn7)
+        df.Rn_EPDnew_001_rn7 <- readRDS(cache_file_epd_rn7)
+    } else {
+        message("Processing EPD rn7 data...")
+        Rn_EPDnew_001_rn6.bed.raw <- read.table("~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6.bed", sep = " ") %>%
+            dplyr::rename(
+                seqnames = V1,
+                start = V7,
+                name = V4,
+                score = V5,
+                strand = V6
+            ) %>%
+            dplyr::select(-starts_with("V")) %>%
+            mutate(start = as.numeric(start), end = start + 1, score = 1)
+
+        # Rn_EPDnew_001_rn6.bed.raw # 12,601
+        Rn_EPDnew_001_rn6.bed.gr <- GRanges(
+            seqnames = Rn_EPDnew_001_rn6.bed.raw$seqnames,
+            ranges = IRanges(
+                start = Rn_EPDnew_001_rn6.bed.raw$start,
+                end = Rn_EPDnew_001_rn6.bed.raw$end
+            ),
+            strand = Rn_EPDnew_001_rn6.bed.raw$strand,
+            name = Rn_EPDnew_001_rn6.bed.raw$name,
+            score = Rn_EPDnew_001_rn6.bed.raw$score
+        )
+        # Rn_EPDnew_001_rn6.bed.gr
+        BiocIO::export(Rn_EPDnew_001_rn6.bed.gr, "/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6.bed.gr", format = "BED")
+        Rn_EPDnew_001_rn6.bed <- import("/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6.bed.gr", format = "BED")
+        # Rn_EPDnew_001_rn6.bed
+
+        # chain file
+        chain.rn6.to.rn7 <- import.chain("~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/rn6ToRn7.over.chain")
+
+        # 3. liftOver: rn6 → rn7
+        Rn_EPDnew_001_rn7.list <- liftOver(Rn_EPDnew_001_rn6.bed, chain.rn6.to.rn7)
+        # Rn_EPDnew_001_rn7.list # 12601
+
+        # 4. GRangesList → GRanges
+        Rn_EPDnew_001_rn7 <- unlist(Rn_EPDnew_001_rn7.list)
+
+        # 5. BED export
+        export(Rn_EPDnew_001_rn7, "~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn7.bed", format = "BED")
+        # export(Rn_EPDnew_001_rn7, "~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/R_norvegicus_epdnew_rn7.bed", format = "BED")
+
+        df.Rn_EPDnew_001_rn7 <- as_tibble(Rn_EPDnew_001_rn7)
+
+        saveRDS(df.Rn_EPDnew_001_rn7, cache_file_epd_rn7)
+    }
+
+    # ENSEMBL ID with gene symbol
+    df.gene.mapping.for.promoter <- read_tsv("~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/db/promoter_ensembl.txt",
+        col_names = c("promoter_id", "gene_id"),
+        col_types = cols(
+            promoter_id = col_character(),
+            gene_id = col_character()
+        )
+    ) %>% # 12,793
+        mutate(gene_id = if_else(str_detect(promoter_id, "Cfb_1"), "ENSRNOG00000051158.3", gene_id)) %>% # https://useast.ensembl.org/Rattus_norvegicus/Gene/Idhistory?g=ENSRNOG00000051158
+        distinct() # 12,600
+
+    # adding gene_id (ENSEMBL provieded by EPD)
+    df.promoter.rn7.raw <- left_join(df.Rn_EPDnew_001_rn7, df.gene.mapping.for.promoter, by = c("name" = "promoter_id"))
+
+    # adding exon information from ENSEMBL and RefSeq
+    df.promoter.rn7.exon_id <- df.promoter.rn7.raw %>% # seqnames   start     end width strand name     score gene_id
+        mutate(gene_id = if_else(str_detect(name, "AABR07053687"), "ENSRNOG00000015756", gene_id)) %>%
+        dplyr::rename(promoter_id = name) %>%
+        mutate(gene_name = str_split_n(promoter_id, "_", 1)) %>% # utils_functions.R
+        left_join(df.ensembl.gtf.for.exon %>% dplyr::select(gene_id, ensembl_exon_id), by = "gene_id") %>%
+        left_join(df.refgene.gtf.for.exon %>% dplyr::select(gene_name, refseq_exon_id), by = "gene_name")
+
+    # Deduplication: keep only _1 promoters when seqnames, start, end, gene_id are identical
+    df.promoter.rn7 <- df.promoter.rn7.exon_id %>%
+        add_count(seqnames, start, end, gene_id, name = "dup_count") %>%
+        filter(dup_count == 1 | str_detect(promoter_id, "_1$")) %>%
+        dplyr::select(-dup_count)
+
+    # df.promoter.rn7 (dups)
+    df.promoter.rn7.epd <- df.promoter.rn7 %>%
+        dplyr::rename(tss_start = start, tss_end = end) %>% # tss_start, tss_end : original coordinates of promoter
+        mutate(
+            start = tss_start - 40,
+            end   = tss_start + 40
         ) %>%
-        dplyr::select(-starts_with("V")) %>%
-        mutate(start = as.numeric(start), end = start + 1, score = 1)
-
-    # Rn_EPDnew_001_rn6.bed.raw # 12,601
-    Rn_EPDnew_001_rn6.bed.gr <- GRanges(
-        seqnames = Rn_EPDnew_001_rn6.bed.raw$seqnames,
-        ranges = IRanges(
-            start = Rn_EPDnew_001_rn6.bed.raw$start,
-            end = Rn_EPDnew_001_rn6.bed.raw$end
-        ),
-        strand = Rn_EPDnew_001_rn6.bed.raw$strand,
-        name = Rn_EPDnew_001_rn6.bed.raw$name,
-        score = Rn_EPDnew_001_rn6.bed.raw$score
-    )
-    # Rn_EPDnew_001_rn6.bed.gr
-    BiocIO::export(Rn_EPDnew_001_rn6.bed.gr, "/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6.bed.gr", format = "BED")
-    Rn_EPDnew_001_rn6.bed <- import("/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn6.bed.gr", format = "BED")
-    # Rn_EPDnew_001_rn6.bed
-
-    # chain file
-    chain.rn6.to.rn7 <- import.chain("~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/rn6ToRn7.over.chain")
-
-    # 3. liftOver: rn6 → rn7
-    Rn_EPDnew_001_rn7.list <- liftOver(Rn_EPDnew_001_rn6.bed, chain.rn6.to.rn7)
-    # Rn_EPDnew_001_rn7.list # 12601
-
-    # 4. GRangesList → GRanges
-    Rn_EPDnew_001_rn7 <- unlist(Rn_EPDnew_001_rn7.list)
-
-    # 5. BED export
-    export(Rn_EPDnew_001_rn7, "~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/Rn_EPDnew_001_rn7.bed", format = "BED")
-    # export(Rn_EPDnew_001_rn7, "~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/R_norvegicus_epdnew_rn7.bed", format = "BED")
-
-    df.Rn_EPDnew_001_rn7 <- as_tibble(Rn_EPDnew_001_rn7)
-
-    saveRDS(df.Rn_EPDnew_001_rn7, cache_file_epd_rn7)
-}
-
-# ENSEMBL ID with gene symbol
-df.gene.mapping.for.promoter <- read_tsv("~/dropbox/Gateway_to_Hao/enhancer/data/epdnew/001/db/promoter_ensembl.txt",
-    col_names = c("promoter_id", "gene_id"),
-    col_types = cols(
-        promoter_id = col_character(),
-        gene_id = col_character()
-    )
-) %>% # 12,793
-    mutate(gene_id = if_else(str_detect(promoter_id, "Cfb_1"), "ENSRNOG00000051158.3", gene_id)) %>% # https://useast.ensembl.org/Rattus_norvegicus/Gene/Idhistory?g=ENSRNOG00000051158
-    distinct() # 12,600
-
-# adding gene_id (ENSEMBL provieded by EPD)
-df.promoter.rn7.raw <- left_join(df.Rn_EPDnew_001_rn7, df.gene.mapping.for.promoter, by = c("name" = "promoter_id"))
-
-# adding exon information from ENSEMBL and RefSeq
-df.promoter.rn7.exon_id <- df.promoter.rn7.raw %>% # seqnames   start     end width strand name     score gene_id
-    mutate(gene_id = if_else(str_detect(name, "AABR07053687"), "ENSRNOG00000015756", gene_id)) %>%
-    dplyr::rename(promoter_id = name) %>%
-    mutate(gene_name = str_split_n(promoter_id, "_", 1)) %>% # utils_functions.R
-    left_join(df.ensembl.gtf.for.exon %>% dplyr::select(gene_id, ensembl_exon_id), by = "gene_id") %>%
-    left_join(df.refgene.gtf.for.exon %>% dplyr::select(gene_name, refseq_exon_id), by = "gene_name")
-
-# Deduplication: keep only _1 promoters when seqnames, start, end, gene_id are identical
-df.promoter.rn7 <- df.promoter.rn7.exon_id %>%
-    add_count(seqnames, start, end, gene_id, name = "dup_count") %>%
-    filter(dup_count == 1 | str_detect(promoter_id, "_1$")) %>%
-    dplyr::select(-dup_count)
-
-# df.promoter.rn7 (dups)
-df.promoter.rn7.epd <- df.promoter.rn7 %>%
-    dplyr::rename(tss_start = start, tss_end = end) %>% # tss_start, tss_end : original coordinates of promoter
-    mutate(
-        start = tss_start - 40,
-        end   = tss_start + 40
-    ) %>%
-    mutate(promoter.id = str_c(seqnames, ":", start, ":", end, ":", strand, ":", gene_id, ":", gene_name, ":", seqnames, ":", tss_start, ":", tss_end))
+        mutate(promoter.id = str_c(seqnames, ":", start, ":", end, ":", strand, ":", gene_id, ":", gene_name, ":", seqnames, ":", tss_start, ":", tss_end))
 
     saveRDS(df.promoter.rn7.epd, cache_file_promoter_epd)
 }
