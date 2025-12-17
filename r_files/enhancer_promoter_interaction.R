@@ -527,22 +527,22 @@ df.final.up.down.directional.point.multi.in.loop.where.three.labelings.mannual.s
 df.final.up.down.directional.point.multi.in.loop.where.three.labelings.mannual.selected %>% head(2)
 
 df.final.combined.using.labelings <- bind_rows(
-  df.final.up.down.directional.point.one.in.loop.where,                                    # 61,838
+  # df.final.up.down.directional.point.one.in.loop.where,                                    # 61,838
   df.final.up.down.directional.point.multi.in.loop.where.two.labelings.selected,           # 95
   df.final.up.down.directional.point.multi.in.loop.where.three.labelings.coords.diff.selected,  # 26
   df.final.up.down.directional.point.multi.in.loop.where.three.labelings.mannual.selected  # 16
 )
-df.final.combined.using.labelings %>% dim()
+
+df.final.up.down.directional.point.final <- bind_rows(df.final.up.down.directional.point.one.in.loop.where, df.final.combined.using.labelings)
+
+df.final.up.down.directional.point.final %>% dim()
 # 예상: 61,838 + 95 + 26 + 16 = 61,975
 # 검증: loop.id + WHERE 조합당 행 수
-df.final.combined.using.labelings %>%
+df.final.up.down.directional.point.final %>%
   count(loop.id, WHERE) %>%
   count(n, name = "count")
 # n=1: 대부분
 # n=2: Surf1/Surf4, Spag16/AABR07068007만
-
-df.final.up.down.directional.point.final <- bind_rows(df.final.up.down.directional.point.one.in.loop.where, df.final.combined.using.labelings)
-
 
 
 
