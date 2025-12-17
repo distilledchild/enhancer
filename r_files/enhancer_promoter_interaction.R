@@ -156,21 +156,24 @@ ctcf.stats.by.resolution
 # retrieving TSS data from Ensembl GTF             : df.ensembl.gtf.for.tss.DISTINCT.geneid
 ####################################################
 df.ensembl.gtf.for.tss.DISTINCT.geneid <- readRDS("../data/df_ensembl_gtf_for_tss_DISTINCT_geneid.rds")
-df.ensembl.gtf.for.tss.DISTINCT.geneid %>% head(2)
+df.ensembl.gtf.for.tss.DISTINCT.geneid %>% head(2) # chr, start, end, strand, gene_id, gene_name, tss.id: chr1:157231467:157231469:+:ENSRNOG00000070168:Or51f23c
 df.ensembl.gtf.for.tss.DISTINCT.geneid %>% dim() # 21,725
 #################################################### 
 # retrieving EXON data 1 from RefSeq GTF           : df.refgene.gtf.for.exon
 #################################################### 
 df.refgene.gtf.for.exon <- readRDS("../data/df_refgene_gtf_for_exon.rds")
-df.refgene.gtf.for.exon %>% head(2)
+df.refgene.gtf.for.exon %>% head(2) # chr, start, end, strand, exon_id, exon_number, gene_id, gene_name, transcript_id refseq_exon_id: chr7:92494376:92494506:-:A1bg:A1bg:8
 df.refgene.gtf.for.exon %>% dim() # 17,488
 ####################################################
 # retrieving EXON data 2 from Ensembl GTF           : df.tss.ensembl
 ####################################################
 df.ensembl.gtf.for.exon.attribute <- readRDS("../data/df_ensembl_gtf_for_exon_attribute.rds")
 df.tss.ensembl <- readRDS("../data/df.tss.ensembl.rds")
-df.tss.ensembl %>% colnames() # "chr", "start", "end", "strand", "gene_id", "gene_name", "tss.id", "ensembl_exon_id", "refseq_exon_id"
-df.tss.ensembl %>% head(2)
+df.tss.ensembl %>% head(2) 
+# chr, start, end, strand, gene_id, gene_name
+# tss.id: chr1:157231467:157231469:+:ENSRNOG00000070168:Or51f23c
+# ensembl_exon_id: chr1:157231467:157232417:+:ENSRNOG00000070168:Or51f23c:1
+# refseq_exon_id: chr1:80126460:80131881:+:Irgq:Irgq:3
 df.tss.ensembl %>% dim() # 21,725
 
 ########################
@@ -185,9 +188,15 @@ df.promoter.rn7.epd.GR <- GRanges(
         end = df.promoter.rn7.epd$end
     )
 )
+# ensembl_exon_id                                         
+# 1 chr1:1807644:1807710:-:ENSRNOG00000040300:LOC120093164:6
+# refseq_exon_id                         start     end
+# 2 chr1:2106343:2108110:+:Lrp11:Lrp11:8 2079583 2079663
+# promoter.id                                                          
+# 1 chr1:1402581:1402661:-:ENSRNOG00000040300:Raet1e:chr1:1402621:1402622
+
 # metadata
 mcols(df.promoter.rn7.epd.GR) <- df.promoter.rn7.epd[, c("promoter.id", "gene_id", "gene_name", "ensembl_exon_id", "refseq_exon_id")]
-
 
 ##########################################################
 ##########################################################
@@ -221,7 +230,7 @@ df.gene_tss_and_pro <- bind_rows(
     mutate(component_id = str_c(component_id, component, sep='|'))
 )
 
-df.gene_tss_and_pro %>% head(10)
+df.gene_tss_and_pro %>% head(2)
 df.gene_tss_and_pro %>% dim() # TSS: 21,725 + Promoter: 12,529 = 34,254
 df.gene_tss_and_pro_prep <- df.gene_tss_and_pro %>% 
   mutate(gene_id = coalesce(ensembl_exon_id, refseq_exon_id)) %>% # priority: ensembl_exon_id > refseq_exon_id
@@ -408,59 +417,138 @@ if (file.exists(cache_file_directional)) {
   saveRDS(df.final.up.down.directional, cache_file_directional)
 }
 
-df.final.up.down.directional %>% dim() # 72,772// point: 62,070/ mid mid:62,111
+df.final.up.down.directional %>% dim() # 72,772// point: 62,070/ mid mid:62,111 (with_ties: TRUE)
 df.final.up.down.directional %>% head(2)
 df.final.up.down.directional.point <- df.final.up.down.directional %>%
-  add_count(loop.id, name = "loop.count") %>%      # loop.count 추가
-  # filter(loop.count > 2) %>%                        # loop.count가 2 이상인 행만.  in point: 400
-  # group_by(loop.id) %>%
-  # summarise(mean_distance = mean(distance, na.rm = TRUE)) %>%
-  # ungroup()
   group_by(loop.id, WHERE) %>%
   filter(distance == min(distance)) %>% 
-  slice_min(distance, with_ties = FALSE) %>% # FALSE
-  ungroup() # 62,070 // 61,936// 61974: 62038 = 31019 * 2
-
+  add_count(name = "tie.count.loop.where")  %>% 
+  ungroup() 
 
 df.final.up.down.directional.point %>% dim() # 61,974 // 61,936// mid mid: 62,111 with_ties = TRUE: 62038 = 31019 * 2
 df.final.up.down.directional.point %>% head(2)
-
-df.final.up.down.directional.point 
-
-
-
-#%>% 
-  add_count(loop.id, WHERE, name = "loop.where") %>% 
-  filter(loop.where > 1) 
   
+df.final.up.down.directional.point.one.in.loop.where <- df.final.up.down.directional.point %>%
+  filter(tie.count.loop.where == 1) # 61,838
+
+# for df.final.combined.using.labelings from df.final.up.down.directional.point.multi.in.loop.where
+df.final.up.down.directional.point.multi.in.loop.where <- df.final.up.down.directional.point %>%
+  filter(tie.count.loop.where > 1) # 273
+df.final.up.down.directional.point.multi.in.loop.where %>% 
+  # count(loop.id) # 136
+  count(tie.count.loop.where) # 273 (2:270 + 3(3))
+
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings <- df.final.up.down.directional.point.multi.in.loop.where %>% # head(2)
+  filter(!is.na(gene_chr)) %>% # %>% # 245
+  add_count(loop.id, WHERE, name = "multi.1st.filter") %>% 
+  # count(multi.1st.filter) %>% # AFTER CLEANING NA
+  group_by(loop.id, WHERE, gene_name) %>%
+    mutate(
+      has_pro_tss = all(c("pro", "tss") %in% component),  # pro와 tss 둘 다 있는지
+      keep_row = case_when(
+        multi.1st.filter == 1 ~ TRUE,                      # 이미 1개면 유지
+        has_pro_tss & component == "pro" ~ TRUE,           # pro/tss 둘 다 있으면 pro만
+        has_pro_tss & component == "tss" ~ FALSE,          # tss는 제거
+        TRUE ~ TRUE                                         # 그 외는 유지
+      )
+    ) %>%
+  ungroup() %>% 
+  filter(keep_row) %>% 
+  add_count(loop.id, WHERE, name = "multi.2nd.filter")
   
-  
-  
-  %>% 
-  filter(!is.na(gene_chr) & !is.na(gene_start) & !is.na(gene_end)) %>%  # 먼저 NA 
-  group_by(loop.id, WHERE) %>%
-  filter(n_distinct(paste(gene_chr, gene_start, gene_end, sep = "_")) > 1) %>%  # gene이 서로 다른 경우
-  ungroup() %>%
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>% dim() # 174
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>% head(2)
+
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings.selected <- df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>% 
+  filter(multi.2nd.filter == 1)
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings.selected %>% dim() # 95
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings.selected %>% head(2)
+
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings.ongoing <- df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>% 
+  filter(multi.2nd.filter > 1) 
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings.ongoing %>% dim() # 79
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings.ongoing %>% head(2)
+
+df.final.up.down.directional.point.multi.in.loop.where.three.labelings <- df.final.up.down.directional.point.multi.in.loop.where.two.labelings.ongoing %>% 
   arrange(loop.id, WHERE) %>% 
-  print(n = Inf)
-# count(loop.where) 
-# loop.where     n
-# 1          2   270
-# 2          3     3
+  dplyr::select(multi.2nd.filter, gene_name, component, loop.id, everything()) %>% 
+  add_count(loop.id, WHERE, name = "multi.3rd.filter")
 
-colnames(df.final.up.down.directional.point)
-#  [1] "distance"        "loop.id"         "loop.mid"        "loop_chr"       
-#  [5] "loop_start"      "loop_end"        "gene_id"         "gene_name"      
-#  [9] "component_id"    "component"       "component_chr"   "component_start"
-# [13] "component_end"   "WHERE"           "loop.count"
+df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>% dim()
+df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>% head(2)
 
-# stats <- df.final.up.down.directional.point %>%
-#   group_by(WHERE) %>%
-#   summarise(
-#     Q1 = quantile(distance, 0.25, na.rm = TRUE),
-#     Median = quantile(distance, 0.5, na.rm = TRUE),
-#     Q3 = quantile(distance, 0.75, na.rm = TRUE)
-#   )
+df.final.up.down.directional.point.multi.in.loop.where.three.labelings.coords.diff.selected <- df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>%
+  filter(multi.3rd.filter > 1) %>% 
+  group_by(loop.id, WHERE) %>%
+  mutate(
+    n_gene_name = n_distinct(gene_name),
+    n_coords = n_distinct(paste(gene_chr, gene_start, gene_end)),
+    coords_also_diff = n_gene_name == n_coords
+  ) %>%
+  ungroup() %>%
+  filter(coords_also_diff) %>%   # 👈 coords도 다른 것들!
+  group_by(loop.id, WHERE) %>%
+  filter(row_number() == 1) %>%                    # 첫 번째만 선택
+  ungroup() %>%
+  dplyr::select(-n_gene_name, -n_coords, -coords_also_diff)
+
+df.final.up.down.directional.point.multi.in.loop.where.three.labelings.coords.diff.selected %>% dim() # 26
+df.final.up.down.directional.point.multi.in.loop.where.three.labelings.coords.diff.selected %>% head(2)
+
+df.final.up.down.directional.point.multi.in.loop.where.three.labelings.mannual.selected <- df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>% 
+  filter(multi.3rd.filter > 1) %>% 
+  group_by(loop.id, WHERE) %>%
+  mutate(
+      n_gene_name = n_distinct(gene_name),
+      n_coords = n_distinct(paste(gene_chr, gene_start, gene_end)),
+      coords_also_diff = n_gene_name == n_coords  # gene_name 수 = coords 수 → 다 다름
+  ) %>%
+  ungroup() %>% 
+  filter(!coords_also_diff) %>% 
+  mutate(
+    # Surf1/Surf4, Spag16/AABR07068007은 둘 다 유지
+    keep_both = gene_name %in% c("Surf1", "Surf4", "Spag16", "AABR07068007")
+  ) %>%
+  group_by(loop.id, WHERE) %>%
+  mutate(
+    # keep_both가 TRUE인 그룹은 전체 유지, 아니면 첫 번째만
+    row_num = row_number(),
+    final_keep = case_when(
+      keep_both ~ TRUE,                    # Surf1/4, Spag16/AABR 유지
+      row_num == 1 ~ TRUE,                 # 나머지는 첫 번째만
+      TRUE ~ FALSE
+    )
+  ) %>%
+  ungroup() %>%
+  filter(final_keep) %>%
+  dplyr::select(-keep_both, -row_num, -final_keep, -n_gene_name, -n_coords, -coords_also_diff)  # 임시 컬럼 제거
+
+df.final.up.down.directional.point.multi.in.loop.where.three.labelings.mannual.selected %>% dim() # 16
+df.final.up.down.directional.point.multi.in.loop.where.three.labelings.mannual.selected %>% head(2)
+
+df.final.combined.using.labelings <- bind_rows(
+  df.final.up.down.directional.point.one.in.loop.where,                                    # 61,838
+  df.final.up.down.directional.point.multi.in.loop.where.two.labelings.selected,           # 95
+  df.final.up.down.directional.point.multi.in.loop.where.three.labelings.coords.diff.selected,  # 26
+  df.final.up.down.directional.point.multi.in.loop.where.three.labelings.mannual.selected  # 16
+)
+df.final.combined.using.labelings %>% dim()
+# 예상: 61,838 + 95 + 26 + 16 = 61,975
+# 검증: loop.id + WHERE 조합당 행 수
+df.final.combined.using.labelings %>%
+  count(loop.id, WHERE) %>%
+  count(n, name = "count")
+# n=1: 대부분
+# n=2: Surf1/Surf4, Spag16/AABR07068007만
+
+df.final.up.down.directional.point.final <- bind_rows(df.final.up.down.directional.point.one.in.loop.where, df.final.combined.using.labelings)
+
+
+
+
+
+
+
 
 df.final.up.down.directional.point %>% dim() # 62,070 // 61,936// mid mid: 62,974: 62038 = 31019 * 2
 df.final.up.down.directional.point %>% head(3)

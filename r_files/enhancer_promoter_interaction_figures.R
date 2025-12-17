@@ -1156,7 +1156,7 @@ if (file.exists(cache_file_tss_ensembl)) {
         group_by(gene_id) %>%
         slice_max(order_by = exon_number, n = 1, with_ties = FALSE) %>% # keep only the largest exon_number
         ungroup() %>%
-        mutate(ensembl_exon_id = str_c(chr, ":", start, ":", end, ":", strand, ":", gene_name, ":", gene_id, ":", exon_number)) %>%
+        mutate(ensembl_exon_id = str_c(chr, ":", start, ":", end, ":", strand, ":", gene_id, ":", gene_name, ":", exon_number)) %>%
         dplyr::select(-c(gene_biotype, tag, transcript_biotype, transcript_version))
 
     df.tss.ensembl <- df.ensembl.gtf.for.tss.DISTINCT.geneid %>%
