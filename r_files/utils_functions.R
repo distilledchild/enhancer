@@ -1011,44 +1011,45 @@ approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5
     # Task 1: Filtering and top N genes by loop count
     df.filtered <- df %>% filter(distance <= threshold_distance)
     df.gene_loop_count <- df.filtered %>%
+        # filter(UP == "OK" | DOWN == "OK") %>%
+        # filter(!is.na(gene_start)) %>% # in order to exclude NA values
         count(gene_id, sort = TRUE) # descend gene_id n 
 
     df.top_genes <- df.gene_loop_count %>%
         slice_max(n, n = top_n_genes) %>%
         arrange(n)
 
-    # plot <- ggplot(df.top_genes, aes(x = reorder(gene_id, n), y = n)) +
-    #     geom_bar(stat = "identity", fill = "#1F78B4") +
-    #     geom_text(aes(label = n), vjust = -0.3, color = "red", size = 3) +
-    #     coord_flip() +
-    #     labs(
-    #         title = paste("Top", top_n_genes, "Genes by Number of Loops (distance <=", threshold_distance, ")"),
-    #         x = "Gene",
-    #         y = "Number of Loops"
-    #     ) +
-    #     theme_minimal() +
-    #     theme(plot.title = element_text(hjust = 0.5))
+    plot <- ggplot(df.top_genes, aes(x = reorder(gene_id, n), y = n)) +
+        geom_bar(stat = "identity", fill = "#1F78B4") +
+        geom_text(aes(label = n), vjust = -0.3, color = "red", size = 3) +
+        coord_flip() +
+        labs(
+            title = paste("Top", top_n_genes, "Genes by Number of Loops (distance <=", threshold_distance, ")"),
+            x = "Gene",
+            y = "Number of Loops"
+        ) +
+        theme_minimal() +
+        theme(plot.title = element_text(hjust = 0.5))
 
-    # print(plot)
+    print(plot)
 
     # Task 2: Percentage of loops retained
     total_loops <- df %>% distinct(loop.id)
     filtered_loops <- df.filtered %>% distinct(loop.id)
 
-    # percent_retained <- round((nrow(filtered_loops) / nrow(total_loops)) * 100, 2)
-    # message("total loops: ", nrow(total_loops), " ")
-    # message("filtered_loops: ", nrow(filtered_loops), " ")
-    # message("Filtered loops retain ", percent_retained, "% of total loops")
+    percent_retained <- round((nrow(filtered_loops) / nrow(total_loops)) * 100, 2)
+    message("total loops: ", nrow(total_loops), " ")
+    message("filtered_loops: ", nrow(filtered_loops), " ")
+    message("Filtered loops retain ", percent_retained, "% of total loops")
 
     # Task 3: Print top genes
+
     top_genes <- df.gene_loop_count %>%
-        slice_max(n, n = print_top_n) #%>%
-        #pull(gene_id)
+    slice_max(n, n = print_top_n)
 
-    print(top_genes, n=Inf)
+    cat("Top", print_top_n, "genes:\n")
+    print(top_genes, n = Inf)    
 
-    # cat("Top", print_top_n, "genes:\n")
-    # cat(top_genes, sep = "\n")
 }
 
 #' Plot and save filtering summary histogram
@@ -1186,4 +1187,29 @@ process_feature_bins <- function(feature_df, chromosome_ends, bin_size = 1e6, la
     return(final)
 }
 
+################################################################################
+# 20. Dataframe comparison Functions
+################################################################################
+
+compare_df <- function(df1, df2) {
+  cat("df1 rows:", nrow(df1), "\n")
+  cat("df2 rows:", nrow(df2), "\n")
+  
+  if (nrow(df1) != nrow(df2)) {
+    cat("Different number of rows!\n")
+    return(FALSE)
+  }
+  
+  # 정렬 후 비교
+  df1_sorted <- df1 %>% arrange(across(everything()))
+  df2_sorted <- df2 %>% arrange(across(everything()))
+  
+  result <- identical(df1_sorted, df2_sorted)
+  cat("Identical:", result, "\n")
+  
+  return(result)
+}
+
 message("All utility functions loaded successfully!")
+
+
