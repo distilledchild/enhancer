@@ -1230,6 +1230,8 @@ saving_plot_dual( # utils_functions.R
 ################################################################################
 # Flowchart using DiagrammeR
 ################################################################################
+install.packages("DiagrammeRsvg")
+
 library(DiagrammeR)
 library(DiagrammeRsvg)
 library(magick)
@@ -1243,7 +1245,7 @@ library(ggplot2)
 flow_graph <- grViz("
 digraph flowchart {
   # Graph settings
-  graph [layout = dot, rankdir = TB, nodesep = 0.5, ranksep = 0.5]
+  graph [layout = dot, rankdir = TB, nodesep = 0.5, ranksep = 0.5, splines = line]
 
   # Node settings
   node [fontname = 'Helvetica', fontsize = 10, fixedsize = false]
@@ -1271,26 +1273,68 @@ digraph flowchart {
   node [shape = box, style = rounded, width = 2.5, height = 1]
   Rem2 [label = '754 loops\nremoved']
 
+  # New Branch Nodes
+  node [shape = diamond, style = solid, width = 2.5, height = 2.5]
+  Branch1 [label = 'Branch Check 1']
+  Branch2 [label = 'Branch Check 2']
+
+  # Outward boxes for Branch1 (left) and Branch2 (right) - No cases
+  node [shape = box, style = rounded, width = 2.5, height = 1]
+  Rem3 [label = 'Removed\\n(Branch1 No)']
+  Rem4 [label = 'Removed\\n(Branch2 No)']
+
+  # Sub-diamonds under Branch1 and Branch2 (Yes cases lead here)
+  node [shape = diamond, style = solid, width = 2.5, height = 2.5]
+  SubDec1 [label = 'Sub Check 1']
+  SubDec2 [label = 'Sub Check 2']
+
+  # Outward boxes for Sub-diamonds (right side) - No cases
+  node [shape = box, style = rounded, width = 2.5, height = 1]
+  Rem5 [label = 'Removed\\n(SubDec1 No)']
+  Rem6 [label = 'Removed\\n(SubDec2 No)']
+
   # End Result
   node [shape = box, style = solid, width = 4, height = 2.5, fixedsize = false]
-  End [label = '31,019 non-redundant loops\nshorter than 2 Mb retained\nfor downstream analyses.']
+  End [label = '31,019 non-redundant loops\\nshorter than 2 Mb retained\\nfor downstream analyses.']
 
 
   # --- Edges ---
 
-  Start -> Dec1
+  Start -> Dec1 [headport = n]
 
   # Decision 1 branches
-  Dec1 -> Rem1 [label = 'Yes']
-  Dec1 -> Dec2 [label = 'No']
+  Dec1 -> Rem1 [tailport = e, headport = w, label = 'Yes']
+  Dec1 -> Dec2 [tailport = s, headport = n, label = 'No']
 
   # Decision 2 branches
-  Dec2 -> Rem2 [label = 'No']
-  Dec2 -> End [label = 'Yes']
+  Dec2 -> Rem2 [tailport = e, headport = w, label = 'No']
+
+  # Split after Decision 2 (Yes)
+  Dec2 -> Branch1 [tailport = s, headport = n, label = 'Yes (Left)']
+  Dec2 -> Branch2 [tailport = s, headport = n, label = 'Yes (Right)']
+
+  # Branch1: No goes LEFT, Yes goes down to SubDec1
+  Branch1 -> Rem3 [tailport = w, headport = e, label = 'No']
+  Branch1 -> SubDec1 [tailport = s, headport = n, label = 'Yes']
+
+  # Branch2: No goes RIGHT, Yes goes down to SubDec2
+  Branch2 -> Rem4 [tailport = e, headport = w, label = 'No']
+  Branch2 -> SubDec2 [tailport = s, headport = n, label = 'Yes']
+
+  # SubDec1: No goes RIGHT, Yes goes to End
+  SubDec1 -> Rem5 [tailport = e, headport = w, label = 'No']
+  SubDec1 -> End [tailport = s, headport = n, label = 'Yes']
+
+  # SubDec2: No goes RIGHT, Yes goes to End
+  SubDec2 -> Rem6 [tailport = e, headport = w, label = 'No']
+  SubDec2 -> End [tailport = s, headport = n, label = 'Yes']
 
   # --- Ranks (Alignment) ---
   { rank = same; Dec1; Rem1 }
   { rank = same; Dec2; Rem2 }
+  { rank = same; Rem3; Branch1; Branch2; Rem4 }
+  { rank = same; SubDec1; Rem5 }
+  { rank = same; SubDec2; Rem6 }
 }
 ")
 
