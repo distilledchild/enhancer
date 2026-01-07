@@ -25,7 +25,6 @@ library("magick")
 library("tools")
 library("httpgd")
 library("RIdeogram")
-library("rsvg")
 library("rtracklayer")
 
 options(tibble.width = Inf)
@@ -456,9 +455,9 @@ df.final.up.down.directional.point.multi.in.loop.where %>%
 # 1                    2   270
 # 2                    3     3
 
-# step for filtering only cases of PRO and TSS both in an anchor with the same gene_name (only removing TSS cases)
+# step for filtering only cases of PRO and TSS both in an anchor with the same gene_name (only removing TSS cases): multi케이스중 오직 pro tss 둘다 있는 케이스 처리: 두개 중 pro 우선권 (TSS제외)
 df.final.up.down.directional.point.multi.in.loop.where.two.labelings <- df.final.up.down.directional.point.multi.in.loop.where %>% # head(2)
-  filter(!is.na(gene_chr)) %>% # view() # 245 (28: is.na)
+  filter(!is.na(gene_chr)) %>% # view() # 245 (28: is.na): 일단 gene이 NA인 케이스 제외
   add_count(loop.id, WHERE, name = "multi.1st.filter") %>% # multi.1st.filter: is.na 처리하고 재통계 (multi.1st.filter > 1이 문제들)
   # count(multi.1st.filter) %>%
   # view()
@@ -489,14 +488,14 @@ df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>% count(h
 df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>% count(multi.2nd.filter)
 df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>% head(2)
 
-df.final.up.down.directional.point.multi.in.loop.where.two.labelings.selected <- df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>% # 95/174
+df.final.up.down.directional.point.multi.in.loop.where.two.labelings.selected <- df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>% # 95/174 (273->174 after multiple case들 중 NA나 pro에게 우선권 준뒤...)
   filter(multi.2nd.filter == 1)
 df.final.up.down.directional.point.multi.in.loop.where.two.labelings.selected %>% dim() # 95
 df.final.up.down.directional.point.multi.in.loop.where.two.labelings.selected %>% head(2)
 
 # 3. AFTER PROMOTER PRIORITY filteration, 2 rows from loop.id and WHERE
 df.final.up.down.directional.point.multi.in.loop.where.two.labelings.ongoing <- df.final.up.down.directional.point.multi.in.loop.where.two.labelings %>%
-  filter(multi.2nd.filter > 1) # 79
+  filter(multi.2nd.filter > 1) # 79 (이제 이 multi 케이스들 처리작업 해야함.)
 df.final.up.down.directional.point.multi.in.loop.where.two.labelings.ongoing %>% dim() # 79
 df.final.up.down.directional.point.multi.in.loop.where.two.labelings.ongoing %>% head(2)
 
@@ -508,15 +507,15 @@ df.final.up.down.directional.point.multi.in.loop.where.three.labelings <- df.fin
 df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>% dim()
 df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>% head(2)
 
-# gene_name 필터링
+# gene_name 필터링: 실제로 같은 gene인지 확인 (gene_id의 뒤에서 두번째 요소가 gene_name이므로, 앞에서 5번째 요소-ENSEMBL id 제거 후 비교)
 df.final.up.down.directional.point.multi.in.loop.where.three.labelings.actual.same.gene.selected <- df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>%
   filter(multi.3rd.filter > 1) %>% # 79
-  mutate(gene_id_trimmed = sapply(strsplit(gene_id, ":"), function(x) paste(x[-5], collapse = ":"))) %>%
+  mutate(gene_id_trimmed = sapply(strsplit(gene_id, ":"), function(x) paste(x[-5], collapse = ":"))) %>% # dplyr::select(gene_id_trimmed) %>% view()
   group_by(loop.id, WHERE) %>%
   mutate(all_same_trimmed = n_distinct(gene_id_trimmed) == 1) %>%
   ungroup() %>%
   # count(all_same_trimmed) %>% view() # FALSE: 30, TRUE: 49
-  filter(all_same_trimmed) %>% # # mutaul exclusive to L533 :::::::::: 49
+  filter(all_same_trimmed) %>% # # mutaul exclusive to L534 :::::::::: 49
   group_by(loop.id, WHERE) %>%
   filter(row_number() == 1) %>%
   ungroup()
@@ -524,6 +523,7 @@ df.final.up.down.directional.point.multi.in.loop.where.three.labelings.actual.sa
 df.final.up.down.directional.point.multi.in.loop.where.three.labelings.actual.same.gene.selected %>% dim() # 24/49
 df.final.up.down.directional.point.multi.in.loop.where.three.labelings.actual.same.gene.selected %>% head(2)
 
+# mannually filtering
 df.final.up.down.directional.point.multi.in.loop.where.three.labelings.exon.number.and.mannually.selected <- df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>%
   filter(multi.3rd.filter > 1) %>%
   mutate(gene_id_trimmed = sapply(strsplit(gene_id, ":"), function(x) paste(x[-5], collapse = ":"))) %>%
@@ -561,9 +561,9 @@ df.final.combined.using.labelings <- bind_rows( # 137 = 95 + 24 + 18
   df.final.up.down.directional.point.multi.in.loop.where.three.labelings.exon.number.and.mannually.selected # 18
 )
 
-df.final.up.down.directional.point.final <- bind_rows(df.final.up.down.directional.point.one.in.loop.where, df.final.combined.using.labelings)
+df.final.up.down.directional.point.final <- bind_rows(df.final.up.down.directional.point.one.in.loop.where, df.final.combined.using.labelings) # 61,838 + 137 = 61,975
 
-df.final.up.down.directional.point.final %>% dim()
+df.final.up.down.directional.point.final %>% dim() # 61,975
 df.final.up.down.directional.point.final %>% head(3)
 # 예상: 61,838 + 137 = 61,975
 
@@ -571,12 +571,14 @@ df.final.up.down.directional.point.final %>%
   add_count(loop.id, WHERE, name = "final_count") %>%
   count(final_count)
 # final_count count
-#1           1 61969
-#2           2     6 (L:548)
+# 1           1 61969
+# 2           2     6 (L:549)
 
 df.final.up.down.directional.point.final %>% dim() # 62,070 // 61,936// mid mid: 61,975/ FYI: 62038 = 31019 * 2
 
+#############################################################
 # validity of the gene’s genomic position based on TSS or promoters selected by the nearestToDistance
+#############################################################
 df.final.up.down.directional.point.decision <- df.final.up.down.directional.point.final %>%
   separate(
     col = loop.id,
@@ -613,10 +615,10 @@ df.final.up.down.directional.point.decision <- df.final.up.down.directional.poin
 df.final.up.down.directional.point.decision %>%
   count(classification)
 
-#   classification     n
-# 1 Both_FAIL      30497| Both_FAIL      30498
-# 2 Both_OK         7606| Both_OK         7606
-# 3 One_OK         23872| One_OK         23871
+#   classification     n | latest
+# 1 Both_FAIL      30497 | Both_FAIL      30498
+# 2 Both_OK         7606 | Both_OK         7606
+# 3 One_OK         23872 | One_OK         23871
 
 ###################################
 # 1. ONE OK case in either anchor
@@ -641,8 +643,8 @@ stats_decision <- df.final.up.down.directional.point.decision %>%
     Q3 = quantile(distance, 0.75)
   )
 stats_decision
-# all loops           
-#     Q1 Median    Q3 
+# all loops
+#     Q1 Median    Q3
 # 1 7400.  23371 66691
 
 df.final.up.down.directional.point.decision %>% head(2)
@@ -678,8 +680,8 @@ distribution.all.cases.distance <- df.final.up.down.directional.point.decision %
   theme(plot.title = element_text(hjust = 0.5))
 distribution.all.cases.distance
 
-# all loops           
-#     Q1 Median    Q3 
+# all loops
+#     Q1 Median    Q3
 # 1 7400.  23371 66691
 
 df.final.up.down.directional.point.decision.one.OK.filtered <- df.final.up.down.directional.point.decision %>%
@@ -712,9 +714,9 @@ approach_2nd_analyze_loops_by_threshold(
 
 # two cases in both anchors
 df.final.up.down.directional.point.decision.both.OK <- df.final.up.down.directional.point.decision %>%
-  filter(classification == "Both_OK") %>% # 3,803/31,019
+  filter(classification == "Both_OK") %>% # 3,803(7,606)/31,019
   # distinct(loop.id) %>%
-  # count() %>% 
+  # count() %>%
   view()
 
 df.final.up.down.directional.point.decision.both.OK %>% head(2)
@@ -739,14 +741,16 @@ dist.diff.decision.both.OK
 
 stats_dist_diff <- dist.diff.decision.both.OK %>%
   summarise(
+    min.dist = min(dist_diff, na.rm = TRUE),
     Q1 = quantile(dist_diff, 0.25, na.rm = TRUE),
-    Q3 = quantile(dist_diff, 0.75, na.rm = TRUE)
+    Q3 = quantile(dist_diff, 0.75, na.rm = TRUE),
+    max.dist = max(dist_diff, na.rm = TRUE)
   )
 
 stats_dist_diff
 
 # Boxplot for distance difference
-ggplot(dist.diff.decision.both.OK, aes(x = "", y = dist_diff)) +
+barplot.dist.diff.decision.both.OK <- ggplot(dist.diff.decision.both.OK, aes(x = "", y = dist_diff)) +
   geom_boxplot(fill = "#6CABDD", color = "black") +
   scale_y_log10() +
   labs(y = "Absolute distance difference (UP vs DOWN)", x = NULL) +
@@ -760,7 +764,7 @@ ggplot(dist.diff.decision.both.OK, aes(x = "", y = dist_diff)) +
     x = 0.8, y = stats_dist_diff$Q3, label = paste0("Q3=", stats_dist_diff$Q3),
     hjust = 1, vjust = -0.5, color = "blue"
   )
-
+barplot.dist.diff.decision.both.OK
 
 df.final.up.down.directional.point.decision.both.OK %>%
   count(distance)
@@ -851,7 +855,7 @@ if (!file.exists(cache_file_combined_ok_filtered)) {
     dplyr::rename(gene_id_id = gene_id) %>%
     mutate(gene_id = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1)) %>%
     count(gene_id, sort = TRUE) # desc(n)
-    # slice_max(n, n = top_n_genes) %>%
+  # slice_max(n, n = top_n_genes) %>%
 
   saveRDS(df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3, cache_file_combined_ok_filtered)
 } else {
@@ -1034,10 +1038,10 @@ df.final.loop %>% count(category) # CP 3973 CT 8261
 df.final.loop %>%
   mutate(resolution = str_split_n(loop.id, "_", 7)) %>%
   count(resolution) # utils_functions.R
-#  resolution    n                      resolution       n  resolution    n     resolution    n
-# 1      10000 4369                      1      10000  86751      10000 5656     1      10000 6968
-# 2      25000 6104                      2      25000 111442      25000 7980     2      25000 8617
-# 3       5000 1761                      3       5000  38213       5000 1962     3       5000 3099
+#  resolution    n |||                     resolution       n  resolution    n     resolution    n
+# 1      10000 4369|||                      1      10000  86751      10000 5656     1      10000 6968
+# 2      25000 6104|||                      2      25000 111442      25000 7980     2      25000 8617
+# 3       5000 1761|||                      3       5000  38213       5000 1962     3       5000 3099
 
 save(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.rda")
 write.csv(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.csv", row.names = FALSE)
@@ -1220,7 +1224,106 @@ combined_plot <- plot_grid(plot_a, plot_b, nrow = 1)
 saving_plot_dual( # utils_functions.R
   output_dir = "./figures/submission/lt2mb",
   filename_base = "circos_first_two_panels_F8.ENSEMBL.mid.mid",
-  plot_obj = combined_plot,
-  scale_x = 1,
-  scale_y = 1
+  plot_obj = combined_plot
 )
+
+################################################################################
+# Flowchart using DiagrammeR
+################################################################################
+library(DiagrammeR)
+library(DiagrammeRsvg)
+library(magick)
+library(rsvg)
+library(cowplot)
+library(ggplot2)
+# Define the flowchart
+# Structure: Start (Rectangle, 100) -> Diamond -> Diamond -> Result (Rectangle)
+# Define the flowchart based on the user's images
+# Structure: Deepvariant filtering pipeline
+flow_graph <- grViz("
+digraph flowchart {
+  # Graph settings
+  graph [layout = dot, rankdir = TB, nodesep = 0.5, ranksep = 0.5]
+
+  # Node settings
+  node [fontname = 'Helvetica', fontsize = 10, fixedsize = false]
+  edge [fontname = 'Helvetica', fontsize = 10]
+
+  # --- Nodes ---
+
+  # Start node
+  node [shape = box, style = rounded, width = 3.5, height = 1.2, fillcolor = 'white']
+  Start [label = '58,992 loops annotated from 10 samples']
+
+  # Decision 1
+  node [shape = diamond, style = solid, width = 3, height = 3]
+  Dec1 [label = 'Are these loops\nredundant across the samples?']
+
+  # Remove 1
+  node [shape = box, style = rounded, width = 2.5, height = 1]
+  Rem1 [label = '27,219 loops\nremoved']
+
+  # Decision 2
+  node [shape = diamond, style = solid, width = 3, height = 3]
+  Dec2 [label = 'Are these loops\nshorter than 2 Mb\nin genomic distance?']
+
+  # Remove 2
+  node [shape = box, style = rounded, width = 2.5, height = 1]
+  Rem2 [label = '754 loops\nremoved']
+
+  # End Result
+  node [shape = box, style = solid, width = 4, height = 2.5, fixedsize = false]
+  End [label = '31,019 non-redundant loops\nshorter than 2 Mb retained\nfor downstream analyses.']
+
+
+  # --- Edges ---
+
+  Start -> Dec1
+
+  # Decision 1 branches
+  Dec1 -> Rem1 [label = 'Yes']
+  Dec1 -> Dec2 [label = 'No']
+
+  # Decision 2 branches
+  Dec2 -> Rem2 [label = 'No']
+  Dec2 -> End [label = 'Yes']
+
+  # --- Ranks (Alignment) ---
+  { rank = same; Dec1; Rem1 }
+  { rank = same; Dec2; Rem2 }
+}
+")
+
+# Convert DiagrammeR graph to SVG, then to bitmap, then to ggplot image to use saving_plot_dual
+# 1. Export to SVG
+# svg_code <- export_svg(flow_graph)
+
+# # 2. Render SVG to bitmap
+# bitmap <- rsvg(charToRaw(svg_code))
+
+# # 3. Read bitmap into magick image
+# img <- image_read(bitmap)
+
+# # 4. Create ggplot object
+# p_flow <- ggdraw() + draw_image(img)
+# p_flow
+
+p_flow <- flow_graph %>%
+  export_svg() %>%
+  charToRaw() %>%
+  rsvg() %>%
+  image_read()
+
+p_flow <- ggdraw() + draw_image(p_flow)
+
+p_flow
+
+
+# Save using saving_plot_dual
+saving_plot_dual(
+  output_dir = "./figures/submission/lt2mb",
+  filename_base = "flowchart_for_loops_filteration",
+  plot_obj = p_flow
+)
+
+getwd()
