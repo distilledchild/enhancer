@@ -844,10 +844,10 @@ if (!file.exists(cache_file_combined_ok_filtered)) {
   df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 <- bind_rows(
     df.final.up.down.directional.point.decision.one.OK.filtered,
     df.final.up.down.directional.point.decision.both.OK.filtered
-  ) %>%
+  ) %>% # view() 15,738
     filter(distance < stats_decision$Q3) # 3,730
 
-  df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% dim() # 14210
+  df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% dim() # 14,210
   df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% head(2)
   df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% count(loop.id) # 14,210 PASS!
 
@@ -1230,8 +1230,6 @@ saving_plot_dual( # utils_functions.R
 ################################################################################
 # Flowchart using DiagrammeR
 ################################################################################
-install.packages("DiagrammeRsvg")
-
 library(DiagrammeR)
 library(DiagrammeRsvg)
 library(magick)
@@ -1255,11 +1253,11 @@ digraph flowchart {
 
   # Start node
   node [shape = box, style = rounded, width = 3.5, height = 1.2, fillcolor = 'white']
-  Start [label = '58,992 loops annotated from 10 samples']
+  Start [label = '58,992 loops annotated from 10 samples', group = main]
 
   # Decision 1
   node [shape = diamond, style = solid, width = 3, height = 3]
-  Dec1 [label = 'Are these loops\nredundant across the samples?']
+  Dec1 [label = 'Are these loops\nredundant across the samples?', group = main]
 
   # Remove 1
   node [shape = box, style = rounded, width = 2.5, height = 1]
@@ -1267,7 +1265,7 @@ digraph flowchart {
 
   # Decision 2
   node [shape = diamond, style = solid, width = 3, height = 3]
-  Dec2 [label = 'Are these loops\nshorter than 2 Mb\nin genomic distance?']
+  Dec2 [label = 'Are these loops\nshorter than 2 Mb\nin genomic distance?', group = main]
 
   # Remove 2
   node [shape = box, style = rounded, width = 2.5, height = 1]
@@ -1275,66 +1273,89 @@ digraph flowchart {
 
   # New Branch Nodes
   node [shape = diamond, style = solid, width = 2.5, height = 2.5]
-  Branch1 [label = 'Branch Check 1']
-  Branch2 [label = 'Branch Check 2']
+  Branch1 [label = 'Do both anchors\nin a loop contain\nCTCF binding sites\nmore than 6?']
+  Branch2a [label = 'Does the loop contain\na TSS/Promoter linked to a gene\nwithin the anchor-proximal half?']
 
-  # Outward boxes for Branch1 (left) and Branch2 (right) - No cases
+  # Outward boxes for Branch1 (left) and Branch2a (right) - No cases
   node [shape = box, style = rounded, width = 2.5, height = 1]
-  Rem3 [label = 'Removed\\n(Branch1 No)']
-  Rem4 [label = 'Removed\\n(Branch2 No)']
+  Rem3 [label = '5,751 loops\nremoved']
+  Rem4 [label = '15,281 loops\nremoved']
 
-  # Sub-diamonds under Branch1 and Branch2 (Yes cases lead here)
+  # Branch2b - below Branch2a
   node [shape = diamond, style = solid, width = 2.5, height = 2.5]
-  SubDec1 [label = 'Sub Check 1']
-  SubDec2 [label = 'Sub Check 2']
+  Branch2b [label = 'Does the loop contain\na TSS/Promoter within the\n75th percentile distance\nto the anchor midpoint?']
 
-  # Outward boxes for Sub-diamonds (right side) - No cases
+  # Outward box for Branch2b (right side) - No case
   node [shape = box, style = rounded, width = 2.5, height = 1]
-  Rem5 [label = 'Removed\\n(SubDec1 No)']
-  Rem6 [label = 'Removed\\n(SubDec2 No)']
+  Rem5 [label = '1,528 loops\nremoved']
+
+  # Merged diamond - combines Branch1 and Branch2b Yes paths
+  node [shape = diamond, style = solid, width = 2.5, height = 2.5]
+  MergedDec [label = 'Do these loops satisfy\nboth CTCF and TSS/Promoter\ncriteria?', group = main]
+
+  # Outward box for MergedDec (left side) - CTCF No case
+  node [shape = box, style = rounded, width = 2.5, height = 1]
+  RemMergedLeft [label = '13,034 loops removed\nfrom CTCF filtering']
+
+  # Outward box for MergedDec (right side) - TSS/Promoter No case
+  node [shape = box, style = rounded, width = 2.5, height = 1]
+  RemMergedRight [label = '1,976 loops removed\nfrom TSS/Promoter filtering']
 
   # End Result
   node [shape = box, style = solid, width = 4, height = 2.5, fixedsize = false]
-  End [label = '31,019 non-redundant loops\\nshorter than 2 Mb retained\\nfor downstream analyses.']
+  End [label = '12,234 loops were retained', group = main]
 
 
   # --- Edges ---
 
-  Start -> Dec1 [headport = n]
+  Start -> Dec1 [headport = n, weight = 10]
 
   # Decision 1 branches
   Dec1 -> Rem1 [tailport = e, headport = w, label = 'Yes']
-  Dec1 -> Dec2 [tailport = s, headport = n, label = 'No']
+  Dec1 -> Dec2 [tailport = s, headport = n, label = 'No', weight = 10]
 
   # Decision 2 branches
   Dec2 -> Rem2 [tailport = e, headport = w, label = 'No']
 
   # Split after Decision 2 (Yes)
-  Dec2 -> Branch1 [tailport = s, headport = n, label = 'Yes (Left)']
-  Dec2 -> Branch2 [tailport = s, headport = n, label = 'Yes (Right)']
+  # Low weight to allow central alignment
+  Dec2 -> Branch1 [tailport = s, headport = n, label = 'Yes', weight = 1]
+  Dec2 -> Branch2a [tailport = s, headport = n, label = 'Yes', weight = 1]
 
-  # Branch1: No goes LEFT, Yes goes down to SubDec1
-  Branch1 -> Rem3 [tailport = w, headport = e, label = 'No']
-  Branch1 -> SubDec1 [tailport = s, headport = n, label = 'Yes']
+  # Branch1: No goes LEFT
+  Branch1 -> Rem3 [tailport = w, headport = e, label = 'No', constraint = false]
+  Branch1 -> MergedDec [tailport = s, headport = n, label = 'Yes', weight = 1]
 
-  # Branch2: No goes RIGHT, Yes goes down to SubDec2
-  Branch2 -> Rem4 [tailport = e, headport = w, label = 'No']
-  Branch2 -> SubDec2 [tailport = s, headport = n, label = 'Yes']
+  # Branch2a: No goes RIGHT, Yes goes down to Branch2b
+  Branch2a -> Rem4 [tailport = e, headport = w, label = 'No']
+  Branch2a -> Branch2b [tailport = s, headport = n, label = 'Yes', weight = 10]
 
-  # SubDec1: No goes RIGHT, Yes goes to End
-  SubDec1 -> Rem5 [tailport = e, headport = w, label = 'No']
-  SubDec1 -> End [tailport = s, headport = n, label = 'Yes']
+  # Branch2b: No goes RIGHT, Yes goes down to MergedDec
+  Branch2b -> Rem5 [tailport = e, headport = w, label = 'No']
+  Branch2b -> MergedDec [tailport = s, headport = n, label = 'Yes', weight = 1]
 
-  # SubDec2: No goes RIGHT, Yes goes to End
-  SubDec2 -> Rem6 [tailport = e, headport = w, label = 'No']
-  SubDec2 -> End [tailport = s, headport = n, label = 'Yes']
+  # MergedDec: No goes to BOTH LEFT and RIGHT boxes, Yes goes to End
+  MergedDec -> RemMergedLeft [tailport = w, headport = e, label = 'No', constraint = false]
+  MergedDec -> RemMergedRight [tailport = e, headport = w, label = 'No', constraint = false]
+  MergedDec -> End [tailport = s, headport = n, label = 'Yes', weight = 10]
 
   # --- Ranks (Alignment) ---
   { rank = same; Dec1; Rem1 }
   { rank = same; Dec2; Rem2 }
-  { rank = same; Rem3; Branch1; Branch2; Rem4 }
-  { rank = same; SubDec1; Rem5 }
-  { rank = same; SubDec2; Rem6 }
+  { rank = same; Rem3; Branch1; Branch2a; Rem4 }
+  { rank = same; Branch2b; Rem5 }
+  { rank = same; RemMergedLeft; MergedDec; RemMergedRight }
+
+  # Invisible edges to force left-to-right ordering
+  Dec2 -> MergedDec [style = invis, weight = 1000]
+
+  Dec2 -> Branch1 [style = invis, weight = 1000]
+  Branch1 -> MergedDec [style = invis, weight = 1000]
+  Rem3 -> Branch1 [style = invis, weight = 20]
+  Branch1 -> Branch2a [style = invis, weight = 20]
+  Branch2a -> Rem4 [style = invis, weight = 20]
+  RemMergedLeft -> MergedDec [style = invis, weight = 20]
+  MergedDec -> RemMergedRight [style = invis, weight = 20]
 }
 ")
 
