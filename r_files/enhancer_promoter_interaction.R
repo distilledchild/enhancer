@@ -67,12 +67,12 @@ OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance <- df.DISTINCT.loop.deep.sam
     y3 = ifelse(mid_y + distance > chr.end.coord, chr.end.coord, mid_y + distance)
   ) # 1 distance for padding
 
-# padding 1 distance && w/o capping only from DISTINCT loops: 31417
+# padding 1 distance && w/o capping only from DISTINCT loops: 31,417
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping <- OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>%
-  filter(!(x0 == 0 | chr.end.coord == y3)) # 31773 - 444 (282 + 162) = 31329 + 88 = 31417
+  filter(!(x0 == 0 | chr.end.coord == y3)) # 31773 - 444 (282 + 162) = 31329 + 88 = 31,417
 # filter(x0 == 0) # 282
 # filter(chr.end.coord == y3)  # 162
-OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping %>% dim() # 31417
+OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping %>% dim() # 31,417
 OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance %>% filter(x0 == 0 & chr.end.coord == y3) # 88 |
 
 # padding 1 distance && w/o capping && less than 2mb: 31329
@@ -428,6 +428,10 @@ if (file.exists(cache_file_directional)) {
 
 df.final.up.down.directional %>% dim() # 72,772// point: 62,070/ mid mid:62,111 (select = all): must filter multiple cases from an anchor
 df.final.up.down.directional %>% head(2)
+df.final.up.down.directional %>%
+  distinct(loop.id) %>%
+  nrow() # 31,019
+
 df.final.up.down.directional.point <- df.final.up.down.directional %>%
   group_by(loop.id, WHERE) %>%
   filter(distance == min(distance)) %>% # multiple hits with the same distance in a loop and an anchor
@@ -568,6 +572,10 @@ df.final.up.down.directional.point.final %>% head(3)
 # 예상: 61,838 + 137 = 61,975
 
 df.final.up.down.directional.point.final %>%
+  distinct(loop.id) %>%
+  nrow() # 31,019
+
+df.final.up.down.directional.point.final %>%
   add_count(loop.id, WHERE, name = "final_count") %>%
   count(final_count)
 # final_count count
@@ -588,12 +596,14 @@ df.final.up.down.directional.point.decision <- df.final.up.down.directional.poin
   ) %>%
   mutate(
     UP = case_when(
-      (WHERE == "UP") & (gene_end < loop.mid) & (gene_start > as.numeric(x1)) ~ "OK",
+      # (WHERE == "UP") & (gene_end < loop.mid) & (gene_start > as.numeric(x1)) ~ "OK",
+      (WHERE == "UP") & (gene_end < as.numeric(y2)) & (gene_start > as.numeric(x1)) ~ "OK",
       WHERE == "UP" ~ "FAIL",
       TRUE ~ NA_character_
     ),
     DOWN = case_when(
-      (WHERE == "DOWN") & (gene_start > loop.mid) & (gene_end < as.numeric(y2)) ~ "OK",
+      # (WHERE == "DOWN") & (gene_start > loop.mid) & (gene_end < as.numeric(y2)) ~ "OK",
+      (WHERE == "DOWN") & (gene_start > as.numeric(x1)) & (gene_end < as.numeric(y2)) ~ "OK",
       WHERE == "DOWN" ~ "FAIL",
       TRUE ~ NA_character_
     )
@@ -615,10 +625,10 @@ df.final.up.down.directional.point.decision <- df.final.up.down.directional.poin
 df.final.up.down.directional.point.decision %>%
   count(classification)
 
-#   classification     n | latest
-# 1 Both_FAIL      30497 | Both_FAIL      30498
-# 2 Both_OK         7606 | Both_OK         7606
-# 3 One_OK         23872 | One_OK         23871
+#   classification     n | latest.              | final
+# 1 Both_FAIL      30497 | Both_FAIL      30498 | 1 Both_FAIL      26022
+# 2 Both_OK         7606 | Both_OK         7606 | 2 Both_OK        10538
+# 3 One_OK         23872 | One_OK         23871 | 3 One_OK         25415
 
 ###################################
 # 1. ONE OK case in either anchor
@@ -626,11 +636,11 @@ df.final.up.down.directional.point.decision %>%
 
 df.final.up.down.directional.point.decision %>%
   distinct(loop.id) %>%
-  count()
+  count() # final: 31,019
 df.final.up.down.directional.point.decision %>%
   filter(classification == "One_OK") %>% #
   # distinct(gene_id) %>% # 7,894
-  distinct(loop.id) %>% # 11,935/31,019
+  distinct(loop.id) %>% # 11,935/31,019 # final: 12,707
   count()
 
 # stats for distance with ALL loops
@@ -645,7 +655,10 @@ stats_decision <- df.final.up.down.directional.point.decision %>%
 stats_decision
 # all loops
 #     Q1 Median    Q3
-# 1 7400.  23371 66691
+# 1 7400.  23,371 66,691
+
+# final
+# 1 7400.  23,371 66,691
 
 df.final.up.down.directional.point.decision %>% head(2)
 
@@ -666,19 +679,19 @@ df.final.up.down.directional.point.all.in.one.decision <- df.final.up.down.direc
 df.final.up.down.directional.point.all.in.one.decision
 
 # boxplot by classification
-distribution.all.cases.distance <- df.final.up.down.directional.point.decision %>%
-  ggplot(aes(x = classification, y = distance, fill = classification)) +
-  geom_boxplot() +
-  theme_minimal() +
-  labs(
-    title = "Boxplot of Distance by Classification",
-    x = "Classification",
-    y = "Distance"
-  ) +
-  scale_y_log10() +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-distribution.all.cases.distance
+# distribution.all.cases.distance <- df.final.up.down.directional.point.decision %>%
+#   ggplot(aes(x = classification, y = distance, fill = classification)) +
+#   geom_boxplot() +
+#   theme_minimal() +
+#   labs(
+#     title = "Boxplot of Distance by Classification",
+#     x = "Classification",
+#     y = "Distance"
+#   ) +
+#   scale_y_log10() +
+#   theme_minimal() +
+#   theme(plot.title = element_text(hjust = 0.5))
+# distribution.all.cases.distance
 
 # all loops
 #     Q1 Median    Q3
@@ -692,7 +705,7 @@ df.final.up.down.directional.point.decision.one.OK.filtered <- df.final.up.down.
 
 df.final.up.down.directional.point.decision.one.OK.filtered %>%
   distinct(loop.id) %>%
-  count() # 11,935
+  count() # 11,935// final: 12,707
 df.final.up.down.directional.point.decision.one.OK.filtered %>% head(2) # 11,937 // 11,935
 
 approach_2nd_analyze_loops_by_threshold(
@@ -702,7 +715,7 @@ approach_2nd_analyze_loops_by_threshold(
   threshold_distance = stats_decision$Q3,
   top_n_genes = 70,
   print_top_n = 50
-) # utils_functions.R
+) # utils_functions.R // final One_OK only gprofiler: https://biit.cs.ut.ee/gplink/l/aRdAXDm53Re
 
 # distribution.OK.distance.q3 %>% dim()
 # distribution.OK.distance.q3 %>% distinct(loop.id) %>% count()
@@ -718,6 +731,8 @@ df.final.up.down.directional.point.decision.both.OK <- df.final.up.down.directio
   # distinct(loop.id) %>%
   # count() %>%
   view()
+
+# final: 5,269(10,538)
 
 df.final.up.down.directional.point.decision.both.OK %>% head(2)
 df.final.up.down.directional.point.decision.both.OK %>% dim() # 7,606 //// 7606/3,801 * 2
@@ -774,55 +789,35 @@ df.final.up.down.directional.point.decision.both.OK %>%
 ##################################
 df.final.up.down.directional.point.decision.both.OK.filtered <- df.final.up.down.directional.point.decision.both.OK %>%
   group_by(loop.id) %>%
-  filter(distance == min(distance)) %>% # 최소 distance만 남김
-  ungroup()
+  mutate(strand = str_split_n(gene_id, ":", 4)) %>% # Extract strand (+ or -)
+  # 1순위: distance(오름차순)
+  # 2순위: Strand에 따른 전사 방향 (Tie-breaking)
+  #        (+) Strand: 5' (Upstream) 이 좌측이므로 UP 앵커 선호
+  #        (-) Strand: 5' (Upstream) 이 우측이므로 DOWN 앵커 선호
+  arrange(distance, case_when(
+    strand == "+" & WHERE == "UP" ~ 1,
+    strand == "+" & WHERE == "DOWN" ~ 2,
+    strand == "-" & WHERE == "DOWN" ~ 1,
+    strand == "-" & WHERE == "UP" ~ 2,
+    TRUE ~ 3
+  )) %>%
+  dplyr::slice(1) %>% # 최우선 순위 하나만 선택 (dplyr 충돌 방지)
+  ungroup() %>%
+  dplyr::select(-strand)
 
-df.final.up.down.directional.point.decision.both.OK.filtered %>% dim() # 3,803
+df.final.up.down.directional.point.decision.both.OK.filtered %>% dim() # 3,803: final: 5,269
 df.final.up.down.directional.point.decision.both.OK.filtered %>% head(2)
-
+# df.final.up.down.directional.point.decision.both.OK.filtered %>% filter(gene_name == "Trpa1")
 # 동일 distance가 존재하는 loop.id 파악하기
-df.final.up.down.directional.point.decision.both.OK.tied <- df.final.up.down.directional.point.decision.both.OK %>%
-  group_by(loop.id) %>%
-  filter(n_distinct(distance) == 1, n() > 1) %>% # 같은 loop.id 내 distance가 모두 동일
-  ungroup()
+# df.final.up.down.directional.point.decision.both.OK.tied <- df.final.up.down.directional.point.decision.both.OK %>%
+#   group_by(loop.id) %>%
+#   filter(n_distinct(distance) == 1, n() > 1) %>% # 같은 loop.id 내 distance가 모두 동일
+#   ungroup()
 
-df.final.up.down.directional.point.decision.both.OK.tied # 0
-
-################################
-# WHAT? NO tied cases? 0 - 0
-################################
-df.final.up.down.directional.point.decision.both.OK.filtered %>%
-  count(loop.id) %>%
-  filter(n != 1) %>%
-  count(n) # n(1) = 0
-
-stats_decision$Q3 # 66,892
-dist.diff.decision.both.OK
-# 히스토그램 + Q3선
-ggplot(df.final.up.down.directional.point.decision.both.OK, aes(x = distance)) +
-  geom_histogram(binwidth = 1000, fill = "#6CABDD", color = "black") +
-  labs(x = "Absolute distance difference (UP vs DOWN)", y = "Count") +
-  geom_vline(xintercept = stats_decision$Q3, linetype = "dashed", color = "red") +
-  annotate("text",
-    x = stats_decision$Q3, y = 0, label = paste0("Q3=", round(stats_decision$Q3, 0)),
-    angle = 90, vjust = -0.5, hjust = 0, color = "red"
-  )
-
-df.final.up.down.directional.point.decision.both.OK.filtered %>%
-  summarise(
-    perc_below_Q3 = mean(distance < stats_decision$Q3) * 100
-  )
-
-df.final.up.down.directional.point.decision.both.OK.filtered %>% # dim() 3801
-  filter(distance < stats_decision$Q3) %>% dim() # 3730/3801
-# perc_below_Q3
-# 1          98.1
-
-# Log scale histogram
-ggplot(dist.diff.decision.both.OK, aes(x = dist_diff)) +
-  geom_histogram(fill = "#6CABDD", color = "black") +
-  scale_x_log10() +
-  labs(x = "Absolute distance difference (UP vs DOWN, log scale)", y = "Count")
+# df.final.up.down.directional.point.decision.both.OK.tied # 0// final: 2
+#   distance loop.id                                         chr1  x1           x2  chr2  y1      y2      resolution loop.mid loop_chr loop_start loop_end    gene_id                                     gene_name  component_id                                        component component_chr         component_start component_end gene_chr gene_start gene_end WHERE tie.count.loop.where multi.1st.filter has_pro_tss keep_row multi.2nd.filter  multi.3rd.filter gene_id_trimmed all_same_trimmed UP    DOWN  has_UP_OK  has_DOWN_OK classification
+# 1    54998 chr5_4320000_4330000_chr5_4430000_4440000_10000 chr5  4320000 4330000  chr5  4430000 4440000 10000       4380000 chr5        4325000  4325000 chr5:4433021:4433570:+:ENSRNOG00000007354:Trpa1:27 Trpa1  chr5:4379999:4380001:+:ENSRNOG00000007354:Trpa1|tss tss       chr5                  4379999       4380001 chr5        4433021  4433570 UP            1               NA NA          NA                     NA                     NA NA              NA               OK    NA    TRUE                     TRUE        Both_OK
+# 2    54998 chr5_4320000_4330000_chr5_4430000_4440000_10000 chr5  4320000 4330000  chr5  4430000 4440000 10000       4380000 chr5        4435000  4435000 chr5:4433021:4433570:+:ENSRNOG00000007354:Trpa1:27 Trpa1  chr5:4379999:4380001:+:ENSRNOG00000007354:Trpa1|tss tss       chr5                  4379999       4380001 chr5        4433021  4433570 DOWN          1               NA NA          NA                     NA                     NA NA              NA               NA    OK    TRUE                     TRUE        Both_OK
 
 ###################################
 # 2. One OK + TWO OK case in either anchor
@@ -830,32 +825,26 @@ ggplot(dist.diff.decision.both.OK, aes(x = dist_diff)) +
 
 df.final.up.down.directional.point.decision %>% dim() # 61,975
 df.final.up.down.directional.point.decision %>% head(2)
-df.final.up.down.directional.point.decision %>% count(classification)
-# 1 Both_FAIL      30498|||||||||||            1 Both_FAIL      30498  1 Both_FAIL      30497
-# 2 Both_OK         7606|||||||||||            2 Both_OK         7602  2 Both_OK         7606
-# 3 One_OK         23871|||||||||||            3 One_OK         23874  3 One_OK         23872
+df.final.up.down.directional.point.decision %>% count(classification) #| final
+# 1 Both_FAIL      30498|||||||||||            1 Both_FAIL      30498  1 Both_FAIL      30497| 1 Both_FAIL      26022
+# 2 Both_OK         7606|||||||||||            2 Both_OK         7602  2 Both_OK         7606| 2 Both_OK        10538
+# 3 One_OK         23871|||||||||||            3 One_OK         23874  3 One_OK         23872| 3 One_OK         25415
 
 # CACHING: df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3
-cache_file_combined_ok_filtered <- "../data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3.rds"
+cache_file_combined_ok_filtered <- "../data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final.rds"
 
 if (!file.exists(cache_file_combined_ok_filtered)) {
-  message("Saving df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 to cache: ", cache_file_combined_ok_filtered)
+  message("Saving df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3_final to cache: ", cache_file_combined_ok_filtered)
 
   df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 <- bind_rows(
     df.final.up.down.directional.point.decision.one.OK.filtered,
     df.final.up.down.directional.point.decision.both.OK.filtered
-  ) %>% # view() 15,738
-    filter(distance < stats_decision$Q3) # 3,730
+  ) %>% # view() # 15,738// final: 17,977
+    filter(distance < stats_decision$Q3) # %>% view() # 3,730
 
-  df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% dim() # 14,210
+  df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% dim() # 14,210// final: 16,113
   df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% head(2)
-  df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% count(loop.id) # 14,210 PASS!
-
-  df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>%
-    dplyr::rename(gene_id_id = gene_id) %>%
-    mutate(gene_id = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1)) %>%
-    count(gene_id, sort = TRUE) # desc(n)
-  # slice_max(n, n = top_n_genes) %>%
+  df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% count(loop.id) # 14,210 PASS! (final: 16,113)
 
   saveRDS(df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3, cache_file_combined_ok_filtered)
 } else {
@@ -863,7 +852,7 @@ if (!file.exists(cache_file_combined_ok_filtered)) {
 }
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 <- readRDS(cache_file_combined_ok_filtered)
-df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 14210
+df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 14210// final: 16,113
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% head(2)
 
 approach_2nd_analyze_loops_by_threshold(
@@ -873,12 +862,12 @@ approach_2nd_analyze_loops_by_threshold(
   threshold_distance = stats_decision$Q3,
   top_n_genes = 30,
   print_top_n = 50
-) # utils_functions.R
+) # utils_functions.R// final gprofiler top 30: https://biit.cs.ut.ee/gplink/l/az9IhnbWJRq
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
   count(component)
-# 1 pro        4776  1 pro        4569|||||||| 1 pro        4569
-# 2 tss       10891  2 tss        9641|||||||| 2 tss        9641
+# 1 pro        4776  1 pro        4569|||||||| 1 pro        4569||||| 1 pro        5429
+# 2 tss       10891  2 tss        9641|||||||| 2 tss        9641||||| 2 tss       10684
 
 ######################################################################
 ######################################################################
@@ -886,14 +875,14 @@ df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
 # final
 final.loops.from.tss.step <- df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
   filter(component == "tss")
-final.loops.from.tss.step %>% dim() # 9,641
+final.loops.from.tss.step %>% dim() # 9,641// 10,684
 
 final.loops.from.promoter.step <- df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
   filter(component == "pro")
-final.loops.from.promoter.step %>% dim() # 4,569
+final.loops.from.promoter.step %>% dim() # 4,569// 5429
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% head(3)
-df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 23524// 14210
+df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 23524// 14210// final: 16,113
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% count(loop.id, component) %>% # view()
   count(n)
 # 1 1 9177 // 14210
@@ -985,8 +974,8 @@ final.loops.from.ctcf.step %>% count(resolution)
 # Venn Diagram
 ####################################
 ####################################
-final.loops.from.promoter.step$loop.id # 4569
-final.loops.from.tss.step$loop.id # 9641
+final.loops.from.promoter.step$loop.id # 4569// final: 5,429
+final.loops.from.tss.step$loop.id # 9641// final: 10,684
 
 venn_plot_submission <- create_venn_plot(final.loops.from.ctcf.step, final.loops.from.promoter.step, final.loops.from.tss.step, "CTCF") # utils_functions.R
 venn_plot_submission
@@ -1006,8 +995,8 @@ saving_plot_dual( # utils_functions.R
 ####################################
 
 final.loops.from.ctcf.step %>% dim() # sub.4 any, either 6: 25,620// span ENSEMBL 25268
-final.loops.from.tss.step %>% dim() # mid mid: 9,641
-final.loops.from.promoter.step %>% dim() # mid mid: 4,569
+final.loops.from.tss.step %>% dim() # mid mid: 9,641// final:10,684
+final.loops.from.promoter.step %>% dim() # mid mid: 4,569// final:5,429
 
 overlapping_loops <- extract_overlapping_loops( # utils_functions.R
   ctcf_data = final.loops.from.ctcf.step,
@@ -1015,25 +1004,25 @@ overlapping_loops <- extract_overlapping_loops( # utils_functions.R
   tss_data = final.loops.from.tss.step
 )
 
-overlapping_loops$ctcf_promoter_only # PASS// 6648 // final: 3,973
-overlapping_loops$ctcf_tss_only # PASS// 8613 // final: 8261
+overlapping_loops$ctcf_promoter_only # PASS// 6648 // final: 3,973// final: 4712
+overlapping_loops$ctcf_tss_only # PASS// 8613 // final: 8261// final: 9,111
 overlapping_loops$ctcf_promoter_tss_overlap # PASS// 3423// final: 0
 
 df.ctcf.promoter.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_only, category = "CP", stringsAsFactors = FALSE)
 df.ctcf.tss.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_tss_only, category = "CT", stringsAsFactors = FALSE)
 df.ctcf.promoter.tss.overlap.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_tss_overlap, category = "CPT", stringsAsFactors = FALSE)
 
-df.ctcf.promoter.only.loop %>% dim() # 5497//3973
-df.ctcf.tss.only.loop %>% dim() # 7799// 8261
+df.ctcf.promoter.only.loop %>% dim() # 5497//3973// final : 4712
+df.ctcf.tss.only.loop %>% dim() # 7799// 8261// final: 9111
 df.ctcf.promoter.tss.overlap.loop %>% dim() # 2302//0
 
 # sub.4 dedups: 11891 = 679 + 3096 + 8116
 df.final.loop <- bind_rows(df.ctcf.promoter.only.loop, df.ctcf.tss.only.loop)
 
-df.final.loop # sub.4 any, either 6// 12234/31019(lt2mb) (0.3944034)
+df.final.loop # sub.4 any, either 6// 12234/31019(lt2mb) (0.3944034)// final: 13823/31019(0.4456301)
 df.final.loop %>% head()
-df.final.loop %>% dim() # 15598: 5656 + 7980 + 1962// final: 12,234
-df.final.loop %>% count(category) # CP 3973 CT 8261
+df.final.loop %>% dim() # 15598: 5656 + 7980 + 1962// final(loop-mid): 12,234// final: 13823
+df.final.loop %>% count(category) # CP 3973 CT 8261// final CP 4712 CT 9111
 
 df.final.loop %>%
   mutate(resolution = str_split_n(loop.id, "_", 7)) %>%
@@ -1046,7 +1035,7 @@ df.final.loop %>%
 save(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.rda")
 write.csv(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.csv", row.names = FALSE)
 
-df.final.loop %>% dim() # 23640// 18681// 18684// 12234
+df.final.loop %>% dim() # 23640// 18681// 18684// 12234// final: 13823
 df.final.loop %>% head(2)
 df.DISTINCT.loop.deep.sample.all %>% head()
 
@@ -1171,7 +1160,7 @@ resolution_colors <- c(
   # values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")
 )
 # Output PDF file
-pdf(file = "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.pdf", height = 11 * 0.8, width = 8.5 * 0.8)
+pdf(file = "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.pdf", height = 11 * 0.8, width = 8.5 * 0.8)
 
 # Initialize circos with ideogram for rat genome
 circos.initializeWithIdeogram(species = "rn7")
@@ -1205,7 +1194,7 @@ for (chr in unique_chromosomes) {
 dev.off()
 
 # 1. Load first two pages from PDF
-pdf_path <- "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.pdf"
+pdf_path <- "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.pdf"
 img_list <- image_read_pdf(pdf_path, pages = 1:2, density = 300)
 
 # Create labeled plots using ggdraw
@@ -1223,7 +1212,7 @@ combined_plot <- plot_grid(plot_a, plot_b, nrow = 1)
 # 5. Save as PNG
 saving_plot_dual( # utils_functions.R
   output_dir = "./figures/submission/lt2mb",
-  filename_base = "circos_first_two_panels_F8.ENSEMBL.mid.mid",
+  filename_base = "circos_first_two_panels_F8.ENSEMBL.mid.mid.final",
   plot_obj = combined_plot
 )
 
