@@ -862,7 +862,7 @@ approach_2nd_analyze_loops_by_threshold(
   threshold_distance = stats_decision$Q3,
   top_n_genes = 30,
   print_top_n = 50
-) # utils_functions.R// final gprofiler top 30: https://biit.cs.ut.ee/gplink/l/az9IhnbWJRq
+) # utils_functions.R// final gprofiler top 30: https://biit.cs.ut.ee/gplink/l/aHWE_iUdCTy
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
   count(component)
@@ -1005,7 +1005,7 @@ overlapping_loops <- extract_overlapping_loops( # utils_functions.R
 )
 
 overlapping_loops$ctcf_promoter_only # PASS// 6648 // final: 3,973// final: 4712
-overlapping_loops$ctcf_tss_only # PASS// 8613 // final: 8261// final: 9,111
+overlapping_loops$ctcf_tss_only # PASS// 8613 // final: 8261// final: 9111
 overlapping_loops$ctcf_promoter_tss_overlap # PASS// 3423// final: 0
 
 df.ctcf.promoter.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_only, category = "CP", stringsAsFactors = FALSE)
@@ -1216,168 +1216,25 @@ saving_plot_dual( # utils_functions.R
   plot_obj = combined_plot
 )
 
-################################################################################
-# Flowchart using DiagrammeR
-################################################################################
-library(DiagrammeR)
-library(DiagrammeRsvg)
 library(magick)
-library(rsvg)
-library(cowplot)
-library(ggplot2)
-# Define the flowchart
-# Structure: Start (Rectangle, 100) -> Diamond -> Diamond -> Result (Rectangle)
-# Define the flowchart based on the user's images
-# Structure: Deepvariant filtering pipeline
-flow_graph <- grViz("
-digraph flowchart {
-  # Graph settings
-  graph [layout = dot, rankdir = TB, nodesep = 0.5, ranksep = 0.5, splines = line]
 
-  # Node settings
-  node [fontname = 'Helvetica', fontsize = 10, fixedsize = false]
-  edge [fontname = 'Helvetica', fontsize = 10]
+# 입력/출력 경로
+infile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.pdf"
+outfile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.png"
 
-  # --- Nodes ---
+# 1) PDF → 이미지 리스트로 읽기
+imgs <- image_read_pdf(infile, density = 300) # density 높이면 더 선명
 
-  # Start node
-  node [shape = box, style = rounded, width = 3.5, height = 1.2, fillcolor = 'white']
-  Start [label = '58,992 loops annotated from 10 samples', group = main]
+# 2) 22장 이미지 → 2열 11행 콜라주 (image_append 사용)
+# image_montage의 geometry 에러를 방지하기 위해 수동으로 병합
 
-  # Decision 1
-  node [shape = diamond, style = solid, width = 3, height = 3]
-  Dec1 [label = 'Are these loops\nredundant across the samples?', group = main]
+# 첫 11장 (1열)
+col1 <- image_append(imgs[1:11], stack = TRUE)
+# 다음 11장 (2열)
+col2 <- image_append(imgs[12:22], stack = TRUE)
 
-  # Remove 1
-  node [shape = box, style = rounded, width = 2.5, height = 1]
-  Rem1 [label = '27,219 loops\nremoved']
+# 두 열을 가로로 병합
+collage <- image_append(c(col1, col2), stack = FALSE)
 
-  # Decision 2
-  node [shape = diamond, style = solid, width = 3, height = 3]
-  Dec2 [label = 'Are these loops\nshorter than 2 Mb\nin genomic distance?', group = main]
-
-  # Remove 2
-  node [shape = box, style = rounded, width = 2.5, height = 1]
-  Rem2 [label = '754 loops\nremoved']
-
-  # New Branch Nodes
-  node [shape = diamond, style = solid, width = 2.5, height = 2.5]
-  Branch1 [label = 'Do both anchors\nin a loop contain\nCTCF binding sites\nmore than 6?']
-  Branch2a [label = 'Does the loop contain\na TSS/Promoter linked to a gene\nwithin the anchor-proximal half?']
-
-  # Outward boxes for Branch1 (left) and Branch2a (right) - No cases
-  node [shape = box, style = rounded, width = 2.5, height = 1]
-  Rem3 [label = '5,751 loops\nremoved']
-  Rem4 [label = '15,281 loops\nremoved']
-
-  # Branch2b - below Branch2a
-  node [shape = diamond, style = solid, width = 2.5, height = 2.5]
-  Branch2b [label = 'Does the loop contain\na TSS/Promoter within the\n75th percentile distance\nto the anchor midpoint?']
-
-  # Outward box for Branch2b (right side) - No case
-  node [shape = box, style = rounded, width = 2.5, height = 1]
-  Rem5 [label = '1,528 loops\nremoved']
-
-  # Merged diamond - combines Branch1 and Branch2b Yes paths
-  node [shape = diamond, style = solid, width = 2.5, height = 2.5]
-  MergedDec [label = 'Do these loops satisfy\nboth CTCF and TSS/Promoter\ncriteria?', group = main]
-
-  # Outward box for MergedDec (left side) - CTCF No case
-  node [shape = box, style = rounded, width = 2.5, height = 1]
-  RemMergedLeft [label = '13,034 loops removed\nfrom CTCF filtering']
-
-  # Outward box for MergedDec (right side) - TSS/Promoter No case
-  node [shape = box, style = rounded, width = 2.5, height = 1]
-  RemMergedRight [label = '1,976 loops removed\nfrom TSS/Promoter filtering']
-
-  # End Result
-  node [shape = box, style = solid, width = 4, height = 2.5, fixedsize = false]
-  End [label = '12,234 loops were retained', group = main]
-
-
-  # --- Edges ---
-
-  Start -> Dec1 [headport = n, weight = 10]
-
-  # Decision 1 branches
-  Dec1 -> Rem1 [tailport = e, headport = w, label = 'Yes']
-  Dec1 -> Dec2 [tailport = s, headport = n, label = 'No', weight = 10]
-
-  # Decision 2 branches
-  Dec2 -> Rem2 [tailport = e, headport = w, label = 'No']
-
-  # Split after Decision 2 (Yes)
-  # Low weight to allow central alignment
-  Dec2 -> Branch1 [tailport = s, headport = n, label = 'Yes', weight = 1]
-  Dec2 -> Branch2a [tailport = s, headport = n, label = 'Yes', weight = 1]
-
-  # Branch1: No goes LEFT
-  Branch1 -> Rem3 [tailport = w, headport = e, label = 'No', constraint = false]
-  Branch1 -> MergedDec [tailport = s, headport = n, label = 'Yes', weight = 1]
-
-  # Branch2a: No goes RIGHT, Yes goes down to Branch2b
-  Branch2a -> Rem4 [tailport = e, headport = w, label = 'No']
-  Branch2a -> Branch2b [tailport = s, headport = n, label = 'Yes', weight = 10]
-
-  # Branch2b: No goes RIGHT, Yes goes down to MergedDec
-  Branch2b -> Rem5 [tailport = e, headport = w, label = 'No']
-  Branch2b -> MergedDec [tailport = s, headport = n, label = 'Yes', weight = 1]
-
-  # MergedDec: No goes to BOTH LEFT and RIGHT boxes, Yes goes to End
-  MergedDec -> RemMergedLeft [tailport = w, headport = e, label = 'No', constraint = false]
-  MergedDec -> RemMergedRight [tailport = e, headport = w, label = 'No', constraint = false]
-  MergedDec -> End [tailport = s, headport = n, label = 'Yes', weight = 10]
-
-  # --- Ranks (Alignment) ---
-  { rank = same; Dec1; Rem1 }
-  { rank = same; Dec2; Rem2 }
-  { rank = same; Rem3; Branch1; Branch2a; Rem4 }
-  { rank = same; Branch2b; Rem5 }
-  { rank = same; RemMergedLeft; MergedDec; RemMergedRight }
-
-  # Invisible edges to force left-to-right ordering
-  Dec2 -> MergedDec [style = invis, weight = 1000]
-
-  Dec2 -> Branch1 [style = invis, weight = 1000]
-  Branch1 -> MergedDec [style = invis, weight = 1000]
-  Rem3 -> Branch1 [style = invis, weight = 20]
-  Branch1 -> Branch2a [style = invis, weight = 20]
-  Branch2a -> Rem4 [style = invis, weight = 20]
-  RemMergedLeft -> MergedDec [style = invis, weight = 20]
-  MergedDec -> RemMergedRight [style = invis, weight = 20]
-}
-")
-
-# Convert DiagrammeR graph to SVG, then to bitmap, then to ggplot image to use saving_plot_dual
-# 1. Export to SVG
-# svg_code <- export_svg(flow_graph)
-
-# # 2. Render SVG to bitmap
-# bitmap <- rsvg(charToRaw(svg_code))
-
-# # 3. Read bitmap into magick image
-# img <- image_read(bitmap)
-
-# # 4. Create ggplot object
-# p_flow <- ggdraw() + draw_image(img)
-# p_flow
-
-p_flow <- flow_graph %>%
-  export_svg() %>%
-  charToRaw() %>%
-  rsvg() %>%
-  image_read()
-
-p_flow <- ggdraw() + draw_image(p_flow)
-
-p_flow
-
-
-# Save using saving_plot_dual
-saving_plot_dual(
-  output_dir = "./figures/submission/lt2mb",
-  filename_base = "flowchart_for_loops_filteration",
-  plot_obj = p_flow
-)
-
-getwd()
+# 3) PNG로 저장
+image_write(collage, path = outfile, format = "png")
