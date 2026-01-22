@@ -1,7 +1,10 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-# Helper to create a rhomboid (diamond)
+# This script generates a flowchart illustrating the filtering process of chromatin loops.
+# It uses matplotlib to draw shapes and text, representing each step of the analysis.
+
+# Helper function to create a diamond shape for decision points
 def draw_diamond(ax, center, width, height, text, fill_color='#E6F3FF', fontweight='bold'):
     x, y = center
     points = [
@@ -21,7 +24,7 @@ def draw_diamond(ax, center, width, height, text, fill_color='#E6F3FF', fontweig
         'center': center
     }
 
-# Helper to create a rounded box
+# Helper function to create a rounded box for showing removed loops
 def draw_box(ax, center, width, height, text, fill_color='white', edgecolor='black', fontweight='bold'):
     x, y = center
     corner = (x - width/2, y - height/2)
@@ -37,7 +40,7 @@ def draw_box(ax, center, width, height, text, fill_color='white', edgecolor='bla
         'center': center
     }
 
-# Helper to create a parallelogram (Input/Output)
+# Helper function to create a parallelogram for input/output data
 def draw_parallelogram(ax, center, width, height, text, fill_color='white', edgecolor='black', fontweight='bold', skew=3):
     x, y = center
     points = [
@@ -56,11 +59,11 @@ def draw_parallelogram(ax, center, width, height, text, fill_color='white', edge
         's': (x - skew, y - height/2), 
         'w': (x - width/2, y),         
         'center': center,
-        'bottom_mid': (x, y - height/2), # Geometric center for vertical alignment
-        'top_mid': (x, y + height/2)     # Geometric center for vertical alignment
+        'bottom_mid': (x, y - height/2),
+        'top_mid': (x, y + height/2)
     }
 
-# Helper to draw arrows
+# Helper function to draw arrows between nodes
 def draw_arrow(ax, start, end, label=None, label_pos=0.5, offset_label=(0,0)):
     ax.annotate("", xy=end, xycoords='data', xytext=start, textcoords='data',
                 arrowprops=dict(arrowstyle="-|>", lw=1.5, color='black'), zorder=5)
@@ -71,6 +74,7 @@ def draw_arrow(ax, start, end, label=None, label_pos=0.5, offset_label=(0,0)):
         ax.text(lx, ly, label, ha='center', va='center', fontsize=9, zorder=30, fontweight='bold',
                     bbox=dict(facecolor='white', edgecolor='none', pad=2))
 
+# Helper function to draw arrows with multiple segments
 def draw_polyline_arrow(ax, points, label=None, label_idx=0, offset_label=(0,0)):
     for i in range(len(points)-1):
         p_start = points[i]
@@ -88,15 +92,13 @@ def draw_polyline_arrow(ax, points, label=None, label_idx=0, offset_label=(0,0))
         ax.text(mid_x + offset_label[0], mid_y + offset_label[1], label, ha='center', va='center', fontsize=9, zorder=30, fontweight='bold',
                 bbox=dict(facecolor='white', edgecolor='none', pad=2))
 
-# Setup Figure
-fig, ax = plt.subplots(figsize=(11, 12)) 
-ax.set_xlim(0, 110)
-ax.set_ylim(25, 100)
+# Setup the plot
+fig, ax = plt.subplots(figsize=(14, 14)) 
+ax.set_xlim(0, 120)
+ax.set_ylim(20, 100)
 ax.axis('off')
 
-# ----------------
-# NODES
-# ----------------
+# Define coordinates for the nodes
 y_start = 96
 y_dec1 = 88
 y_dec2 = 80
@@ -104,86 +106,84 @@ y_tss1 = 68
 y_ctcf = 60
 y_tss2 = 56
 y_final = 42
-y_end = 32
+y_end = 30
 
-x_center = 50
+x_center = 55
 x_left = 28
-x_right = 72
-x_rem_r1 = 81
-x_rem_inner = 50
-x_rem_outer = 96
-x_rem_comb = 83
+x_right = 82
+x_rem_r1 = 90
+x_rem_inner = 55
+x_rem_outer = 110
+x_rem_comb = 90
 
-# Start
-n_start = draw_parallelogram(ax, (x_center, y_start), 24, 5, "58,992 loops annotated\nfrom 10 samples")
+# Create the nodes of the flowchart
 
-# Dec 1 (Redundant loop)
-# Width INCREASED to 24 to match dec2
-n_dec1 = draw_diamond(ax, (x_center, y_dec1), 24, 5, "Redundant loop")
-n_rem1 = draw_box(ax, (x_rem_r1, y_dec1), 16, 4, "27,219 loops\nremoved", fill_color='#FFE6E6', fontweight='normal')
+# Starting point: Total loops from 10 samples
+n_start = draw_parallelogram(ax, (x_center, y_start), 26, 5, "58,992 loops annotated\nfrom 10 samples")
 
-# Dec 2 (Loop length < 2 Mb)
-n_dec2 = draw_diamond(ax, (x_center, y_dec2), 24, 5, "Loop length < 2 Mb")
-n_rem2 = draw_box(ax, (x_rem_r1, y_dec2), 14, 4, "754 loops\nremoved", fill_color='#FFE6E6', fontweight='normal')
+# First filter: Remove redundant loops
+n_dec1 = draw_diamond(ax, (x_center, y_dec1), 26, 5, "Unique loops only")
+n_rem1 = draw_box(ax, (x_rem_r1, y_dec1), 18, 4, "27,219 loops\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
-# Split branches
-n_dec_ctcf = draw_diamond(ax, (x_left, y_ctcf), 26, 7, "Both anchors have\nCTCF sites (score > 6)")
-n_rem_ctcf = draw_box(ax, (x_rem_inner, y_ctcf), 12, 4, "5,751 loops\nremoved", fill_color='#FFE6E6', fontweight='normal')
+# Second filter: Filter by loop length
+n_dec2 = draw_diamond(ax, (x_center, y_dec2), 26, 5, "Loop length < 2 Mb")
+n_rem2 = draw_box(ax, (x_rem_r1, y_dec2), 16, 4, "754 loops\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
-# Text Updated: Concise description of proximity
-n_dec_tss1 = draw_diamond(ax, (x_right, y_tss1), 28, 7, "TSS/Promoter distal\nto the enhancer anchor")
-n_rem_tss1 = draw_box(ax, (x_rem_outer, y_tss1), 11, 5, "13,042\nloops\nremoved", fill_color='#FFE6E6', fontweight='normal')
+# Parallel branches for CTCF and TSS/Promoter filtering
+# CTCF branch
+n_dec_ctcf = draw_diamond(ax, (x_left, y_ctcf), 28, 7, "Both anchors have\nCTCF sites (score > 6)")
+n_rem_ctcf = draw_box(ax, (x_rem_inner, y_ctcf), 14, 4, "5,751 loops\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
-n_dec_tss2 = draw_diamond(ax, (x_right, y_tss2), 28, 7, "TSS/Promoter within 75th\npercentile distance")
-n_rem_tss2 = draw_box(ax, (x_rem_outer, y_tss2), 11, 5, "1,864\nloops\nremoved", fill_color='#FFE6E6', fontweight='normal')
+# TSS/Promoter branch
+n_dec_tss1 = draw_diamond(ax, (x_right, y_tss1), 30, 7, "TSS/Promoter assigned to\nat least one anchor")
+n_rem_tss1 = draw_box(ax, (x_rem_outer, y_tss1), 12, 5, "13,042\nloops\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
-n_dec_final = draw_diamond(ax, (x_center, y_final), 24, 6, "Satisfies both criteria")
-n_rem_final_combined = draw_box(ax, (x_rem_comb, y_final), 25, 6, "11,445 loops (failed CTCF)\n1,573 loops (failed TSS)    \n717 loops (failed Promoter)\nremoved", fill_color='#FFE6E6', fontweight='normal')
+n_dec_tss2 = draw_diamond(ax, (x_right, y_tss2), 30, 7, "Anchor-TSS/Promoter distance\n< 3rd Quartile")
+n_rem_tss2 = draw_box(ax, (x_rem_outer, y_tss2), 12, 5, "1,864\nloops\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
-# End
-n_end = draw_parallelogram(ax, (x_center, y_end), 22, 5, "13,823 loops\nretained", fill_color='#E6FFCC', edgecolor='black')
+# Final intersection of both branches
+n_dec_final = draw_diamond(ax, (x_center, y_final), 26, 6, "Intersection of both criteria")
+n_rem_final_combined = draw_box(ax, (x_rem_comb, y_final), 28, 6, "11,445 loops (failed CTCF)\n2,290 loops (failed TSS/Promoter: 1,573/717)\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
-# ----------------
-# CONNECTIONS
-# ----------------
+# Final result
+n_end = draw_parallelogram(ax, (x_center, y_end), 30, 5, "13,823 loops retained\n(CTCF-TSS: 9,111, CTCF-Promoter: 4,712)", fill_color='#E6FFCC', edgecolor='black')
 
-# Start -> Dec 1 (Vertical)
+# Connect the nodes with arrows and labels
+
+# From start to first decision
 draw_arrow(ax, n_start['bottom_mid'], n_dec1['n'])
 
-# Dec 1 -> Rem 1 (Yes)
-draw_arrow(ax, n_dec1['e'], n_rem1['w'], label="Yes", offset_label=(0, 0.8))
+# First decision: Redundant loops
+draw_arrow(ax, n_dec1['e'], n_rem1['w'], label="No", offset_label=(0, 0.8))
+draw_arrow(ax, n_dec1['s'], n_dec2['n'], label="Yes (31,773 retained)", offset_label=(4.5, 0))
 
-# Dec 1 -> Dec 2 (No)
-draw_arrow(ax, n_dec1['s'], n_dec2['n'], label="No", offset_label=(2.0, 0))
-
-# Dec 2 -> Rem 2 (No)
+# Second decision: Loop length
 draw_arrow(ax, n_dec2['e'], n_rem2['w'], label="No", offset_label=(0, 0.8))
-
-# Dec 2 -> Split (Yes)
 y_fork_line = 74 
-draw_polyline_arrow(ax, [n_dec2['s'], (x_center, y_fork_line)], label="Yes", label_idx=0, offset_label=(2.5, 0))
+draw_polyline_arrow(ax, [n_dec2['s'], (x_center, y_fork_line)], label="Yes (31,019 retained)", label_idx=0, offset_label=(4.5, 0))
 
-# Fork Left to CTCF
+# Fork to parallel branches
 draw_polyline_arrow(ax, [(x_center, y_fork_line), (x_left, y_fork_line), n_dec_ctcf['n']])
-# Fork Right to TSS
 draw_polyline_arrow(ax, [(x_center, y_fork_line), (x_right, y_fork_line), n_dec_tss1['n']])
 
-# CTCF Branch
+# CTCF branch logic
 draw_arrow(ax, n_dec_ctcf['e'], n_rem_ctcf['w'], label="No", offset_label=(0, 0.8))
 y_merge = 48
-draw_polyline_arrow(ax, [n_dec_ctcf['s'], (x_left, y_merge), (x_center-2, y_merge), (x_center-2, n_dec_final['n'][1])], label="Yes", label_idx=0, offset_label=(2.5, 0)) 
+draw_polyline_arrow(ax, [n_dec_ctcf['s'], (x_left, y_merge), (x_center-2, y_merge), (x_center-2, n_dec_final['n'][1])], label="Yes (25,268 retained)", label_idx=0, offset_label=(4.5, 0)) 
 
-# TSS Branch
+# TSS/Promoter branch logic
 draw_arrow(ax, n_dec_tss1['e'], n_rem_tss1['w'], label="No", offset_label=(0, 0.8))
-draw_arrow(ax, n_dec_tss1['s'], n_dec_tss2['n'], label="Yes", offset_label=(2.0, 0))
+draw_arrow(ax, n_dec_tss1['s'], n_dec_tss2['n'], label="Yes (17,977 retained)", offset_label=(4.5, 0))
 draw_arrow(ax, n_dec_tss2['e'], n_rem_tss2['w'], label="No", offset_label=(0, 0.8))
-draw_polyline_arrow(ax, [n_dec_tss2['s'], (x_right, y_merge), (x_center+2, y_merge), (x_center+2, n_dec_final['n'][1])], label="Yes", label_idx=0, offset_label=(2.5, 0))
+draw_polyline_arrow(ax, [n_dec_tss2['s'], (x_right, y_merge), (x_center+2, y_merge), (x_center+2, n_dec_final['n'][1])], label="Yes (16,113 retained)\n(TSS/Promoter:10,684/5,429)", label_idx=0, offset_label=(4.5, 0))
 
-# Final Logic
+# Final intersection logic
 draw_arrow(ax, n_dec_final['e'], n_rem_final_combined['w'], label="No", offset_label=(0, 0.8))
 
-# Final -> End (Vertical)
+# Final arrow to the end result
 draw_arrow(ax, n_dec_final['s'], n_end['top_mid'], label="Yes", offset_label=(2.0, 0))
 
+# Save the flowchart to a file
 plt.tight_layout()
 plt.savefig('flowchart_v11.png', dpi=300, bbox_inches='tight')
+print("Flowchart saved as flowchart_v11.png")

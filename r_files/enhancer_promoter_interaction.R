@@ -441,8 +441,18 @@ df.final.up.down.directional.point <- df.final.up.down.directional %>%
 df.final.up.down.directional.point %>% dim() # 61,974 // 61,936// mid mid: 62,111 with_ties = TRUE// FYI: 62038 = 31019 * 2
 df.final.up.down.directional.point %>% head(2)
 
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+# STAGE 1: How filtering muli-cases in an anchor
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+
 ########################################
-# Categorizing and filtering steps
+# Categorizing and filtering steps FOR MULTIPLE CASES AT AN ANCHOR IN A LOOP
 ########################################
 # 1. only one case in a loop and an anchor
 df.final.up.down.directional.point.one.in.loop.where <- df.final.up.down.directional.point %>%
@@ -513,13 +523,14 @@ df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>% head(
 
 # gene_name 필터링: 실제로 같은 gene인지 확인 (gene_id의 뒤에서 두번째 요소가 gene_name이므로, 앞에서 5번째 요소-ENSEMBL id 제거 후 비교)
 df.final.up.down.directional.point.multi.in.loop.where.three.labelings.actual.same.gene.selected <- df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>%
-  filter(multi.3rd.filter > 1) %>% # 79
-  mutate(gene_id_trimmed = sapply(strsplit(gene_id, ":"), function(x) paste(x[-5], collapse = ":"))) %>% # dplyr::select(gene_id_trimmed) %>% view()
+  filter(multi.3rd.filter > 1) %>%
+  print() # 79
+mutate(gene_id_trimmed = sapply(strsplit(gene_id, ":"), function(x) paste(x[-5], collapse = ":"))) %>% # dplyr::select(gene_id_trimmed) %>% view()
   group_by(loop.id, WHERE) %>%
   mutate(all_same_trimmed = n_distinct(gene_id_trimmed) == 1) %>%
   ungroup() %>%
   # count(all_same_trimmed) %>% view() # FALSE: 30, TRUE: 49
-  filter(all_same_trimmed) %>% # # mutaul exclusive to L534 :::::::::: 49
+  filter(all_same_trimmed) %>% # # mutaul exclusive to L537 :::::::::: 49
   group_by(loop.id, WHERE) %>%
   filter(row_number() == 1) %>%
   ungroup()
@@ -534,7 +545,7 @@ df.final.up.down.directional.point.multi.in.loop.where.three.labelings.exon.numb
   group_by(loop.id, WHERE) %>%
   mutate(all_same_trimmed = n_distinct(gene_id_trimmed) == 1) %>%
   ungroup() %>%
-  filter(!all_same_trimmed) %>% # mutaul exclusive to L519 :::::::::: 30
+  filter(!all_same_trimmed) %>% # mutaul exclusive to L522 :::::::::: 30
   # view() # 30
   mutate(
     gene_name_from_id = sapply(strsplit(gene_id_trimmed, ":"), function(x) x[length(x) - 1]),
@@ -583,6 +594,16 @@ df.final.up.down.directional.point.final %>%
 # 2           2     6 (L:549)
 
 df.final.up.down.directional.point.final %>% dim() # 62,070 // 61,936// mid mid: 61,975/ FYI: 62038 = 31019 * 2
+
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+# STAGE 2: How getting the loops having only one PE interaction in a loop
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
+########################################################################################################################
 
 #############################################################
 # validity of the gene’s genomic position based on TSS or promoters selected by the nearestToDistance
@@ -861,7 +882,7 @@ approach_2nd_analyze_loops_by_threshold(
     mutate(gene_id = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1)),
   threshold_distance = stats_decision$Q3,
   top_n_genes = 30,
-  print_top_n = 50
+  print_top_n = 80
 ) # utils_functions.R// final gprofiler top 30: https://biit.cs.ut.ee/gplink/l/aHWE_iUdCTy
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
@@ -879,7 +900,7 @@ final.loops.from.tss.step %>% dim() # 9,641// 10,684
 
 final.loops.from.promoter.step <- df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
   filter(component == "pro")
-final.loops.from.promoter.step %>% dim() # 4,569// 5429
+final.loops.from.promoter.step %>% dim() # 4,569// 5,429
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% head(3)
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 23524// 14210// final: 16,113
