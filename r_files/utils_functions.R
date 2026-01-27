@@ -1007,7 +1007,7 @@ extracting_attributes <- function(attr_string, keys = NULL) {
 #' @param threshold_distance Maximum distance threshold
 #' @param top_n_genes Number of top genes to plot
 #' @param print_top_n Number of top genes to print
-approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5, top_n_genes = 70, print_top_n = 50) {
+approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5, top_n_genes = 80, print_top_n = 50) {
     # Task 1: Filtering and top N genes by loop count
     df.filtered <- df %>% filter(distance <= threshold_distance)
     df.gene_loop_count <- df.filtered %>%

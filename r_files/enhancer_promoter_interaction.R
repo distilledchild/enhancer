@@ -41,9 +41,8 @@ getwd()
 # getwd()
 
 # Mac
-setwd("~/dropbox/Gateway_to_Hao/enhancer/r_files")
-getwd()
-source("~/Desktop/playground/enhancer/r_files/utils_functions.R") # Load all utility functions
+# setwd("~/dropbox/Gateway_to_Hao/enhancer/r_files")
+source("./utils_functions.R") # Load all utility functions
 
 ########################
 # 1. Loop
@@ -524,8 +523,8 @@ df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>% head(
 # gene_name 필터링: 실제로 같은 gene인지 확인 (gene_id의 뒤에서 두번째 요소가 gene_name이므로, 앞에서 5번째 요소-ENSEMBL id 제거 후 비교)
 df.final.up.down.directional.point.multi.in.loop.where.three.labelings.actual.same.gene.selected <- df.final.up.down.directional.point.multi.in.loop.where.three.labelings %>%
   filter(multi.3rd.filter > 1) %>%
-  print() # 79
-mutate(gene_id_trimmed = sapply(strsplit(gene_id, ":"), function(x) paste(x[-5], collapse = ":"))) %>% # dplyr::select(gene_id_trimmed) %>% view()
+  # print() # 79
+  mutate(gene_id_trimmed = sapply(strsplit(gene_id, ":"), function(x) paste(x[-5], collapse = ":"))) %>% # dplyr::select(gene_id_trimmed) %>% view()
   group_by(loop.id, WHERE) %>%
   mutate(all_same_trimmed = n_distinct(gene_id_trimmed) == 1) %>%
   ungroup() %>%
@@ -698,6 +697,26 @@ df.final.up.down.directional.point.all.in.one.decision <- df.final.up.down.direc
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 df.final.up.down.directional.point.all.in.one.decision
+
+df.final.up.down.directional.point.all.in.one.decision.histogram <- df.final.up.down.directional.point.decision %>%
+  ggplot(aes(x = distance)) +
+  geom_histogram(fill = "skyblue", color = "black", bins = 50) +
+  geom_vline(xintercept = stats_decision$Q1, linetype = "dashed", color = "blue") +
+  geom_vline(xintercept = stats_decision$Median, linetype = "solid", color = "red") +
+  geom_vline(xintercept = stats_decision$Q3, linetype = "dashed", color = "blue") +
+  annotate("text", x = stats_decision$Q1, y = Inf, label = paste0("Q1=", round(stats_decision$Q1, 2)), vjust = 1.5, hjust = 1.1, color = "blue") +
+  annotate("text", x = stats_decision$Median, y = Inf, label = paste0("Median=", round(stats_decision$Median, 2)), vjust = 3.0, hjust = 0.5, color = "red") +
+  annotate("text", x = stats_decision$Q3, y = Inf, label = paste0("Q3=", round(stats_decision$Q3, 2)), vjust = 1.5, hjust = -0.1, color = "blue") +
+  labs(
+    title = "Histogram of Distance (All Data)",
+    x = "Distance",
+    y = "Count"
+  ) +
+  scale_x_log10() +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+df.final.up.down.directional.point.all.in.one.decision.histogram
 
 # boxplot by classification
 # distribution.all.cases.distance <- df.final.up.down.directional.point.decision %>%
