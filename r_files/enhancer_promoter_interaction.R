@@ -1,31 +1,11 @@
-library("ComplexUpset")
 library("tidyverse")
 library("GenomicRanges")
 library("ggplot2")
-library("devtools")
-library("remotes")
-library("gridExtra")
-library("patchwork")
 library("cowplot")
-library("biomaRt")
-library("reshape2")
-library("ggvenn")
-library("gtools")
-library("scales") # for better axis formatting
-library("ggrepel")
 library("circlize")
 library("RColorBrewer")
-library("broom")
-library("igraph")
-library("ggraph")
-library("writexl")
-library("ggrepel")
-library("pdftools")
 library("magick")
-library("tools")
-library("httpgd")
 library("RIdeogram")
-library("rtracklayer")
 
 options(tibble.width = Inf)
 options(tibble.print_max = Inf)
@@ -41,7 +21,7 @@ getwd()
 # getwd()
 
 # Mac
-# setwd("~/dropbox/Gateway_to_Hao/enhancer/r_files")
+setwd("~/dropbox/Gateway_to_Hao/enhancer/r_files")
 source("./utils_functions.R") # Load all utility functions
 
 ########################
@@ -575,6 +555,13 @@ df.final.combined.using.labelings <- bind_rows( # 137 = 95 + 24 + 18
   df.final.up.down.directional.point.multi.in.loop.where.three.labelings.exon.number.and.mannually.selected # 18
 )
 
+df.final.combined.using.labelings %>% head(2)
+df.final.combined.using.labelings %>% dim() # 137
+df.final.combined.using.labelings %>%
+  count(loop.id, WHERE) %>%
+  count(n)
+# 1     1   131
+# 2     2     3
 df.final.up.down.directional.point.final <- bind_rows(df.final.up.down.directional.point.one.in.loop.where, df.final.combined.using.labelings) # 61,838 + 137 = 61,975
 
 df.final.up.down.directional.point.final %>% dim() # 61,975
@@ -693,7 +680,7 @@ df.final.up.down.directional.point.all.in.one.decision <- df.final.up.down.direc
     title = "Boxplot of Distance (All Data)",
     y = "Distance"
   ) +
-  scale_y_log10() +
+  # scale_y_log10() +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 df.final.up.down.directional.point.all.in.one.decision
@@ -717,6 +704,30 @@ df.final.up.down.directional.point.all.in.one.decision.histogram <- df.final.up.
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 df.final.up.down.directional.point.all.in.one.decision.histogram
+
+df.final.up.down.directional.point.all.in.one.decision.200kb <- df.final.up.down.directional.point.decision %>%
+  ggplot(aes(x = distance)) +
+  # geom_density(fill = "skyblue") +
+  geom_histogram(bins = 100, fill = "skyblue") +
+  # annotate("text", y = 1, x = stats_decision$Q1, label = paste0("Q1=", round(stats_decision$Q1, 2)), vjust = -0.5, hjust = 1, color = "blue") +
+  # annotate("text", y = 1, x = stats_decision$Median, label = paste0("Median=", round(stats_decision$Median, 2)), vjust = -0.5, hjust = 1, color = "red") +
+  # annotate("text", y = 1, x = stats_decision$Q3, label = paste0("Q3=", round(stats_decision$Q3, 2)), vjust = -0.5, hjust = 1, color = "blue") +
+  labs(
+    title = "Density plot of distance between TSS/Promoter and anchor",
+    y = "Distance"
+  ) +
+  # scale_y_log10() +
+  theme_minimal() +
+  xlim(c(0, 5e5)) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+df.final.up.down.directional.point.all.in.one.decision.200kb
+
+saving_plot_dual( # utils_functions.R
+  plot_obj = df.final.up.down.directional.point.all.in.one.decision.200kb,
+  filename_base = "df.final.up.down.directional.point.all.in.one.decision.200kb",
+  output_dir = "./figures/submission/lt2mb",
+)
 
 # boxplot by classification
 # distribution.all.cases.distance <- df.final.up.down.directional.point.decision %>%
@@ -748,14 +759,15 @@ df.final.up.down.directional.point.decision.one.OK.filtered %>%
   count() # 11,935// final: 12,707
 df.final.up.down.directional.point.decision.one.OK.filtered %>% head(2) # 11,937 // 11,935
 
-approach_2nd_analyze_loops_by_threshold(
-  df.final.up.down.directional.point.decision.one.OK.filtered %>%
-    dplyr::rename(gene_id_id = gene_id) %>%
-    mutate(gene_id = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1)),
-  threshold_distance = stats_decision$Q3,
-  top_n_genes = 70,
-  print_top_n = 50
-) # utils_functions.R // final One_OK only gprofiler: https://biit.cs.ut.ee/gplink/l/aRdAXDm53Re
+# for just one OK
+# approach_2nd_analyze_loops_by_threshold(
+#   df.final.up.down.directional.point.decision.one.OK.filtered %>%
+#     dplyr::rename(gene_id_id = gene_id) %>%
+#     mutate(gene_id = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1)),
+#   threshold_distance = stats_decision$Q3,
+#   top_n_genes = 70,
+#   print_top_n = 50
+# ) # utils_functions.R // final One_OK only gprofiler: https://biit.cs.ut.ee/gplink/l/aRdAXDm53Re
 
 # distribution.OK.distance.q3 %>% dim()
 # distribution.OK.distance.q3 %>% distinct(loop.id) %>% count()
@@ -871,7 +883,7 @@ df.final.up.down.directional.point.decision %>% count(classification) #| final
 # 3 One_OK         23871|||||||||||            3 One_OK         23874  3 One_OK         23872| 3 One_OK         25415
 
 # CACHING: df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3
-cache_file_combined_ok_filtered <- "../data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final.rds"
+cache_file_combined_ok_filtered <- "../data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"
 
 if (!file.exists(cache_file_combined_ok_filtered)) {
   message("Saving df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3_final to cache: ", cache_file_combined_ok_filtered)
@@ -879,10 +891,12 @@ if (!file.exists(cache_file_combined_ok_filtered)) {
   df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 <- bind_rows(
     df.final.up.down.directional.point.decision.one.OK.filtered,
     df.final.up.down.directional.point.decision.both.OK.filtered
-  ) %>% # view() # 15,738// final: 17,977
-    filter(distance < stats_decision$Q3) # %>% view() # 3,730
+  ) %>% # view() # 15,738// final: 17,976
+    # filter(distance < stats_decision$Q3) # %>% view() # 3,730
+    # filter(distance < 150000) # %>% view() # 3,730
+    filter(distance < 200000) # %>% view() # 3,730
 
-  df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% dim() # 14,210// final: 16,113
+  df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% dim() # 14,210// final: 16,113// 150kb: 17,417// 200kb: 17,648
   df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% head(2)
   df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3 %>% count(loop.id) # 14,210 PASS! (final: 16,113)
 
@@ -892,22 +906,23 @@ if (!file.exists(cache_file_combined_ok_filtered)) {
 }
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 <- readRDS(cache_file_combined_ok_filtered)
-df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 14210// final: 16,113
+df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 14210// final: 16,113// 150kb: 17,417// 200kb: 17,648
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% head(2)
 
 approach_2nd_analyze_loops_by_threshold(
   df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
     dplyr::rename(gene_id_id = gene_id) %>%
     mutate(gene_id = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1)),
-  threshold_distance = stats_decision$Q3,
+  # threshold_distance = stats_decision$Q3,
+  threshold_distance = 200000,
   top_n_genes = 30,
   print_top_n = 80
 ) # utils_functions.R// final gprofiler top 30: https://biit.cs.ut.ee/gplink/l/aHWE_iUdCTy
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
-  count(component)
-# 1 pro        4776  1 pro        4569|||||||| 1 pro        4569||||| 1 pro        5429
-# 2 tss       10891  2 tss        9641|||||||| 2 tss        9641||||| 2 tss       10684
+  count(component) #  |     # 200kb
+# 1 pro        4776  1 pro        4569|||||||| 1 pro        4569||||| 1 pro        5429| 1 pro        5729
+# 2 tss       10891  2 tss        9641|||||||| 2 tss        9641||||| 2 tss       10684| 2 tss       11919
 
 ######################################################################
 ######################################################################
@@ -922,7 +937,7 @@ final.loops.from.promoter.step <- df_final_up_down_directional_point_decision_CO
 final.loops.from.promoter.step %>% dim() # 4,569// 5,429
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% head(3)
-df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 23524// 14210// final: 16,113
+df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 23524// 14210// final: 16,113// 200kb: 17,648
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% count(loop.id, component) %>% # view()
   count(n)
 # 1 1 9177 // 14210
@@ -943,9 +958,9 @@ where_dist
 # component distribution
 component_dist <- df_single_loop %>%
   count(component)
-component_dist
-# 1 pro        4035  // 1 pro        4569
-# 2 tss        5142  // 2 tss        9641
+component_dist # 200kb
+# 1 pro        4035  // 1 pro        4569| 1 pro        5729
+# 2 tss        5142  // 2 tss        9641| 2 tss       11919
 
 ################################################################################################
 ################################################################################################
@@ -1014,8 +1029,8 @@ final.loops.from.ctcf.step %>% count(resolution)
 # Venn Diagram
 ####################################
 ####################################
-final.loops.from.promoter.step$loop.id # 4569// final: 5,429
-final.loops.from.tss.step$loop.id # 9641// final: 10,684
+final.loops.from.promoter.step$loop.id # 4569// final: 5,429// 200kb: 5,729
+final.loops.from.tss.step$loop.id # 9641// final: 10,684// 200kb: 11,919
 
 venn_plot_submission <- create_venn_plot(final.loops.from.ctcf.step, final.loops.from.promoter.step, final.loops.from.tss.step, "CTCF") # utils_functions.R
 venn_plot_submission
@@ -1035,8 +1050,8 @@ saving_plot_dual( # utils_functions.R
 ####################################
 
 final.loops.from.ctcf.step %>% dim() # sub.4 any, either 6: 25,620// span ENSEMBL 25268
-final.loops.from.tss.step %>% dim() # mid mid: 9,641// final:10,684
-final.loops.from.promoter.step %>% dim() # mid mid: 4,569// final:5,429
+final.loops.from.tss.step %>% dim() # mid mid: 9,641// final:10,684// 200kb: 11,919
+final.loops.from.promoter.step %>% dim() # mid mid: 4,569// final:5,429// 200kb: 5,729
 
 overlapping_loops <- extract_overlapping_loops( # utils_functions.R
   ctcf_data = final.loops.from.ctcf.step,
@@ -1044,38 +1059,38 @@ overlapping_loops <- extract_overlapping_loops( # utils_functions.R
   tss_data = final.loops.from.tss.step
 )
 
-overlapping_loops$ctcf_promoter_only # PASS// 6648 // final: 3,973// final: 4712
-overlapping_loops$ctcf_tss_only # PASS// 8613 // final: 8261// final: 9111
-overlapping_loops$ctcf_promoter_tss_overlap # PASS// 3423// final: 0
+overlapping_loops$ctcf_promoter_only # PASS// 6648 // final: 3,973// final: 4712// 200kb: 4,960
+overlapping_loops$ctcf_tss_only # PASS// 8613 // final: 8261// final: 9111// 200kb: 10,125
+overlapping_loops$ctcf_promoter_tss_overlap # PASS// 3423// final: 0 // 200kb: 0
 
 df.ctcf.promoter.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_only, category = "CP", stringsAsFactors = FALSE)
 df.ctcf.tss.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_tss_only, category = "CT", stringsAsFactors = FALSE)
 df.ctcf.promoter.tss.overlap.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_tss_overlap, category = "CPT", stringsAsFactors = FALSE)
 
-df.ctcf.promoter.only.loop %>% dim() # 5497//3973// final : 4712
-df.ctcf.tss.only.loop %>% dim() # 7799// 8261// final: 9111
-df.ctcf.promoter.tss.overlap.loop %>% dim() # 2302//0
+df.ctcf.promoter.only.loop %>% dim() # 5497//3973// final : 4712// 200kb: 4,960
+df.ctcf.tss.only.loop %>% dim() # 7799// 8261// final: 9111// 200kb: 10,125
+df.ctcf.promoter.tss.overlap.loop %>% dim() # 2302//0// 200kb: 0
 
 # sub.4 dedups: 11891 = 679 + 3096 + 8116
 df.final.loop <- bind_rows(df.ctcf.promoter.only.loop, df.ctcf.tss.only.loop)
 
-df.final.loop # sub.4 any, either 6// 12234/31019(lt2mb) (0.3944034)// final: 13823/31019(0.4456301)
+df.final.loop # sub.4 any, either 6// 12234/31019(lt2mb) (0.3944034)// final: 13823/31019(0.4456301)// 200kb: 15,085/30,109 (0.501013)
 df.final.loop %>% head()
-df.final.loop %>% dim() # 15598: 5656 + 7980 + 1962// final(loop-mid): 12,234// final: 13823
-df.final.loop %>% count(category) # CP 3973 CT 8261// final CP 4712 CT 9111
+df.final.loop %>% dim() # 15598: 5656 + 7980 + 1962// final(loop-mid): 12,234// final: 13823// 200kb: 15,085
+df.final.loop %>% count(category) # CP 3973 CT 8261// final CP 4712 CT 9111// 200kb: 4,960CT 10,125
 
 df.final.loop %>%
   mutate(resolution = str_split_n(loop.id, "_", 7)) %>%
   count(resolution) # utils_functions.R
-#  resolution    n |||                     resolution       n  resolution    n     resolution    n
-# 1      10000 4369|||                      1      10000  86751      10000 5656     1      10000 6968
-# 2      25000 6104|||                      2      25000 111442      25000 7980     2      25000 8617
-# 3       5000 1761|||                      3       5000  38213       5000 1962     3       5000 3099
+#  resolution    n |||          200kb
+# 1      10000 4369|||   | 1      10000 5430
+# 2      25000 6104|||   | 2      25000 7416
+# 3       5000 1761|||   | 3       5000 2239
 
-save(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.rda")
-write.csv(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.csv", row.names = FALSE)
+save(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.rda")
+write.csv(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.csv", row.names = FALSE)
 
-df.final.loop %>% dim() # 23640// 18681// 18684// 12234// final: 13823
+df.final.loop %>% dim() # 23640// 18681// 18684// 12234// final: 13823// 200kb: 15,085
 df.final.loop %>% head(2)
 df.DISTINCT.loop.deep.sample.all %>% head()
 
@@ -1200,7 +1215,7 @@ resolution_colors <- c(
   # values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")
 )
 # Output PDF file
-pdf(file = "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.pdf", height = 11 * 0.8, width = 8.5 * 0.8)
+pdf(file = "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.200kb.pdf", height = 11 * 0.8, width = 8.5 * 0.8)
 
 # Initialize circos with ideogram for rat genome
 circos.initializeWithIdeogram(species = "rn7")
@@ -1234,7 +1249,7 @@ for (chr in unique_chromosomes) {
 dev.off()
 
 # 1. Load first two pages from PDF
-pdf_path <- "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.pdf"
+pdf_path <- "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.200kb.pdf"
 img_list <- image_read_pdf(pdf_path, pages = 1:2, density = 300)
 
 # Create labeled plots using ggdraw
@@ -1252,15 +1267,13 @@ combined_plot <- plot_grid(plot_a, plot_b, nrow = 1)
 # 5. Save as PNG
 saving_plot_dual( # utils_functions.R
   output_dir = "./figures/submission/lt2mb",
-  filename_base = "circos_first_two_panels_F8.ENSEMBL.mid.mid.final",
+  filename_base = "circos_first_two_panels_F8.ENSEMBL.mid.mid.final.200kb",
   plot_obj = combined_plot
 )
 
-library(magick)
-
 # 입력/출력 경로
-infile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.pdf"
-outfile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.png"
+infile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.200kb.pdf"
+outfile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.200kb.png"
 
 # 1) PDF → 이미지 리스트로 읽기
 imgs <- image_read_pdf(infile, density = 300) # density 높이면 더 선명

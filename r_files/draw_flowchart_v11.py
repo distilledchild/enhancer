@@ -138,15 +138,15 @@ n_rem_ctcf = draw_box(ax, (x_rem_inner, y_ctcf), 14, 4, "5,751 loops\nremoved", 
 n_dec_tss1 = draw_diamond(ax, (x_right, y_tss1), 30, 7, "TSS/Promoter assigned to\nat least one anchor")
 n_rem_tss1 = draw_box(ax, (x_rem_outer, y_tss1), 12, 5, "13,042\nloops\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
-n_dec_tss2 = draw_diamond(ax, (x_right, y_tss2), 30, 7, "Anchor-TSS/Promoter distance\n< 3rd Quartile")
-n_rem_tss2 = draw_box(ax, (x_rem_outer, y_tss2), 12, 5, "1,864\nloops\nremoved", fill_color='#FFE6E6', fontweight='normal')
+n_dec_tss2 = draw_diamond(ax, (x_right, y_tss2), 30, 7, "Anchor-TSS/Promoter distance\n< 200 kb")
+n_rem_tss2 = draw_box(ax, (x_rem_outer, y_tss2), 12, 5, "328\nloops\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
 # Final intersection of both branches
 n_dec_final = draw_diamond(ax, (x_center, y_final), 26, 6, "Intersection of both criteria")
-n_rem_final_combined = draw_box(ax, (x_rem_comb, y_final), 28, 6, "11,445 loops (failed CTCF)\n2,290 loops (failed TSS/Promoter: 1,573/717)\nremoved", fill_color='#FFE6E6', fontweight='normal')
+n_rem_final_combined = draw_box(ax, (x_rem_comb, y_final), 28, 6, "10,183 loops (failed CTCF)\n2,563 loops (failed TSS/Promoter: 1,794/769)\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
 # Final result
-n_end = draw_parallelogram(ax, (x_center, y_end), 30, 5, "13,823 loops retained\n(CTCF-TSS: 9,111, CTCF-Promoter: 4,712)", fill_color='#E6FFCC', edgecolor='black')
+n_end = draw_parallelogram(ax, (x_center, y_end), 30, 5, "15,085 loops retained\n(CTCF-TSS: 10,125, CTCF-Promoter: 4,960)", fill_color='#E6FFCC', edgecolor='black')
 
 # Connect the nodes with arrows and labels
 
@@ -173,9 +173,9 @@ draw_polyline_arrow(ax, [n_dec_ctcf['s'], (x_left, y_merge), (x_center-2, y_merg
 
 # TSS/Promoter branch logic
 draw_arrow(ax, n_dec_tss1['e'], n_rem_tss1['w'], label="No", offset_label=(0, 0.8))
-draw_arrow(ax, n_dec_tss1['s'], n_dec_tss2['n'], label="Yes (17,977 retained)", offset_label=(4.5, 0))
+draw_arrow(ax, n_dec_tss1['s'], n_dec_tss2['n'], label="Yes (17,976 retained)", offset_label=(4.5, 0))
 draw_arrow(ax, n_dec_tss2['e'], n_rem_tss2['w'], label="No", offset_label=(0, 0.8))
-draw_polyline_arrow(ax, [n_dec_tss2['s'], (x_right, y_merge), (x_center+2, y_merge), (x_center+2, n_dec_final['n'][1])], label="Yes (16,113 retained)\n(TSS/Promoter:10,684/5,429)", label_idx=0, offset_label=(4.5, 0))
+draw_polyline_arrow(ax, [n_dec_tss2['s'], (x_right, y_merge), (x_center+2, y_merge), (x_center+2, n_dec_final['n'][1])], label="Yes (17,648 retained)\n(TSS/Promoter:11,919/5,729)", label_idx=0, offset_label=(4.5, 0))
 
 # Final intersection logic
 draw_arrow(ax, n_dec_final['e'], n_rem_final_combined['w'], label="No", offset_label=(0, 0.8))
