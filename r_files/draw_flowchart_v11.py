@@ -162,7 +162,21 @@ def draw_box(ax, center, width, height, text, fill_color='white', edgecolor='bla
     }
 
 # Helper function to create a parallelogram for input/output data
-def draw_parallelogram(ax, center, width, height, text, fill_color='white', edgecolor='black', fontweight='bold', skew=3):
+def draw_parallelogram(
+    ax,
+    center,
+    width,
+    height,
+    text,
+    fill_color='white',
+    edgecolor='black',
+    fontweight='bold',
+    skew=3,
+    fontsize=None,
+    fit_width_ratio=0.92,
+    fit_height_ratio=0.84,
+    linespacing=1.2
+):
     x, y = center
     points = [
         (x - width/2 + skew, y + height/2), # Top Left
@@ -177,10 +191,11 @@ def draw_parallelogram(ax, center, width, height, text, fill_color='white', edge
         x,
         y,
         text,
-        fontsize=BASE_FONTSIZE,
+        fontsize=fontsize if fontsize is not None else BASE_FONTSIZE,
         fontweight=fontweight,
-        max_width=(width - 2 * abs(skew)) * 0.92,
-        max_height=height * 0.84
+        max_width=(width - 2 * abs(skew)) * fit_width_ratio,
+        max_height=height * fit_height_ratio,
+        linespacing=linespacing
     )
     
     return {
@@ -247,7 +262,17 @@ x_rem_comb = 125
 # Create the nodes of the flowchart
 
 # Starting point: Total loops from 10 samples
-n_start = draw_parallelogram(ax, (x_center, y_start), 40, 9, "58,992 loops annotated\nfrom 10 samples")
+n_start = draw_parallelogram(
+    ax,
+    (x_center, y_start),
+    40,
+    9,
+    "58,992 loops annotated\nfrom 10 samples",
+    fontsize=22,
+    fit_width_ratio=0.95,
+    fit_height_ratio=0.90,
+    linespacing=1.05
+)
 
 # First filter: Remove redundant loops
 n_dec1 = draw_diamond(
