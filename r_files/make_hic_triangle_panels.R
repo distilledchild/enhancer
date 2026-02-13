@@ -175,11 +175,11 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL) {
 
   # Overlay loop markers (arrow + label) on the heatmap for a paper-like callout style.
   if (!is.null(loops_df) && nrow(loops_df) > 0) {
-    # Pick a small number to avoid clutter.
+    # Pick a modest number to avoid clutter.
     loops_pick <- loops_df %>%
       mutate(span_bp = abs(centroid2 - centroid1), span_mb = span_bp / 1e6) %>%
       arrange(desc(observed)) %>%
-      slice_head(n = 12) %>%
+      slice_head(n = 80) %>%
       mutate(
         c1 = pmin(centroid1, centroid2),
         c2 = pmax(centroid1, centroid2)
@@ -190,31 +190,15 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL) {
       mutate(px = coords$px, py = coords$py) %>%
       filter(is.finite(px), is.finite(py), py >= 0)
 
-    # Arrow from slightly above-left toward the point.
-    loops_pick <- loops_pick %>%
-      mutate(
-        ax = px - 12,
-        ay = py + 12
-      )
-
+    # Professor preference: show loop location with black dots only (no arrows/labels).
     p <- p +
-      geom_segment(
+      geom_point(
         data = loops_pick,
-        aes(x = ax, y = ay, xend = px, yend = py),
+        aes(x = px, y = py),
         inherit.aes = FALSE,
         color = "black",
-        linewidth = 0.35,
-        arrow = arrow(length = unit(0.08, "inches"), type = "closed")
-      ) +
-      geom_text(
-        data = loops_pick,
-        aes(x = ax, y = ay, label = sprintf("%.2fMb", span_mb)),
-        inherit.aes = FALSE,
-        color = "black",
-        size = 2.7,
-        fontface = "bold",
-        hjust = 0,
-        vjust = 0.5
+        size = 0.9,
+        alpha = 0.9
       )
   }
 
@@ -356,6 +340,29 @@ make_gene_track <- function(chr, start, end, highlight_gene) {
     theme(plot.margin = margin(0, 2, 2, 2))
 }
 
+make_distance_track <- function(start, end, origin, step_bp = 500000L) {
+  # Simple "distance from origin" track (e.g., -2000kb ... 0 ... +2000kb)
+  # that sits above the gene annotation.
+  start <- as.integer(start)
+  end <- as.integer(end)
+  origin <- as.integer(origin)
+
+  offsets <- seq(from = start - origin, to = end - origin, by = step_bp)
+  ticks <- tibble(
+    x = origin + offsets,
+    label = ifelse(offsets == 0, "0", sprintf("%+dkb", as.integer(offsets / 1000)))
+  ) %>%
+    filter(x >= start, x <= end)
+
+  ggplot() +
+    geom_segment(aes(x = start, xend = end, y = 0, yend = 0), linewidth = 0.35, color = "black") +
+    geom_segment(data = ticks, aes(x = x, xend = x, y = 0, yend = 0.18), linewidth = 0.35, color = "black") +
+    geom_text(data = ticks, aes(x = x, y = 0.35, label = label), size = 2.6, color = "black") +
+    coord_cartesian(xlim = c(start, end), ylim = c(-0.1, 0.55), expand = FALSE) +
+    theme_void() +
+    theme(plot.margin = margin(0, 2, 0, 2))
+}
+
 clamp_region <- function(chr, start, end) {
   chr_end <- chrom_sizes$end[match(chr, chrom_sizes$chr)]
   if (is.na(chr_end)) stop("Unknown chr in chrom.sizes: ", chr)
@@ -378,12 +385,17 @@ for (i in seq_len(nrow(genes_of_interest))) {
 
   p_hic <- make_triangle_hic(g$chr, reg$start, reg$end, binsize, loops_df = loops_region)
   p_ctcf <- make_ctcf_track(g$chr, reg$start, reg$end)
+  p_dist <- make_distance_track(reg$start, reg$end, origin = mid, step_bp = 500000L)
   p_genes <- make_gene_track(g$chr, reg$start, reg$end, g$gene)
 
-  panel <- p_hic / p_ctcf / p_genes +
-    plot_layout(heights = c(7.0, 1.6, 2.2))
+  panel <- p_hic / p_ctcf / p_dist / p_genes +
+    plot_layout(heights = c(7.0, 1.6, 0.7, 2.2))
 
   out_pdf <- file.path(out_dir, sprintf("DA68A_%s_%s_%d_%d.pdf", g$gene, g$chr, reg$start, reg$end))
   ggsave(out_pdf, panel, width = 9.5, height = 7.2, units = "in", dpi = 300)
   message("Wrote: ", out_pdf)
+
+  out_png <- file.path(out_dir, sprintf("DA68A_%s_%s_%d_%d.png", g$gene, g$chr, reg$start, reg$end))
+  ggsave(out_png, panel, width = 9.5, height = 7.2, units = "in", dpi = 300, bg = "white")
+  message("Wrote: ", out_png)
 }
