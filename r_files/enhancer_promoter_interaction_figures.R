@@ -1484,3 +1484,99 @@ saving_combined_plot(
 
 combining_and_save_plots(plot.ctcf.hist, plot.tss.hist, plot.promoter.hist, "histogram_combined_all_ENSEMBL.png") # utils_functions.R
 combining_and_save_plots(plot.ctcf.dens, plot.tss.dens, plot.promoter.dens, "density_combined_all_ENSEMBL.png") # utils_functions.R
+
+################################################################################
+# CTCF Track Export (RDS -> bedGraph -> bigWig) for Figure Tracks
+# - Uses rn7 chromosome sizes from df.chromosome.data (cached earlier in this script)
+# - Produces a "histogram-like" signal by binning CTCF positions and counting hits
+# - Requires UCSC kent tool: bedGraphToBigWig (recommended install: `brew install kent-tools`)
+################################################################################
+
+cache_file_ctcf <- "../data/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
+
+# Fallback to the absolute path provided in chat if the repo-local cache isn't present.
+ctcf_rds_candidates <- c(
+    cache_file_ctcf,
+    "/Users/pete/Desktop/playground/enhancer/r_files/data/df.DISTINCT.fimo.2nd.trial.ctcf.rds",
+    "~/dropbox/Gateway_to_Hao/enhancer/r_files/data/df.DISTINCT.fimo.2nd.trial.ctcf.rds",
+    "~/dropbox/Gateway_to_Hao/enhancer/data/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
+)
+
+ctcf_rds_path <- ctcf_rds_candidates[file.exists(path.expand(ctcf_rds_candidates))][1]
+if (is.na(ctcf_rds_path) || !nzchar(ctcf_rds_path)) {
+    stop("CTCF .rds not found. Tried:\n  - ", paste(ctcf_rds_candidates, collapse = "\n  - "))
+}
+ctcf_rds_path <- path.expand(ctcf_rds_path)
+message("Loading CTCF from: ", ctcf_rds_path)
+
+df.ctcf <- readRDS(ctcf_rds_path)
+stopifnot(all(c("chr", "start", "end", "ctcf_pos", "id") %in% colnames(df.ctcf)))
+
+# Output paths (under ../data so other plotting tools can pick them up)
+track_out_dir <- "../data/tracks"
+dir.create(track_out_dir, showWarnings = FALSE, recursive = TRUE)
+
+rn7_chrom_sizes_path <- file.path(track_out_dir, "rn7.chrom.sizes")
+ctcf_prefix <- file.path(track_out_dir, "ctcf_density_5kb")
+ctcf_bedgraph_path <- paste0(ctcf_prefix, ".bedGraph")
+ctcf_sorted_bedgraph_path <- paste0(ctcf_prefix, ".sorted.bedGraph")
+ctcf_bigwig_path <- paste0(ctcf_prefix, ".bw")
+
+# Write rn7 chrom.sizes from cached df.chromosome.data (created earlier in this script)
+if (!exists("df.chromosome.data")) {
+    stop("df.chromosome.data is not available. Ensure earlier chromosome caching block has run.")
+}
+df.chrom.sizes <- df.chromosome.data %>%
+    dplyr::select(chr, end) %>%
+    mutate(chr = as.character(chr), end = as.integer(end)) %>%
+    filter(!is.na(chr), !is.na(end), end > 0) %>%
+    distinct() %>%
+    arrange(chr)
+
+readr::write_tsv(df.chrom.sizes, rn7_chrom_sizes_path, col_names = FALSE)
+message("Wrote chrom.sizes: ", rn7_chrom_sizes_path)
+
+# Create a binned density bedGraph (histogram-like)
+bin_size <- 5000L
+
+df.ctcf.bg <- df.ctcf %>%
+    mutate(
+        chr = as.character(chr),
+        start = as.integer(start),
+        end = as.integer(end),
+        ctcf_pos = as.integer(ctcf_pos)
+    ) %>%
+    filter(!is.na(chr), !is.na(ctcf_pos), ctcf_pos > 0) %>%
+    mutate(
+        # bedGraph uses 0-based start; we bin by ctcf_pos, so start is derived from bins directly.
+        bin_start = (ctcf_pos %/% bin_size) * bin_size,
+        bin_end = bin_start + bin_size
+    ) %>%
+    group_by(chr, bin_start, bin_end) %>%
+    summarise(score = dplyr::n(), .groups = "drop") %>%
+    arrange(chr, bin_start)
+
+readr::write_tsv(
+    df.ctcf.bg %>% transmute(chr, start = bin_start, end = bin_end, score),
+    ctcf_bedgraph_path,
+    col_names = FALSE
+)
+message("Wrote bedGraph: ", ctcf_bedgraph_path)
+
+# Sort and convert bedGraph -> bigWig (kent tools)
+system(sprintf("LC_ALL=C sort -k1,1 -k2,2n %s > %s",
+    shQuote(ctcf_bedgraph_path),
+    shQuote(ctcf_sorted_bedgraph_path)
+))
+message("Wrote sorted bedGraph: ", ctcf_sorted_bedgraph_path)
+
+if (Sys.which("bedGraphToBigWig") == "") {
+    message("Skipping bigWig export: bedGraphToBigWig not found on PATH. Install kent-tools (mac: `brew install kent-tools`).")
+} else {
+    system(sprintf("bedGraphToBigWig %s %s %s",
+        shQuote(ctcf_sorted_bedgraph_path),
+        shQuote(rn7_chrom_sizes_path),
+        shQuote(ctcf_bigwig_path)
+    ))
+    message("Wrote bigWig: ", ctcf_bigwig_path)
+}
