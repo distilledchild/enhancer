@@ -196,7 +196,7 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL) {
         aes(x = px, y = py),
         inherit.aes = FALSE,
         color = "black",
-        size = 0.65,
+        size = 0.78, # +20%
         alpha = 0.55
       )
   }
