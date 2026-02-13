@@ -175,11 +175,10 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL) {
 
   # Overlay loop markers (arrow + label) on the heatmap for a paper-like callout style.
   if (!is.null(loops_df) && nrow(loops_df) > 0) {
-    # Pick a modest number to avoid clutter.
+    # Show all loop dots (per preference). This can be dense, so use small size + alpha.
     loops_pick <- loops_df %>%
       mutate(span_bp = abs(centroid2 - centroid1), span_mb = span_bp / 1e6) %>%
       arrange(desc(observed)) %>%
-      slice_head(n = 80) %>%
       mutate(
         c1 = pmin(centroid1, centroid2),
         c2 = pmax(centroid1, centroid2)
@@ -197,8 +196,8 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL) {
         aes(x = px, y = py),
         inherit.aes = FALSE,
         color = "black",
-        size = 0.9,
-        alpha = 0.9
+        size = 0.65,
+        alpha = 0.55
       )
   }
 
@@ -340,19 +339,18 @@ make_gene_track <- function(chr, start, end, highlight_gene) {
     theme(plot.margin = margin(0, 2, 2, 2))
 }
 
-make_distance_track <- function(start, end, origin, step_bp = 500000L) {
-  # Simple "distance from origin" track (e.g., -2000kb ... 0 ... +2000kb)
-  # that sits above the gene annotation.
+make_coord_track <- function(start, end, step_bp = 250000L) {
+  # Genomic coordinate track (real coordinates) that sits above the gene annotation.
   start <- as.integer(start)
   end <- as.integer(end)
-  origin <- as.integer(origin)
+  step_bp <- as.integer(step_bp)
 
-  offsets <- seq(from = start - origin, to = end - origin, by = step_bp)
+  first_tick <- as.integer(ceiling(start / step_bp) * step_bp)
+  xs <- seq(from = first_tick, to = end, by = step_bp)
   ticks <- tibble(
-    x = origin + offsets,
-    label = ifelse(offsets == 0, "0", sprintf("%+dkb", as.integer(offsets / 1000)))
-  ) %>%
-    filter(x >= start, x <= end)
+    x = xs,
+    label = sprintf("%.2fMb", xs / 1e6)
+  )
 
   ggplot() +
     geom_segment(aes(x = start, xend = end, y = 0, yend = 0), linewidth = 0.35, color = "black") +
@@ -360,7 +358,8 @@ make_distance_track <- function(start, end, origin, step_bp = 500000L) {
     geom_text(data = ticks, aes(x = x, y = 0.35, label = label), size = 2.6, color = "black") +
     coord_cartesian(xlim = c(start, end), ylim = c(-0.1, 0.55), expand = FALSE) +
     theme_void() +
-    theme(plot.margin = margin(0, 2, 0, 2))
+    # Keep vertical whitespace tight so it sits close to the gene track below.
+    theme(plot.margin = margin(0, 2, -2, 2))
 }
 
 clamp_region <- function(chr, start, end) {
@@ -385,11 +384,11 @@ for (i in seq_len(nrow(genes_of_interest))) {
 
   p_hic <- make_triangle_hic(g$chr, reg$start, reg$end, binsize, loops_df = loops_region)
   p_ctcf <- make_ctcf_track(g$chr, reg$start, reg$end)
-  p_dist <- make_distance_track(reg$start, reg$end, origin = mid, step_bp = 500000L)
+  p_coord <- make_coord_track(reg$start, reg$end, step_bp = 250000L)
   p_genes <- make_gene_track(g$chr, reg$start, reg$end, g$gene)
 
-  panel <- p_hic / p_ctcf / p_dist / p_genes +
-    plot_layout(heights = c(7.0, 1.6, 0.7, 2.2))
+  panel <- p_hic / p_ctcf / p_coord / p_genes +
+    plot_layout(heights = c(7.0, 1.6, 0.45, 2.2))
 
   out_pdf <- file.path(out_dir, sprintf("DA68A_%s_%s_%d_%d.pdf", g$gene, g$chr, reg$start, reg$end))
   ggsave(out_pdf, panel, width = 9.5, height = 7.2, units = "in", dpi = 300)
