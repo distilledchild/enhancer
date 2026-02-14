@@ -51,7 +51,7 @@ genes_of_interest <- tibble::tribble(
 )
 
 binsize <- 5000L
-flank_bp <- 2000000L  # +/- 2Mb around gene midpoint
+flank_bp <- 1000000L  # zoom-in: keep middle 50% of previous window (4Mb -> 2Mb)
 norm_try <- c("KR", "NONE")  # try KR first, fall back to NONE
 hic_gamma <- 0.22  # smaller => darker (boosts low intensities after normalization)
 
