@@ -23,6 +23,7 @@ suppressPackageStartupMessages({
 hic_path <- "/Users/pete/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2023A/hic_analysis/juicer/DA68A/intact/DA68A_intact_inter_30.hic"
 ctcf_bedgraph_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/tracks/ctcf_density_5kb.sorted.bedGraph")
 loops_bedpe_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/loops/DA68A_intact_merged_loops_5k10k25k.bedpe")
+tad_bedpe_path <- path.expand("~/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2023A/hic_analysis/juicer/DA68A/intact/DA68A_intact_arrowhead/DA68A_intact_arrowhead_25000/25000_blocks.bedpe")
 gtf_path <- path.expand("~/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_refGene.gtf")
 chrom_sizes_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/tracks/rn7.chrom.sizes")
 
@@ -32,6 +33,7 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 stopifnot(file.exists(hic_path))
 stopifnot(file.exists(ctcf_bedgraph_path))
 stopifnot(file.exists(loops_bedpe_path))
+stopifnot(file.exists(tad_bedpe_path))
 stopifnot(file.exists(gtf_path))
 
 if (!file.exists(chrom_sizes_path)) {
@@ -69,7 +71,21 @@ read_loops <- function(path) {
     )
 }
 
+read_tads <- function(path) {
+  # Arrowhead blocks.bedpe has duplicated "score" column name in header comments.
+  cols <- c(
+    "chr1", "x1", "x2", "chr2", "y1", "y2", "name", "score1", "strand1", "strand2",
+    "color", "score2", "uVarScore", "lVarScore", "upSign", "loSign"
+  )
+  read_tsv(path, comment = "#", col_names = cols, show_col_types = FALSE) %>%
+    mutate(
+      chr1 = as.character(chr1), chr2 = as.character(chr2),
+      x1 = as.integer(x1), x2 = as.integer(x2), y1 = as.integer(y1), y2 = as.integer(y2)
+    )
+}
+
 loops_all <- read_loops(loops_bedpe_path)
+tads_all <- read_tads(tad_bedpe_path)
 ctcf_all <- read_tsv(ctcf_bedgraph_path, col_names = c("chr","start","end","score"), show_col_types = FALSE) %>%
   mutate(chr = as.character(chr), start = as.integer(start), end = as.integer(end), score = as.numeric(score))
 
@@ -125,7 +141,7 @@ annotate_target_related_loops <- function(df, gene_start, gene_end, strand) {
     )
 }
 
-make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL) {
+make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df = NULL) {
   loc <- sprintf("%s:%d:%d", chr, start, end)
 
   last_err <- NULL
@@ -186,6 +202,46 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL) {
       legend.text = element_text(size = 9, color = "black"),
       plot.margin = margin(2, 2, 0, 2)
     )
+
+  # Overlay TAD domains as thin triangular outlines (Arrowhead blocks).
+  if (!is.null(tads_df) && nrow(tads_df) > 0) {
+    tads_tri <- tads_df %>%
+      mutate(
+        s = pmin(x1, y1),
+        e = pmax(x2, y2),
+        sbin = (s - start) / binsize,
+        ebin = (e - start) / binsize
+      ) %>%
+      filter(is.finite(sbin), is.finite(ebin), ebin > sbin) %>%
+      transmute(
+        x_left = sbin,
+        y_left = 0,
+        x_apex = (sbin + ebin) / 2,
+        y_apex = (ebin - sbin) / 2,
+        x_right = ebin,
+        y_right = 0
+      )
+
+    if (nrow(tads_tri) > 0) {
+      p <- p +
+        geom_segment(
+          data = tads_tri,
+          aes(x = x_left, y = y_left, xend = x_apex, yend = y_apex),
+          inherit.aes = FALSE,
+          color = "#00a89d",
+          linewidth = 0.25,
+          alpha = 0.45
+        ) +
+        geom_segment(
+          data = tads_tri,
+          aes(x = x_apex, y = y_apex, xend = x_right, yend = y_right),
+          inherit.aes = FALSE,
+          color = "#00a89d",
+          linewidth = 0.25,
+          alpha = 0.45
+        )
+    }
+  }
 
   # Overlay loop markers (arrow + label) on the heatmap for a paper-like callout style.
   if (!is.null(loops_df) && nrow(loops_df) > 0) {
@@ -402,7 +458,13 @@ for (i in seq_len(nrow(genes_of_interest))) {
     strand = g$strand
   )
 
-  p_hic <- make_triangle_hic(g$chr, reg$start, reg$end, binsize, loops_df = loops_region)
+  # TADs from Arrowhead blocks (25kb), intrachromosomal domains in region.
+  tads_region <- tads_all %>%
+    filter(chr1 == !!g$chr, chr2 == !!g$chr) %>%
+    filter(x1 == y1, x2 == y2) %>%
+    filter(x2 >= reg$start, x1 <= reg$end)
+
+  p_hic <- make_triangle_hic(g$chr, reg$start, reg$end, binsize, loops_df = loops_region, tads_df = tads_region)
   p_ctcf <- make_ctcf_track(g$chr, reg$start, reg$end)
   p_coord <- make_coord_track(reg$start, reg$end, step_bp = 250000L)
   p_genes <- make_gene_track(g$chr, reg$start, reg$end, g$gene)
