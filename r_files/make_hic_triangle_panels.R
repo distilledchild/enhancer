@@ -111,6 +111,20 @@ compute_triangle_coords <- function(pos1, pos2, region_start, binsize) {
   list(px = px, py = py)
 }
 
+# Mark loop as target-related if either anchor overlaps target gene body or TSS.
+annotate_target_related_loops <- function(df, gene_start, gene_end, strand) {
+  if (is.null(df) || nrow(df) == 0) return(df)
+  tss <- ifelse(strand == "-", gene_end, gene_start)
+  df %>%
+    mutate(
+      anchor1_overlap_gene = (x1 <= gene_end) & (x2 >= gene_start),
+      anchor2_overlap_gene = (y1 <= gene_end) & (y2 >= gene_start),
+      anchor1_has_tss = (x1 <= tss) & (x2 >= tss),
+      anchor2_has_tss = (y1 <= tss) & (y2 >= tss),
+      is_target_related = anchor1_overlap_gene | anchor2_overlap_gene | anchor1_has_tss | anchor2_has_tss
+    )
+}
+
 make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL) {
   loc <- sprintf("%s:%d:%d", chr, start, end)
 
@@ -195,7 +209,7 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL) {
         data = loops_pick,
         aes(x = px, y = py),
         inherit.aes = FALSE,
-        color = "black",
+        color = ifelse(loops_pick$is_target_related, "#2c7fb8", "black"),
         size = 0.78, # +20%
         alpha = 0.55
       )
@@ -381,6 +395,12 @@ for (i in seq_len(nrow(genes_of_interest))) {
   loops_region <- loops_all %>%
     filter(chr1 == !!g$chr, chr2 == !!g$chr) %>%
     filter(pmin(centroid1, centroid2) >= reg$start, pmax(centroid1, centroid2) <= reg$end)
+  loops_region <- annotate_target_related_loops(
+    loops_region,
+    gene_start = g$gene_start,
+    gene_end = g$gene_end,
+    strand = g$strand
+  )
 
   p_hic <- make_triangle_hic(g$chr, reg$start, reg$end, binsize, loops_df = loops_region)
   p_ctcf <- make_ctcf_track(g$chr, reg$start, reg$end)
