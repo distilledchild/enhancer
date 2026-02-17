@@ -228,7 +228,7 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
           data = tads_tri,
           aes(x = x_left, y = y_left, xend = x_apex, yend = y_apex),
           inherit.aes = FALSE,
-          color = "#00a89d",
+          color = "#2ca25f",
           linewidth = 0.25,
           alpha = 0.45
         ) +
@@ -236,7 +236,7 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
           data = tads_tri,
           aes(x = x_apex, y = y_apex, xend = x_right, yend = y_right),
           inherit.aes = FALSE,
-          color = "#00a89d",
+          color = "#2ca25f",
           linewidth = 0.25,
           alpha = 0.45
         )
