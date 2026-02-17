@@ -24,6 +24,7 @@ hic_path <- "/Users/pete/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2023A/hic_anal
 ctcf_bedgraph_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/tracks/ctcf_density_5kb.sorted.bedGraph")
 loops_bedpe_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/loops/DA68A_intact_merged_loops_5k10k25k.bedpe")
 tad_bedpe_path <- path.expand("~/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2023A/hic_analysis/juicer/DA68A/intact/DA68A_intact_arrowhead/DA68A_intact_arrowhead_25000/25000_blocks.bedpe")
+tad_bedpe_path_50kb <- path.expand("~/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2023A/hic_analysis/juicer/DA68A/intact/DA68A_intact_arrowhead/DA68A_intact_arrowhead_50000/50000_blocks.bedpe")
 gtf_path <- path.expand("~/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_refGene.gtf")
 chrom_sizes_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/tracks/rn7.chrom.sizes")
 
@@ -34,6 +35,7 @@ stopifnot(file.exists(hic_path))
 stopifnot(file.exists(ctcf_bedgraph_path))
 stopifnot(file.exists(loops_bedpe_path))
 stopifnot(file.exists(tad_bedpe_path))
+stopifnot(file.exists(tad_bedpe_path_50kb))
 stopifnot(file.exists(gtf_path))
 
 if (!file.exists(chrom_sizes_path)) {
@@ -86,6 +88,7 @@ read_tads <- function(path) {
 
 loops_all <- read_loops(loops_bedpe_path)
 tads_all <- read_tads(tad_bedpe_path)
+tads_all_50kb <- read_tads(tad_bedpe_path_50kb)
 ctcf_all <- read_tsv(ctcf_bedgraph_path, col_names = c("chr","start","end","score"), show_col_types = FALSE) %>%
   mutate(chr = as.character(chr), start = as.integer(start), end = as.integer(end), score = as.numeric(score))
 
@@ -479,4 +482,24 @@ for (i in seq_len(nrow(genes_of_interest))) {
   out_png <- file.path(out_dir, sprintf("DA68A_%s_%s_%d_%d.png", g$gene, g$chr, reg$start, reg$end))
   ggsave(out_png, panel, width = 9.5, height = 7.2, units = "in", dpi = 300, bg = "white")
   message("Wrote: ", out_png)
+
+  # Add one comparison panel with 50kb TAD annotation (requested: one extra panel).
+  if (g$gene == "Tgfb2") {
+    tads_region_50kb <- tads_all_50kb %>%
+      filter(chr1 == !!g$chr, chr2 == !!g$chr) %>%
+      filter(x1 == y1, x2 == y2) %>%
+      filter(x2 >= reg$start, x1 <= reg$end)
+
+    p_hic_50kb <- make_triangle_hic(g$chr, reg$start, reg$end, binsize, loops_df = loops_region, tads_df = tads_region_50kb)
+    panel_50kb <- p_hic_50kb / p_ctcf / p_coord / p_genes +
+      plot_layout(heights = c(7.0, 1.6, 0.45, 2.2))
+
+    out_pdf_50kb <- file.path(out_dir, sprintf("DA68A_%s_%s_%d_%d_TAD50kb.pdf", g$gene, g$chr, reg$start, reg$end))
+    ggsave(out_pdf_50kb, panel_50kb, width = 9.5, height = 7.2, units = "in", dpi = 300)
+    message("Wrote: ", out_pdf_50kb)
+
+    out_png_50kb <- file.path(out_dir, sprintf("DA68A_%s_%s_%d_%d_TAD50kb.png", g$gene, g$chr, reg$start, reg$end))
+    ggsave(out_png_50kb, panel_50kb, width = 9.5, height = 7.2, units = "in", dpi = 300, bg = "white")
+    message("Wrote: ", out_png_50kb)
+  }
 }
