@@ -316,24 +316,30 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
     loops_pick <- loops_pick %>%
       mutate(
         is_highlight = loop_color != "black",
-        inner_color = ifelse(loop_color == "black", "#111111", loop_color),
-        outer_size = ifelse(is_highlight, 1.35, 0.95),
-        inner_size = ifelse(is_highlight, 0.95, 0.62),
-        point_alpha = ifelse(is_highlight, 0.95, 0.60)
+        point_fill = case_when(
+          loop_color == "#2c7fb8" ~ "#00d5e6",  # DA68-related: cyan fill
+          loop_color == "#c7a0ff" ~ "#c7a0ff",  # added related: keep light purple fill
+          TRUE ~ "#111111"
+        ),
+        point_border = case_when(
+          loop_color == "#2c7fb8" ~ "#0b3c8a",  # dark blue border
+          loop_color == "#c7a0ff" ~ "#5b2a86",  # dark purple border
+          TRUE ~ "#111111"
+        ),
+        point_size = ifelse(is_highlight, 1.55, 1.00),
+        point_alpha = ifelse(is_highlight, 0.95, 0.65),
+        point_stroke = ifelse(is_highlight, 0.55, 0.25)
       )
 
     p <- p +
       geom_point(
         data = loops_pick,
-        aes(x = px, y = py, size = outer_size, alpha = point_alpha),
+        aes(x = px, y = py, size = point_size, alpha = point_alpha),
         inherit.aes = FALSE,
-        color = "black"
-      ) +
-      geom_point(
-        data = loops_pick,
-        aes(x = px, y = py, size = inner_size, alpha = point_alpha),
-        inherit.aes = FALSE,
-        color = loops_pick$inner_color
+        shape = 21,
+        stroke = loops_pick$point_stroke,
+        fill = loops_pick$point_fill,
+        color = loops_pick$point_border
       ) +
       scale_size_identity() +
       scale_alpha_identity()
@@ -349,20 +355,20 @@ add_aux_loop_legend <- function(p, start, end, binsize, n_blue = NA_integer_, n_
   y0 <- y_max * 0.92
   dy <- y_max * 0.05
   blue_label <- if (is.na(n_blue)) {
-    "Related in main panel"
+    "Loops annotated in DA68"
   } else {
-    sprintf("Related in main panel (%d)", as.integer(n_blue))
+    sprintf("Loops annotated in DA68 (%d)", as.integer(n_blue))
   }
   purple_label <- if (is.na(n_purple)) {
-    "Added related"
+    "Loops annotated in other samples"
   } else {
-    sprintf("Added related (%d)", as.integer(n_purple))
+    sprintf("Loops annotated in other samples (%d)", as.integer(n_purple))
   }
 
   p +
-    annotate("point", x = x0, y = y0, color = "#2c7fb8", size = 2.3, alpha = 0.9) +
+    annotate("point", x = x0, y = y0, shape = 21, fill = "#00d5e6", color = "#0b3c8a", stroke = 0.7, size = 2.6, alpha = 0.95) +
     annotate("text", x = x0 + (end - start) * 0.02, y = y0, label = blue_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black") +
-    annotate("point", x = x0, y = y0 - dy, color = "#c7a0ff", size = 2.3, alpha = 0.95) +
+    annotate("point", x = x0, y = y0 - dy, shape = 21, fill = "#c7a0ff", color = "#5b2a86", stroke = 0.7, size = 2.6, alpha = 0.95) +
     annotate("text", x = x0 + (end - start) * 0.02, y = y0 - dy, label = purple_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black")
 }
 
