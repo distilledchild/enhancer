@@ -100,8 +100,20 @@ ctcf_all <- read_tsv(ctcf_bedgraph_path, col_names = c("chr","start","end","scor
 gene_loop_map_raw <- readRDS(gene_loop_map_rds_path) %>%
   as_tibble() %>%
   filter(!is.na(gene_name), !is.na(loop.id)) %>%
-  mutate(gene_key = tolower(gene_name)) %>%
-  distinct(gene_key, loop.id)
+  mutate(
+    gene_key = tolower(gene_name),
+    chr1 = as.character(chr1),
+    chr2 = as.character(chr2),
+    x1 = as.integer(x1),
+    x2 = as.integer(x2),
+    y1 = as.integer(y1),
+    y2 = as.integer(y2),
+    centroid1 = as.integer((x1 + x2) / 2),
+    centroid2 = as.integer((y1 + y2) / 2),
+    loop_left = pmin(centroid1, centroid2),
+    loop_right = pmax(centroid1, centroid2)
+  ) %>%
+  distinct(gene_key, loop.id, .keep_all = TRUE)
 
 gene_to_loop_ids <- gene_loop_map_raw %>%
   group_by(gene_key) %>%
@@ -273,12 +285,17 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
       filter(is.finite(px), is.finite(py), py >= 0)
 
     # Professor preference: show loop location with black dots only (no arrows/labels).
+    if (!("loop_color" %in% colnames(loops_pick))) {
+      loops_pick <- loops_pick %>%
+        mutate(loop_color = ifelse(is_target_related, "#2c7fb8", "black"))
+    }
+
     p <- p +
       geom_point(
         data = loops_pick,
         aes(x = px, y = py),
         inherit.aes = FALSE,
-        color = ifelse(loops_pick$is_target_related, "#2c7fb8", "black"),
+        color = loops_pick$loop_color,
         size = 0.78, # +20%
         alpha = 0.55
       )
@@ -468,13 +485,24 @@ for (i in seq_len(nrow(genes_of_interest))) {
   gene_key_target <- tolower(g$gene)
   related_tbl <- gene_to_loop_ids %>% filter(gene_key == !!gene_key_target)
   related_loop_ids <- if (nrow(related_tbl) == 0) character() else related_tbl$loop_ids[[1]]
+  related_loops_gene <- gene_loop_map_raw %>%
+    filter(gene_key == !!gene_key_target, chr1 == !!g$chr, chr2 == !!g$chr)
 
   loops_region <- annotate_target_related_loops(
     loops_region,
     related_loop_ids = related_loop_ids
   )
-  n_related_in_window <- sum(loops_region$is_target_related, na.rm = TRUE)
-  n_related_total <- if (nrow(related_tbl) == 0) 0L else related_tbl$n_related_total[[1]]
+  loops_region <- loops_region %>%
+    mutate(loop_color = ifelse(is_target_related, "#2c7fb8", "black"))
+  n_related_in_window <- loops_region %>%
+    filter(is_target_related) %>%
+    summarise(n = n_distinct(loop.id)) %>%
+    pull(n)
+  n_related_total <- if (nrow(related_tbl) == 0) 0L else as.integer(related_tbl$n_related_total[[1]])
+  visible_related_ids_main <- loops_region %>%
+    filter(is_target_related) %>%
+    distinct(loop.id) %>%
+    pull(loop.id)
   message(
     "[loop-map] ", g$gene,
     " related loops total=", n_related_total,
@@ -502,6 +530,72 @@ for (i in seq_len(nrow(genes_of_interest))) {
   out_png <- file.path(out_dir, sprintf("DA68A_%s_%s_%d_%d.png", g$gene, g$chr, reg$start, reg$end))
   ggsave(out_png, panel, width = 9.5, height = 7.2, units = "in", dpi = 300, bg = "white")
   message("Wrote: ", out_png)
+
+  # AUX figure: expand window to include all target-related loops.
+  if (length(related_loop_ids) > 0) {
+    if (nrow(related_loops_gene) > 0) {
+      aux_start_raw <- min(c(reg$start, related_loops_gene$loop_left), na.rm = TRUE)
+      aux_end_raw <- max(c(reg$end, related_loops_gene$loop_right), na.rm = TRUE)
+      reg_aux <- clamp_region(g$chr, aux_start_raw, aux_end_raw)
+
+      loops_aux <- loops_all %>%
+        filter(chr1 == !!g$chr, chr2 == !!g$chr) %>%
+        filter(pmin(centroid1, centroid2) >= reg_aux$start, pmax(centroid1, centroid2) <= reg_aux$end) %>%
+        annotate_target_related_loops(related_loop_ids = related_loop_ids) %>%
+        mutate(
+          in_main_window = (pmin(centroid1, centroid2) >= reg$start) & (pmax(centroid1, centroid2) <= reg$end),
+          added_for_aux = loop.id %in% setdiff(related_loop_ids, visible_related_ids_main),
+          loop_color = case_when(
+            is_target_related & added_for_aux ~ "#c7a0ff",   # light purple: loops not shown in main panel
+            is_target_related & !added_for_aux ~ "#2c7fb8",  # blue: loops already shown in main panel
+            TRUE ~ "black"
+          )
+        )
+      added_related_ids <- setdiff(related_loop_ids, visible_related_ids_main)
+      related_aux_map_only <- related_loops_gene %>%
+        filter(loop.id %in% added_related_ids) %>%
+        filter(loop_left >= reg_aux$start, loop_right <= reg_aux$end) %>%
+        filter(!(loop.id %in% loops_aux$loop.id)) %>%
+        mutate(
+          is_target_related = TRUE,
+          in_main_window = (loop_left >= reg$start) & (loop_right <= reg$end),
+          added_for_aux = TRUE,
+          loop_color = "#c7a0ff"
+        )
+      if (nrow(related_aux_map_only) > 0) {
+        loops_aux <- bind_rows(loops_aux, related_aux_map_only)
+      }
+
+      n_related_aux <- length(unique(related_loop_ids))
+      n_related_purple <- length(unique(added_related_ids))
+      message(
+        "[aux-loop-map] ", g$gene,
+        " related in-aux=", n_related_aux,
+        ", added(light-purple)=", n_related_purple
+      )
+
+      tads_aux <- tads_all %>%
+        filter(chr1 == !!g$chr, chr2 == !!g$chr) %>%
+        filter(x1 == y1, x2 == y2) %>%
+        filter(x2 >= reg_aux$start, x1 <= reg_aux$end)
+
+      p_hic_aux <- make_triangle_hic(g$chr, reg_aux$start, reg_aux$end, binsize, loops_df = loops_aux, tads_df = tads_aux)
+      p_ctcf_aux <- make_ctcf_track(g$chr, reg_aux$start, reg_aux$end)
+      p_coord_aux <- make_coord_track(reg_aux$start, reg_aux$end, step_bp = 250000L)
+      p_genes_aux <- make_gene_track(g$chr, reg_aux$start, reg_aux$end, g$gene)
+
+      panel_aux <- p_hic_aux / p_ctcf_aux / p_coord_aux / p_genes_aux +
+        plot_layout(heights = c(7.0, 1.6, 0.45, 2.2))
+
+      out_pdf_aux <- file.path(out_dir, sprintf("aux_DA68A_%s_%s_%d_%d.pdf", g$gene, g$chr, reg_aux$start, reg_aux$end))
+      ggsave(out_pdf_aux, panel_aux, width = 9.5, height = 7.2, units = "in", dpi = 300)
+      message("Wrote: ", out_pdf_aux)
+
+      out_png_aux <- file.path(out_dir, sprintf("aux_DA68A_%s_%s_%d_%d.png", g$gene, g$chr, reg_aux$start, reg_aux$end))
+      ggsave(out_png_aux, panel_aux, width = 9.5, height = 7.2, units = "in", dpi = 300, bg = "white")
+      message("Wrote: ", out_png_aux)
+    }
+  }
 
   # Add one comparison panel with 50kb TAD annotation (requested: one extra panel).
   if (g$gene == "Tgfb2") {
