@@ -304,19 +304,29 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
   p
 }
 
-add_aux_loop_legend <- function(p, start, end, binsize) {
+add_aux_loop_legend <- function(p, start, end, binsize, n_blue = NA_integer_, n_purple = NA_integer_) {
   x_max <- (end - start) / binsize
   y_max <- x_max / 2
 
   x0 <- x_max * 0.03
   y0 <- y_max * 0.92
   dy <- y_max * 0.05
+  blue_label <- if (is.na(n_blue)) {
+    "Related in main panel"
+  } else {
+    sprintf("Related in main panel (%d)", as.integer(n_blue))
+  }
+  purple_label <- if (is.na(n_purple)) {
+    "Added related"
+  } else {
+    sprintf("Added related (%d)", as.integer(n_purple))
+  }
 
   p +
     annotate("point", x = x0, y = y0, color = "#2c7fb8", size = 2.3, alpha = 0.9) +
-    annotate("text", x = x0 + x_max * 0.02, y = y0, label = "Related in main panel", hjust = 0, vjust = 0.5, size = 2.8, color = "black") +
+    annotate("text", x = x0 + x_max * 0.02, y = y0, label = blue_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black") +
     annotate("point", x = x0, y = y0 - dy, color = "#c7a0ff", size = 2.3, alpha = 0.95) +
-    annotate("text", x = x0 + x_max * 0.02, y = y0 - dy, label = "Added related (aux)", hjust = 0, vjust = 0.5, size = 2.8, color = "black")
+    annotate("text", x = x0 + x_max * 0.02, y = y0 - dy, label = purple_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black")
 }
 
 make_ctcf_track <- function(chr, start, end) {
@@ -595,7 +605,13 @@ for (i in seq_len(nrow(genes_of_interest))) {
         filter(x2 >= reg_aux$start, x1 <= reg_aux$end)
 
       p_hic_aux <- make_triangle_hic(g$chr, reg_aux$start, reg_aux$end, binsize, loops_df = loops_aux, tads_df = tads_aux)
-      p_hic_aux <- add_aux_loop_legend(p_hic_aux, reg_aux$start, reg_aux$end, binsize)
+      n_blue <- length(unique(visible_related_ids_main))
+      n_purple <- length(unique(added_related_ids))
+      p_hic_aux <- add_aux_loop_legend(
+        p_hic_aux, reg_aux$start, reg_aux$end, binsize,
+        n_blue = n_blue,
+        n_purple = n_purple
+      )
       p_ctcf_aux <- make_ctcf_track(g$chr, reg_aux$start, reg_aux$end)
       p_coord_aux <- make_coord_track(reg_aux$start, reg_aux$end, step_bp = 250000L)
       p_genes_aux <- make_gene_track(g$chr, reg_aux$start, reg_aux$end, g$gene)
