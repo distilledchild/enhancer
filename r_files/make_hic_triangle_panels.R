@@ -217,12 +217,12 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
     mutate(
       z = ifelse(is.na(z), 0, z),
       px = start + ((ibin + jbin) / 2) * binsize,
-      py = (jbin - ibin) / 2
+      py = ((jbin - ibin) / 2) * binsize
     )
 
   p <- ggplot(tri_grid, aes(px, py, fill = z)) +
     # Use tiles (px/py are on a regular 0.5-grid; raster warns about uneven spacing).
-    geom_tile(width = 1, height = 1) +
+    geom_tile(width = binsize, height = binsize) +
     scale_fill_gradientn(
       # Faster ramp to strong reds (matches typical Capture-C/Hi-C figure feel)
       colors = c("#ffffff", "#fee5d9", "#fcae91", "#fb6a4a", "#de2d26", "#a50f15"),
@@ -231,7 +231,11 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
       oob = scales::squish,
       name = NULL
     ) +
-    coord_fixed(xlim = c(start, end), expand = FALSE) +
+    coord_fixed(
+      xlim = c(start, end),
+      ylim = c(0, (end - start) / 2),
+      expand = FALSE
+    ) +
     theme_void() +
     theme(
       legend.position = "right",
@@ -259,7 +263,7 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
         x_left = start + sbin * binsize,
         y_left = 0,
         x_apex = start + ((sbin + ebin) / 2) * binsize,
-        y_apex = (ebin - sbin) / 2,
+        y_apex = ((ebin - sbin) / 2) * binsize,
         x_right = start + ebin * binsize,
         y_right = 0
       )
@@ -300,7 +304,7 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
     loops_pick <- loops_pick %>%
       mutate(
         px = start + coords$px * binsize,
-        py = coords$py
+        py = coords$py * binsize
       ) %>%
       filter(is.finite(px), is.finite(py), py >= 0)
 
@@ -339,7 +343,7 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
 }
 
 add_aux_loop_legend <- function(p, start, end, binsize, n_blue = NA_integer_, n_purple = NA_integer_) {
-  y_max <- ((end - start) / binsize) / 2
+  y_max <- (end - start) / 2
 
   x0 <- start + (end - start) * 0.03
   y0 <- y_max * 0.92
