@@ -207,7 +207,20 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
       z = pmin(z, 4)
     )
 
-  p <- ggplot(tri, aes(px, py, fill = z)) +
+  # Fill missing bins in the upper triangle so expanded x-range still renders
+  # a complete triangular heatmap instead of sparse "islands".
+  i_vals <- seq(min(tri$i, na.rm = TRUE), max(tri$i, na.rm = TRUE), by = 1)
+  j_vals <- seq(min(tri$j, na.rm = TRUE), max(tri$j, na.rm = TRUE), by = 1)
+  tri_grid <- tidyr::expand_grid(i = i_vals, j = j_vals) %>%
+    filter(j >= i) %>%
+    left_join(tri %>% select(i, j, z), by = c("i", "j")) %>%
+    mutate(
+      z = ifelse(is.na(z), 0, z),
+      px = (i + j) / 2,
+      py = (j - i) / 2
+    )
+
+  p <- ggplot(tri_grid, aes(px, py, fill = z)) +
     # Use tiles (px/py are on a regular 0.5-grid; raster warns about uneven spacing).
     geom_tile(width = 1, height = 1) +
     scale_fill_gradientn(
@@ -289,16 +302,30 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
       loops_pick <- loops_pick %>%
         mutate(loop_color = ifelse(is_target_related, "#2c7fb8", "black"))
     }
+    loops_pick <- loops_pick %>%
+      mutate(
+        is_highlight = loop_color != "black",
+        inner_color = ifelse(loop_color == "black", "#111111", loop_color),
+        outer_size = ifelse(is_highlight, 1.35, 0.95),
+        inner_size = ifelse(is_highlight, 0.95, 0.62),
+        point_alpha = ifelse(is_highlight, 0.95, 0.60)
+      )
 
     p <- p +
       geom_point(
         data = loops_pick,
-        aes(x = px, y = py),
+        aes(x = px, y = py, size = outer_size, alpha = point_alpha),
         inherit.aes = FALSE,
-        color = loops_pick$loop_color,
-        size = 0.78, # +20%
-        alpha = 0.55
-      )
+        color = "black"
+      ) +
+      geom_point(
+        data = loops_pick,
+        aes(x = px, y = py, size = inner_size, alpha = point_alpha),
+        inherit.aes = FALSE,
+        color = loops_pick$inner_color
+      ) +
+      scale_size_identity() +
+      scale_alpha_identity()
   }
 
   p
