@@ -289,7 +289,8 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
     }
   }
 
-  # Overlay loop markers (arrow + label) on the heatmap for a paper-like callout style.
+  # Loop dots are drawn from panel loop table (loops_df).
+  # In this script, loops_df is built from DA68 bedpe (+ optional aux add-ins).
   if (!is.null(loops_df) && nrow(loops_df) > 0) {
     # Show all loop dots (per preference). This can be dense, so use small size + alpha.
     loops_pick <- loops_df %>%
@@ -308,7 +309,10 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
       ) %>%
       filter(is.finite(px), is.finite(py), py >= 0)
 
-    # Professor preference: show loop location with black dots only (no arrows/labels).
+    # Category style:
+    # - DA68 target-related: cyan fill + dark-blue border (largest; must stay visible)
+    # - Related in other samples: light-purple fill + dark-purple border
+    # - Other DA68 loops: black
     if (!("loop_color" %in% colnames(loops_pick))) {
       loops_pick <- loops_pick %>%
         mutate(loop_color = ifelse(is_target_related, "#2c7fb8", "black"))
@@ -573,6 +577,9 @@ for (i in seq_len(nrow(genes_of_interest))) {
   related_loops_gene <- gene_loop_map_raw %>%
     filter(gene_key == !!gene_key_target, chr1 == !!g$chr, chr2 == !!g$chr)
 
+  # Source roles:
+  # - loops_all (DA68 bedpe): geometry shown in panel
+  # - gene_to_loop_ids (RDS): target-related membership for coloring/counts
   loops_region <- annotate_target_related_loops(
     loops_region,
     related_loop_ids = related_loop_ids
@@ -647,6 +654,9 @@ for (i in seq_len(nrow(genes_of_interest))) {
           added_for_aux = TRUE,
           loop_color = "#c7a0ff"
         )
+      # Why add this:
+      # some related loop.ids exist in mapping RDS but not in DA68 bedpe file.
+      # Keep them in aux panel as "other samples" so total related count is visible.
       if (nrow(related_aux_map_only) > 0) {
         loops_aux <- bind_rows(loops_aux, related_aux_map_only)
       }
