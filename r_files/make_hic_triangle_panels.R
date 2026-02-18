@@ -182,18 +182,20 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
     stop("Failed to fetch Hi-C data for ", loc, " (last error: ", if (!is.null(last_err)) last_err$message else "unknown", ")")
   }
 
+  nbin <- as.integer(floor((end - start) / binsize))
   tri <- mat %>%
     mutate(
-      i = (x - start) / binsize,
-      j = (y - start) / binsize
+      ibin = as.integer(round((x - start) / binsize)),
+      jbin = as.integer(round((y - start) / binsize))
     ) %>%
-    filter(i >= 0, j >= 0, j >= i) %>%
+    filter(ibin >= 0, jbin >= 0, ibin <= nbin, jbin <= nbin, jbin >= ibin) %>%
     mutate(
-      px = (i + j) / 2,
-      py = (j - i) / 2,
       # Match the paper-like "0-4" scale feel using log10.
       z = log10(counts + 1)
-    )
+    ) %>%
+    filter(is.finite(z), !is.na(z)) %>%
+    group_by(ibin, jbin) %>%
+    summarise(z = max(z, na.rm = TRUE), .groups = "drop")
 
   # Paper-like contrast: normalize by a high quantile, then apply gamma to boost low values.
   # This makes the heatmap much darker without losing dynamic range.
@@ -209,15 +211,13 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
 
   # Fill missing bins in the upper triangle so expanded x-range still renders
   # a complete triangular heatmap instead of sparse "islands".
-  i_vals <- seq(min(tri$i, na.rm = TRUE), max(tri$i, na.rm = TRUE), by = 1)
-  j_vals <- seq(min(tri$j, na.rm = TRUE), max(tri$j, na.rm = TRUE), by = 1)
-  tri_grid <- tidyr::expand_grid(i = i_vals, j = j_vals) %>%
-    filter(j >= i) %>%
-    left_join(tri %>% select(i, j, z), by = c("i", "j")) %>%
+  tri_grid <- tidyr::expand_grid(ibin = 0:nbin, jbin = 0:nbin) %>%
+    filter(jbin >= ibin) %>%
+    left_join(tri %>% select(ibin, jbin, z), by = c("ibin", "jbin")) %>%
     mutate(
       z = ifelse(is.na(z), 0, z),
-      px = (i + j) / 2,
-      py = (j - i) / 2
+      px = start + ((ibin + jbin) / 2) * binsize,
+      py = (jbin - ibin) / 2
     )
 
   p <- ggplot(tri_grid, aes(px, py, fill = z)) +
@@ -231,7 +231,7 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
       oob = scales::squish,
       name = NULL
     ) +
-    coord_fixed(expand = FALSE) +
+    coord_fixed(xlim = c(start, end), expand = FALSE) +
     theme_void() +
     theme(
       legend.position = "right",
@@ -247,16 +247,20 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
       mutate(
         s = pmin(x1, y1),
         e = pmax(x2, y2),
-        sbin = (s - start) / binsize,
-        ebin = (e - start) / binsize
+        sbin = as.integer(floor((s - start) / binsize)),
+        ebin = as.integer(ceiling((e - start) / binsize))
       ) %>%
-      filter(is.finite(sbin), is.finite(ebin), ebin > sbin) %>%
+      filter(is.finite(sbin), is.finite(ebin), ebin > sbin, sbin <= nbin, ebin >= 0) %>%
+      mutate(
+        sbin = pmax(0L, pmin(nbin, sbin)),
+        ebin = pmax(0L, pmin(nbin, ebin))
+      ) %>%
       transmute(
-        x_left = sbin,
+        x_left = start + sbin * binsize,
         y_left = 0,
-        x_apex = (sbin + ebin) / 2,
+        x_apex = start + ((sbin + ebin) / 2) * binsize,
         y_apex = (ebin - sbin) / 2,
-        x_right = ebin,
+        x_right = start + ebin * binsize,
         y_right = 0
       )
 
@@ -294,7 +298,10 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
 
     coords <- compute_triangle_coords(loops_pick$c1, loops_pick$c2, start, binsize)
     loops_pick <- loops_pick %>%
-      mutate(px = coords$px, py = coords$py) %>%
+      mutate(
+        px = start + coords$px * binsize,
+        py = coords$py
+      ) %>%
       filter(is.finite(px), is.finite(py), py >= 0)
 
     # Professor preference: show loop location with black dots only (no arrows/labels).
@@ -332,10 +339,9 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
 }
 
 add_aux_loop_legend <- function(p, start, end, binsize, n_blue = NA_integer_, n_purple = NA_integer_) {
-  x_max <- (end - start) / binsize
-  y_max <- x_max / 2
+  y_max <- ((end - start) / binsize) / 2
 
-  x0 <- x_max * 0.03
+  x0 <- start + (end - start) * 0.03
   y0 <- y_max * 0.92
   dy <- y_max * 0.05
   blue_label <- if (is.na(n_blue)) {
@@ -351,9 +357,9 @@ add_aux_loop_legend <- function(p, start, end, binsize, n_blue = NA_integer_, n_
 
   p +
     annotate("point", x = x0, y = y0, color = "#2c7fb8", size = 2.3, alpha = 0.9) +
-    annotate("text", x = x0 + x_max * 0.02, y = y0, label = blue_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black") +
+    annotate("text", x = x0 + (end - start) * 0.02, y = y0, label = blue_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black") +
     annotate("point", x = x0, y = y0 - dy, color = "#c7a0ff", size = 2.3, alpha = 0.95) +
-    annotate("text", x = x0 + x_max * 0.02, y = y0 - dy, label = purple_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black")
+    annotate("text", x = x0 + (end - start) * 0.02, y = y0 - dy, label = purple_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black")
 }
 
 make_ctcf_track <- function(chr, start, end) {
