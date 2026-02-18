@@ -316,6 +316,8 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
     loops_pick <- loops_pick %>%
       mutate(
         is_highlight = loop_color != "black",
+        is_da68_related = loop_color == "#2c7fb8",
+        is_other_sample_related = loop_color == "#c7a0ff",
         point_fill = case_when(
           loop_color == "#2c7fb8" ~ "#00d5e6",  # DA68-related: cyan fill
           loop_color == "#c7a0ff" ~ "#c7a0ff",  # added related: keep light purple fill
@@ -326,9 +328,17 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
           loop_color == "#c7a0ff" ~ "#5b2a86",  # dark purple border
           TRUE ~ "#111111"
         ),
-        point_size = ifelse(is_highlight, 1.55, 1.00),
+        point_size = case_when(
+          is_da68_related ~ 2.15,
+          is_other_sample_related ~ 1.75,
+          TRUE ~ 1.05
+        ),
         point_alpha = ifelse(is_highlight, 0.95, 0.65),
-        point_stroke = ifelse(is_highlight, 0.55, 0.25)
+        point_stroke = case_when(
+          is_da68_related ~ 0.70,
+          is_other_sample_related ~ 0.60,
+          TRUE ~ 0.25
+        )
       )
 
     p <- p +
@@ -348,7 +358,7 @@ make_triangle_hic <- function(chr, start, end, binsize, loops_df = NULL, tads_df
   p
 }
 
-add_aux_loop_legend <- function(p, start, end, binsize, n_blue = NA_integer_, n_purple = NA_integer_) {
+add_aux_loop_legend <- function(p, start, end, binsize, n_blue = NA_integer_, n_purple = NA_integer_, n_black = NA_integer_) {
   y_max <- (end - start) / 2
 
   x0 <- start + (end - start) * 0.03
@@ -364,12 +374,19 @@ add_aux_loop_legend <- function(p, start, end, binsize, n_blue = NA_integer_, n_
   } else {
     sprintf("Loops annotated in other samples (%d)", as.integer(n_purple))
   }
+  black_label <- if (is.na(n_black)) {
+    "Other DA68 loops (not target-related)"
+  } else {
+    sprintf("Other DA68 loops (not target-related) (%d)", as.integer(n_black))
+  }
 
   p +
     annotate("point", x = x0, y = y0, shape = 21, fill = "#00d5e6", color = "#0b3c8a", stroke = 0.7, size = 2.6, alpha = 0.95) +
     annotate("text", x = x0 + (end - start) * 0.02, y = y0, label = blue_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black") +
     annotate("point", x = x0, y = y0 - dy, shape = 21, fill = "#c7a0ff", color = "#5b2a86", stroke = 0.7, size = 2.6, alpha = 0.95) +
-    annotate("text", x = x0 + (end - start) * 0.02, y = y0 - dy, label = purple_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black")
+    annotate("text", x = x0 + (end - start) * 0.02, y = y0 - dy, label = purple_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black") +
+    annotate("point", x = x0, y = y0 - (2 * dy), shape = 21, fill = "#111111", color = "black", stroke = 0.4, size = 2.2, alpha = 0.85) +
+    annotate("text", x = x0 + (end - start) * 0.02, y = y0 - (2 * dy), label = black_label, hjust = 0, vjust = 0.5, size = 2.8, color = "black")
 }
 
 make_ctcf_track <- function(chr, start, end) {
@@ -650,10 +667,15 @@ for (i in seq_len(nrow(genes_of_interest))) {
       p_hic_aux <- make_triangle_hic(g$chr, reg_aux$start, reg_aux$end, binsize, loops_df = loops_aux, tads_df = tads_aux)
       n_blue <- length(unique(visible_related_ids_main))
       n_purple <- length(unique(added_related_ids))
+      n_black <- loops_aux %>%
+        filter(!is_target_related) %>%
+        summarise(n = n_distinct(loop.id)) %>%
+        pull(n)
       p_hic_aux <- add_aux_loop_legend(
         p_hic_aux, reg_aux$start, reg_aux$end, binsize,
         n_blue = n_blue,
-        n_purple = n_purple
+        n_purple = n_purple,
+        n_black = n_black
       )
       p_ctcf_aux <- make_ctcf_track(g$chr, reg_aux$start, reg_aux$end)
       p_coord_aux <- make_coord_track(reg_aux$start, reg_aux$end, step_bp = 250000L)
