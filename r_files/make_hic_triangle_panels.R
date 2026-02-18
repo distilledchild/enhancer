@@ -27,6 +27,7 @@ tad_bedpe_path <- path.expand("~/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2023A/
 tad_bedpe_path_50kb <- path.expand("~/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2023A/hic_analysis/juicer/DA68A/intact/DA68A_intact_arrowhead/DA68A_intact_arrowhead_50000/50000_blocks.bedpe")
 gtf_path <- path.expand("~/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_refGene.gtf")
 chrom_sizes_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/tracks/rn7.chrom.sizes")
+gene_loop_map_rds_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
 
 out_dir <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/figures/hic_panels")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
@@ -37,6 +38,7 @@ stopifnot(file.exists(loops_bedpe_path))
 stopifnot(file.exists(tad_bedpe_path))
 stopifnot(file.exists(tad_bedpe_path_50kb))
 stopifnot(file.exists(gtf_path))
+stopifnot(file.exists(gene_loop_map_rds_path))
 
 if (!file.exists(chrom_sizes_path)) {
   stop("chrom.sizes not found at: ", chrom_sizes_path, "\nCreate it from df.chromosome.data or rn7 TSV first.")
@@ -69,7 +71,9 @@ read_loops <- function(path) {
     mutate(
       chr1 = as.character(chr1), chr2 = as.character(chr2),
       x1 = as.integer(x1), x2 = as.integer(x2), y1 = as.integer(y1), y2 = as.integer(y2),
-      centroid1 = as.integer(centroid1), centroid2 = as.integer(centroid2)
+      centroid1 = as.integer(centroid1), centroid2 = as.integer(centroid2),
+      end.distance = as.integer(x2 - x1),
+      loop.id = str_c(chr1, "_", x1, "_", x2, "_", chr2, "_", y1, "_", y2, "_", end.distance)
     )
 }
 
@@ -91,6 +95,17 @@ tads_all <- read_tads(tad_bedpe_path)
 tads_all_50kb <- read_tads(tad_bedpe_path_50kb)
 ctcf_all <- read_tsv(ctcf_bedgraph_path, col_names = c("chr","start","end","score"), show_col_types = FALSE) %>%
   mutate(chr = as.character(chr), start = as.integer(start), end = as.integer(end), score = as.numeric(score))
+
+# Gene-loop mapping from enhancer_promoter_interaction pipeline (strict filtered result).
+gene_loop_map_raw <- readRDS(gene_loop_map_rds_path) %>%
+  as_tibble() %>%
+  filter(!is.na(gene_name), !is.na(loop.id)) %>%
+  mutate(gene_key = tolower(gene_name)) %>%
+  distinct(gene_key, loop.id)
+
+gene_to_loop_ids <- gene_loop_map_raw %>%
+  group_by(gene_key) %>%
+  summarise(loop_ids = list(unique(loop.id)), n_related_total = n_distinct(loop.id), .groups = "drop")
 
 pack_rows <- function(df, start_col = "start", end_col = "end") {
   # Greedy interval packing into rows (minimize overlaps).
@@ -130,17 +145,12 @@ compute_triangle_coords <- function(pos1, pos2, region_start, binsize) {
   list(px = px, py = py)
 }
 
-# Mark loop as target-related if either anchor overlaps target gene body or TSS.
-annotate_target_related_loops <- function(df, gene_start, gene_end, strand) {
+# Mark loop as target-related using loop.id mapping from enhancer_promoter_interaction.R results.
+annotate_target_related_loops <- function(df, related_loop_ids = character()) {
   if (is.null(df) || nrow(df) == 0) return(df)
-  tss <- ifelse(strand == "-", gene_end, gene_start)
   df %>%
     mutate(
-      anchor1_overlap_gene = (x1 <= gene_end) & (x2 >= gene_start),
-      anchor2_overlap_gene = (y1 <= gene_end) & (y2 >= gene_start),
-      anchor1_has_tss = (x1 <= tss) & (x2 >= tss),
-      anchor2_has_tss = (y1 <= tss) & (y2 >= tss),
-      is_target_related = anchor1_overlap_gene | anchor2_overlap_gene | anchor1_has_tss | anchor2_has_tss
+      is_target_related = loop.id %in% related_loop_ids
     )
 }
 
@@ -454,11 +464,21 @@ for (i in seq_len(nrow(genes_of_interest))) {
   loops_region <- loops_all %>%
     filter(chr1 == !!g$chr, chr2 == !!g$chr) %>%
     filter(pmin(centroid1, centroid2) >= reg$start, pmax(centroid1, centroid2) <= reg$end)
+
+  gene_key_target <- tolower(g$gene)
+  related_tbl <- gene_to_loop_ids %>% filter(gene_key == !!gene_key_target)
+  related_loop_ids <- if (nrow(related_tbl) == 0) character() else related_tbl$loop_ids[[1]]
+
   loops_region <- annotate_target_related_loops(
     loops_region,
-    gene_start = g$gene_start,
-    gene_end = g$gene_end,
-    strand = g$strand
+    related_loop_ids = related_loop_ids
+  )
+  n_related_in_window <- sum(loops_region$is_target_related, na.rm = TRUE)
+  n_related_total <- if (nrow(related_tbl) == 0) 0L else related_tbl$n_related_total[[1]]
+  message(
+    "[loop-map] ", g$gene,
+    " related loops total=", n_related_total,
+    ", in-window=", n_related_in_window
   )
 
   # TADs from Arrowhead blocks (25kb), intrachromosomal domains in region.
