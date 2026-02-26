@@ -713,7 +713,7 @@ df.final.up.down.directional.point.all.in.one.decision.200kb <- df.final.up.down
   # annotate("text", y = 1, x = stats_decision$Median, label = paste0("Median=", round(stats_decision$Median, 2)), vjust = -0.5, hjust = 1, color = "red") +
   # annotate("text", y = 1, x = stats_decision$Q3, label = paste0("Q3=", round(stats_decision$Q3, 2)), vjust = -0.5, hjust = 1, color = "blue") +
   labs(
-    title = "Density plot of distance between TSS/Promoter and anchor",
+    # title = "Density plot of distance between TSS/Promoter and anchor",
     y = "Distance"
   ) +
   # scale_y_log10() +
@@ -918,6 +918,162 @@ approach_2nd_analyze_loops_by_threshold(
   top_n_genes = 30,
   print_top_n = 80
 ) # utils_functions.R// final gprofiler top 30: https://biit.cs.ut.ee/gplink/l/aHWE_iUdCTy
+
+################################################################################
+# AlphaGenome input export for top genes (loop anchors + rn7 sequences)
+################################################################################
+ag_threshold_distance <- 200000
+ag_top_n_genes <- 54
+ag_output_dir <- "../data/alphagenome/top54_genes_loop_anchors_200kb"
+dir.create(ag_output_dir, recursive = TRUE, showWarnings = FALSE)
+
+ag_df_gene_ready <- df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
+  dplyr::rename(gene_id_id = gene_id) %>%
+  mutate(gene_symbol = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1))
+
+ag_top_genes <- ag_df_gene_ready %>%
+  filter(distance <= ag_threshold_distance) %>%
+  count(gene_symbol, sort = TRUE) %>%
+  slice_max(n, n = ag_top_n_genes, with_ties = FALSE) %>%
+  mutate(top_rank = row_number()) %>%
+  dplyr::rename(n_loops = n)
+
+readr::write_tsv(ag_top_genes, file.path(ag_output_dir, "top54_genes.tsv"))
+
+ag_gene_loop_map <- ag_df_gene_ready %>%
+  filter(distance <= ag_threshold_distance, gene_symbol %in% ag_top_genes$gene_symbol) %>%
+  distinct(gene_symbol, loop.id, .keep_all = TRUE) %>%
+  dplyr::select(gene_symbol, loop.id, distance, component, WHERE)
+
+ag_loop_coords <- parse_loop_id(unique(ag_gene_loop_map$loop.id)) %>% # utils_functions.R
+  dplyr::select(loop.id, chr1, x1, x2, chr2, y1, y2, end.distance)
+
+ag_gene_loop_wide <- ag_gene_loop_map %>%
+  left_join(ag_loop_coords, by = "loop.id") %>%
+  left_join(ag_top_genes, by = "gene_symbol") %>%
+  relocate(top_rank, gene_symbol, n_loops, loop.id, chr1, x1, x2, chr2, y1, y2, end.distance, .before = distance)
+
+readr::write_tsv(ag_gene_loop_wide, file.path(ag_output_dir, "top54_gene_loop_anchor_coordinates_wide.tsv"))
+
+ag_gene_loop_anchor_long <- bind_rows(
+  ag_gene_loop_wide %>%
+    transmute(
+      top_rank, gene_symbol, n_loops, loop.id, distance, component, WHERE,
+      anchor = "anchor1", chr = chr1, start0 = as.integer(x1), end = as.integer(x2), end.distance = as.integer(end.distance)
+    ),
+  ag_gene_loop_wide %>%
+    transmute(
+      top_rank, gene_symbol, n_loops, loop.id, distance, component, WHERE,
+      anchor = "anchor2", chr = chr2, start0 = as.integer(y1), end = as.integer(y2), end.distance = as.integer(end.distance)
+    )
+) %>%
+  mutate(
+    width = end - start0,
+    start1 = pmax(start0 + 1L, 1L), # BED-style start(0-based) -> 1-based for sequence extraction
+    record_id = str_c("gene=", gene_symbol, "|loop=", loop.id, "|anchor=", anchor)
+  ) %>%
+  arrange(top_rank, gene_symbol, loop.id, anchor)
+
+readr::write_tsv(ag_gene_loop_anchor_long, file.path(ag_output_dir, "top54_gene_loop_anchor_coordinates_long.tsv"))
+
+ag_unique_anchors <- ag_gene_loop_anchor_long %>%
+  distinct(chr, start0, end, start1, width, .keep_all = FALSE) %>%
+  mutate(anchor_uid = str_c(chr, ":", start0, "-", end))
+
+ag_unique_anchors_bed <- ag_unique_anchors %>%
+  transmute(chr = chr, start = start0, end = end, name = anchor_uid, score = 0, strand = ".")
+
+write.table(
+  ag_unique_anchors_bed,
+  file = file.path(ag_output_dir, "top54_anchor_coordinates_unique.bed"),
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE,
+  quote = FALSE
+)
+
+# Sequence extraction from rn7 FASTA (optional).
+# Priority:
+#   1) Sys.getenv("RN7_FASTA")
+#   2) ../data/rn7.fa
+#   3) ../data/rn7.fasta
+ag_fasta_candidates <- c(
+  Sys.getenv("RN7_FASTA", unset = ""),
+  "../data/rn7.fa",
+  "../data/rn7.fasta"
+)
+ag_fasta_candidates <- ag_fasta_candidates[nzchar(ag_fasta_candidates)]
+ag_fasta_candidates <- path.expand(ag_fasta_candidates)
+ag_fasta_existing <- ag_fasta_candidates[file.exists(ag_fasta_candidates)]
+
+if (length(ag_fasta_existing) == 0) {
+  message("[AlphaGenome] rn7 FASTA not found. Coordinate files were created, but sequence files were skipped.")
+  message("[AlphaGenome] Set RN7_FASTA env var (example): Sys.setenv(RN7_FASTA = '/absolute/path/to/rn7.fa')")
+} else if (!requireNamespace("Rsamtools", quietly = TRUE) || !requireNamespace("Biostrings", quietly = TRUE)) {
+  message("[AlphaGenome] Rsamtools/Biostrings package missing. Coordinate files were created, but sequence files were skipped.")
+} else {
+  ag_fasta_path <- ag_fasta_existing[[1]]
+  message("[AlphaGenome] Using rn7 FASTA: ", ag_fasta_path)
+
+  fa <- Rsamtools::FaFile(ag_fasta_path)
+  Rsamtools::open(fa)
+  fa_idx <- Rsamtools::scanFaIndex(fa)
+  fa_seqlevels <- unique(as.character(GenomicRanges::seqnames(fa_idx)))
+
+  ag_unique_anchors_for_fa <- ag_unique_anchors %>%
+    mutate(
+      chr_fa = case_when(
+        chr %in% fa_seqlevels ~ chr,
+        str_remove(chr, "^chr") %in% fa_seqlevels ~ str_remove(chr, "^chr"),
+        str_c("chr", chr) %in% fa_seqlevels ~ str_c("chr", chr),
+        TRUE ~ NA_character_
+      )
+    )
+
+  n_drop_chr <- ag_unique_anchors_for_fa %>%
+    filter(is.na(chr_fa)) %>%
+    nrow()
+  if (n_drop_chr > 0) {
+    message("[AlphaGenome] ", n_drop_chr, " anchors skipped due to chromosome name mismatch with FASTA index.")
+  }
+
+  ag_unique_anchors_for_fa <- ag_unique_anchors_for_fa %>%
+    filter(!is.na(chr_fa))
+
+  ag_gr <- GenomicRanges::GRanges(
+    seqnames = ag_unique_anchors_for_fa$chr_fa,
+    ranges = IRanges::IRanges(start = ag_unique_anchors_for_fa$start1, end = ag_unique_anchors_for_fa$end)
+  )
+  ag_seqs <- Rsamtools::scanFa(fa, param = ag_gr)
+  Rsamtools::close(fa)
+
+  ag_unique_anchor_sequences <- ag_unique_anchors_for_fa %>%
+    mutate(sequence = toupper(as.character(ag_seqs)))
+
+  readr::write_tsv(ag_unique_anchor_sequences, file.path(ag_output_dir, "top54_anchor_sequences_unique.tsv"))
+
+  ag_unique_fasta <- Biostrings::DNAStringSet(ag_unique_anchor_sequences$sequence)
+  names(ag_unique_fasta) <- ag_unique_anchor_sequences$anchor_uid
+  Biostrings::writeXStringSet(ag_unique_fasta, filepath = file.path(ag_output_dir, "top54_anchor_sequences_unique.fasta"), format = "fasta")
+
+  ag_gene_loop_anchor_sequences <- ag_gene_loop_anchor_long %>%
+    left_join(
+      ag_unique_anchor_sequences %>% dplyr::select(chr, start0, end, sequence),
+      by = c("chr", "start0", "end")
+    )
+
+  readr::write_tsv(ag_gene_loop_anchor_sequences, file.path(ag_output_dir, "top54_gene_loop_anchor_sequences.tsv"))
+
+  ag_gene_loop_anchor_sequences_for_fasta <- ag_gene_loop_anchor_sequences %>%
+    filter(!is.na(sequence))
+
+  ag_input_fasta <- Biostrings::DNAStringSet(ag_gene_loop_anchor_sequences_for_fasta$sequence)
+  names(ag_input_fasta) <- ag_gene_loop_anchor_sequences_for_fasta$record_id
+  Biostrings::writeXStringSet(ag_input_fasta, filepath = file.path(ag_output_dir, "alphagenome_input_top54_gene_loop_anchor.fasta"), format = "fasta")
+
+  message("[AlphaGenome] Export completed: ", ag_output_dir)
+  message("[AlphaGenome] Top genes: ", nrow(ag_top_genes), ", gene-loop pairs: ", nrow(ag_gene_loop_map), ", anchor rows: ", nrow(ag_gene_loop_anchor_long))
+}
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
   count(component) #  |     # 200kb
