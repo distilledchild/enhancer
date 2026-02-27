@@ -63,7 +63,20 @@ def parse_args():
     parser.add_argument("--input", type=str, required=True, help="Path to A_dual.csv")
     parser.add_argument("--output-dir", type=str, default=None, help="Output root dir")
     parser.add_argument("--api-key", type=str, default=None, help="AlphaGenome API key")
-    parser.add_argument("--ontology-terms", type=str, default="UBERON:0002037", help="Comma-separated ontology terms")
+    parser.add_argument(
+        "--histone-ontology-terms",
+        type=str,
+        default="UBERON:0001890",
+        help="Comma-separated ontology terms for CHIP_HISTONE (e.g. forebrain)",
+    )
+    parser.add_argument(
+        "--dnase-ontology-terms",
+        type=str,
+        default="UBERON:0001870",
+        help="Comma-separated ontology terms for DNASE (e.g. frontal cortex)",
+    )
+    parser.add_argument("--histone-tissue-label", type=str, default="forebrain", help="Display label for histone tissue in PNG")
+    parser.add_argument("--dnase-tissue-label", type=str, default="frontal cortex", help="Display label for DNASE tissue in PNG")
     parser.add_argument("--organism", type=str, default="MUS_MUSCULUS", help="dna_client.Organism enum")
     parser.add_argument("--zoom-bp", type=int, default=100000, help="Plot zoom window size")
     parser.add_argument("--fallback-box-bp", type=int, default=10000, help="Fallback box size when anchor interval is missing")
@@ -291,6 +304,55 @@ def draw_role_boxes(intervals_rel_bp, role):
             ax.axvspan(s_bp, e_bp, facecolor=face, edgecolor=edge, linewidth=0.9, alpha=alpha)
 
 
+def apply_absolute_genome_axis(window_start0, chr_name, anchor_start0=None, anchor_end=None):
+    fig = plt.gcf()
+    if fig is None or not fig.axes:
+        return
+
+    ws = parse_int(window_start0)
+    a0 = parse_int(anchor_start0)
+    a1 = parse_int(anchor_end)
+    anchor_mid_abs = None
+    if a0 is not None and a1 is not None:
+        anchor_mid_abs = int((a0 + a1) // 2)
+
+    for ax in fig.axes:
+        ticks = ax.get_xticks()
+        labels = []
+        for t in ticks:
+            if t != t:  # NaN
+                labels.append("")
+                continue
+            rel_bp = int(round(float(t)))
+            abs_bp = rel_bp if ws is None else int(ws + rel_bp)
+            labels.append(f"{abs_bp:,}")
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(labels, fontsize=8)
+        try:
+            ax.ticklabel_format(style="plain", axis="x", useOffset=False)
+        except Exception:
+            # Some track axes do not use ScalarFormatter.
+            pass
+        ax.set_xlabel(f"{chr_name} absolute genomic position (bp)", fontsize=8)
+
+        if anchor_mid_abs is not None and ws is not None:
+            anchor_mid_rel = anchor_mid_abs - ws
+            ax.axvline(anchor_mid_rel, color="#1f77b4", linestyle="--", linewidth=0.9, alpha=0.85)
+            ymin, ymax = ax.get_ylim()
+            text_y = ymax - (ymax - ymin) * 0.03
+            ax.text(
+                anchor_mid_rel,
+                text_y,
+                f"anchor_mid={anchor_mid_abs:,}",
+                rotation=90,
+                va="top",
+                ha="right",
+                fontsize=7,
+                color="#1f77b4",
+                alpha=0.9,
+            )
+
+
 def combine_two_plots(enhancer_png, promoter_png, out_png, combined_title):
     img1 = mpimg.imread(enhancer_png)
     img2 = mpimg.imread(promoter_png)
@@ -361,7 +423,12 @@ def main():
                 p.unlink(missing_ok=True)
 
     csv_limit = set_csv_field_size_limit()
-    ontology_terms = [x.strip() for x in args.ontology_terms.split(",") if x.strip()]
+    histone_ontology_terms = [x.strip() for x in args.histone_ontology_terms.split(",") if x.strip()]
+    dnase_ontology_terms = [x.strip() for x in args.dnase_ontology_terms.split(",") if x.strip()]
+    if not histone_ontology_terms:
+        raise ValueError("No valid values in --histone-ontology-terms")
+    if not dnase_ontology_terms:
+        raise ValueError("No valid values in --dnase-ontology-terms")
     api_key = load_api_key(args.api_key)
     model = dna_client.create(api_key)
     try:
@@ -437,8 +504,13 @@ def main():
     print(f"[Dual] Rows: {len(rows)} | csv_field_size_limit={csv_limit}")
     print(f"[Dual] Output: {output_root}")
     print(f"[Dual] Background: mode={args.bg_mode}, flank_bp={args.bg_flank_bp}")
+    print(
+        "[Dual] Tissue map: "
+        f"DNASE={args.dnase_tissue_label} ({','.join(dnase_ontology_terms)}), "
+        f"CHIP_HISTONE={args.histone_tissue_label} ({','.join(histone_ontology_terms)})"
+    )
 
-    # Group by window. One API call per unique window.
+    # Group by window. Two API calls per unique window (DNASE + CHIP_HISTONE).
     groups = defaultdict(list)
     for i, row in enumerate(rows):
         key = row.get("window_uid") or f"{row.get('chr')}:{row.get('start0')}-{row.get('end')}"
@@ -448,8 +520,10 @@ def main():
     summary_rows = []
     pair_role_to_plot = defaultdict(dict)
     t0 = time.time()
-    api_calls = 0
-    api_errors = 0
+    api_calls_histone = 0
+    api_calls_dnase = 0
+    api_errors_histone = 0
+    api_errors_dnase = 0
 
     for gi, (window_key, idxs) in enumerate(groups.items(), start=1):
         row0 = rows[idxs[0]]
@@ -458,38 +532,66 @@ def main():
         seq, adjust = normalize_sequence(raw_seq, seq_len_required)
         print(f"[Dual][window {gi}/{len(groups)}] {window_key} | rows_in_window={len(idxs)} | adjust={adjust}")
 
+        interval_1mb = genome.Interval(chr_name, 0, seq_len_required)
+        histone_output = None
+        dnase_output = None
+        window_errors = []
+
         try:
-            predict_kwargs = {
+            histone_predict_kwargs = {
                 "sequence": seq,
                 "organism": organism,
                 "requested_outputs": {
-                    dna_client.OutputType.ATAC,
-                    dna_client.OutputType.DNASE,
                     dna_client.OutputType.CHIP_HISTONE,
                 },
-                "interval": genome.Interval(chr_name, 0, seq_len_required),
-                "ontology_terms": ontology_terms,
+                "interval": interval_1mb,
+                "ontology_terms": histone_ontology_terms,
             }
-            output = model.predict_sequence(**predict_kwargs)
-            api_calls += 1
+            histone_output = model.predict_sequence(**histone_predict_kwargs)
+            api_calls_histone += 1
         except Exception as exc:
-            api_errors += 1
+            api_errors_histone += 1
+            window_errors.append(f"histone_error={exc}")
+
+        try:
+            dnase_predict_kwargs = {
+                "sequence": seq,
+                "organism": organism,
+                "requested_outputs": {
+                    dna_client.OutputType.DNASE,
+                },
+                "interval": interval_1mb,
+                "ontology_terms": dnase_ontology_terms,
+            }
+            dnase_output = model.predict_sequence(**dnase_predict_kwargs)
+            api_calls_dnase += 1
+        except Exception as exc:
+            api_errors_dnase += 1
+            window_errors.append(f"dnase_error={exc}")
+
+        if histone_output is None and dnase_output is None:
             for idx in idxs:
                 row = rows[idx]
                 summary_rows.append({
                     "pair_uid": row.get("pair_uid"),
                     "role": row.get("role"),
                     "window_uid": row.get("window_uid") or window_key,
+                    "dnase_tissue_label": args.dnase_tissue_label,
+                    "dnase_ontology_terms": ",".join(dnase_ontology_terms),
+                    "histone_tissue_label": args.histone_tissue_label,
+                    "histone_ontology_terms": ",".join(histone_ontology_terms),
                     "status": "error",
-                    "error": str(exc),
+                    "error": " | ".join(window_errors),
                     "plot_png": "",
                 })
-            print(f"  -> ERROR API window: {exc}")
+            print(f"  -> ERROR API window: {' | '.join(window_errors)}")
             continue
 
-        h3k27ac_track = filter_histone_mark_track(output.chip_histone, "H3K27ac")
-        h3k4me1_track = filter_histone_mark_track(output.chip_histone, "H3K4me1")
-        h3k4me3_track = filter_histone_mark_track(output.chip_histone, "H3K4me3")
+        histone_track_data = getattr(histone_output, "chip_histone", None) if histone_output is not None else None
+        dnase_track_data = getattr(dnase_output, "dnase", None) if dnase_output is not None else None
+        h3k27ac_track = filter_histone_mark_track(histone_track_data, "H3K27ac")
+        h3k4me1_track = filter_histone_mark_track(histone_track_data, "H3K4me1")
+        h3k4me3_track = filter_histone_mark_track(histone_track_data, "H3K4me3")
 
         for idx in idxs:
             row = rows[idx]
@@ -508,15 +610,12 @@ def main():
                 anchor_size_label = bp_to_size_label(parse_int(row.get("anchor_width_bp")))
             scoring_intervals, interval_source = parse_anchor_interval_rel(row, seq_len_required, fallback_bp=args.fallback_box_bp)
 
-            atac_m = compute_interval_metrics(output.atac, scoring_intervals, bg_mode=args.bg_mode, bg_flank_bp=args.bg_flank_bp)
-            dnase_m = compute_interval_metrics(output.dnase, scoring_intervals, bg_mode=args.bg_mode, bg_flank_bp=args.bg_flank_bp)
+            dnase_m = compute_interval_metrics(dnase_track_data, scoring_intervals, bg_mode=args.bg_mode, bg_flank_bp=args.bg_flank_bp)
             h3k27_m = compute_interval_metrics(h3k27ac_track, scoring_intervals, bg_mode=args.bg_mode, bg_flank_bp=args.bg_flank_bp)
             h3k4m1_m = compute_interval_metrics(h3k4me1_track, scoring_intervals, bg_mode=args.bg_mode, bg_flank_bp=args.bg_flank_bp)
             h3k4m3_m = compute_interval_metrics(h3k4me3_track, scoring_intervals, bg_mode=args.bg_mode, bg_flank_bp=args.bg_flank_bp)
 
-            if atac_m["n_tracks"] > 0:
-                open_src, open_m = "ATAC", atac_m
-            elif dnase_m["n_tracks"] > 0:
+            if dnase_m["n_tracks"] > 0:
                 open_src, open_m = "DNASE", dnase_m
             else:
                 open_src, open_m = "none", compute_interval_metrics(None, scoring_intervals, bg_mode=args.bg_mode, bg_flank_bp=args.bg_flank_bp)
@@ -543,16 +642,38 @@ def main():
 
             try:
                 components = []
-                if open_src == "ATAC":
-                    components.append(plot_components.Tracks(tdata=output.atac, ylabel_template="ATAC\n{biosample_name}", filled=True))
-                elif open_src == "DNASE":
-                    components.append(plot_components.Tracks(tdata=output.dnase, ylabel_template="DNASE\n{biosample_name}", filled=True))
+                if open_src == "DNASE":
+                    components.append(
+                        plot_components.Tracks(
+                            tdata=dnase_track_data,
+                            ylabel_template=f"DNASE ({args.dnase_tissue_label})\n{{biosample_name}}",
+                            filled=True,
+                        )
+                    )
                 if h3k27_m["n_tracks"] > 0:
-                    components.append(plot_components.Tracks(tdata=h3k27ac_track, ylabel_template="H3K27ac\n{biosample_name}", filled=True))
+                    components.append(
+                        plot_components.Tracks(
+                            tdata=h3k27ac_track,
+                            ylabel_template=f"H3K27ac ({args.histone_tissue_label})\n{{biosample_name}}",
+                            filled=True,
+                        )
+                    )
                 if h3k4m1_m["n_tracks"] > 0:
-                    components.append(plot_components.Tracks(tdata=h3k4me1_track, ylabel_template="H3K4me1\n{biosample_name}", filled=True))
+                    components.append(
+                        plot_components.Tracks(
+                            tdata=h3k4me1_track,
+                            ylabel_template=f"H3K4me1 ({args.histone_tissue_label})\n{{biosample_name}}",
+                            filled=True,
+                        )
+                    )
                 if h3k4m3_m["n_tracks"] > 0:
-                    components.append(plot_components.Tracks(tdata=h3k4me3_track, ylabel_template="H3K4me3\n{biosample_name}", filled=True))
+                    components.append(
+                        plot_components.Tracks(
+                            tdata=h3k4me3_track,
+                            ylabel_template=f"H3K4me3 ({args.histone_tissue_label})\n{{biosample_name}}",
+                            filled=True,
+                        )
+                    )
 
                 if components:
                     zoom_interval = build_anchor_centered_plot_interval(
@@ -566,11 +687,19 @@ def main():
                         interval=zoom_interval,
                         title=(
                             f"{gene_symbol} | role={role} | anchor={anchor_uid} ({anchor_size_label}) "
-                            f"| window={chr_name}:{row.get('start0')}-{row.get('end')}"
+                            f"| window={chr_name}:{row.get('start0')}-{row.get('end')}\n"
+                            f"DNASE={args.dnase_tissue_label} ({','.join(dnase_ontology_terms)}) | "
+                            f"HISTONE={args.histone_tissue_label} ({','.join(histone_ontology_terms)})"
                         ),
                         despine_keep_bottom=True,
                     )
                     draw_role_boxes(scoring_intervals, role=role)
+                    apply_absolute_genome_axis(
+                        window_start0=row.get("start0"),
+                        chr_name=chr_name,
+                        anchor_start0=row.get("anchor_start0"),
+                        anchor_end=row.get("anchor_end"),
+                    )
                     plt.savefig(plot_path, dpi=160, bbox_inches="tight")
                 plt.close("all")
             except Exception:
@@ -588,8 +717,12 @@ def main():
                 "anchor_uid": anchor_uid,
                 "window_uid": row.get("window_uid") or window_key,
                 "shared_window_used": row.get("shared_window_used", ""),
+                "dnase_tissue_label": args.dnase_tissue_label,
+                "dnase_ontology_terms": ",".join(dnase_ontology_terms),
+                "histone_tissue_label": args.histone_tissue_label,
+                "histone_ontology_terms": ",".join(histone_ontology_terms),
                 "status": "ok",
-                "error": "",
+                "error": " | ".join(window_errors) if window_errors else "",
                 "interval_source": interval_source,
                 "bg_mode": args.bg_mode,
                 "bg_flank_bp": args.bg_flank_bp,
@@ -615,7 +748,9 @@ def main():
         meta = pair_meta.get(pair_uid, {})
         combined_title = (
             f"{meta.get('gene_symbol','NA')} | enhancer={meta.get('enhancer_anchor_uid','NA')} ({meta.get('enhancer_size_label','NA')}) "
-            f"| promoter={meta.get('promoter_anchor_uid','NA')} ({meta.get('promoter_size_label','NA')})"
+            f"| promoter={meta.get('promoter_anchor_uid','NA')} ({meta.get('promoter_size_label','NA')})\n"
+            f"DNASE={args.dnase_tissue_label} ({','.join(dnase_ontology_terms)}) | "
+            f"HISTONE={args.histone_tissue_label} ({','.join(histone_ontology_terms)})"
         )
         try:
             combine_two_plots(enh_png, prom_png, combined_png, combined_title)
@@ -627,6 +762,7 @@ def main():
     summary_path = output_root / "dual_run_summary.csv"
     fieldnames = [
         "pair_uid", "gene_symbol", "loop_id", "role", "anchor_uid", "window_uid", "shared_window_used",
+        "dnase_tissue_label", "dnase_ontology_terms", "histone_tissue_label", "histone_ontology_terms",
         "status", "error", "interval_source", "bg_mode", "bg_flank_bp", "decision_class", "support_count",
         "open_source", "h3k27ac_fc", "h3k4me1_fc", "open_fc", "h3k4me3_fc", "plot_png",
     ]
@@ -653,15 +789,23 @@ def main():
         f.write(f"unique_pairs\t{len({r.get('pair_uid') for r in summary_rows})}\n")
         f.write(f"role_enhancer_rows\t{role_counts.get('enhancer', 0)}\n")
         f.write(f"role_promoter_rows\t{role_counts.get('promoter', 0)}\n")
-        f.write(f"api_calls_unique_windows\t{api_calls}\n")
-        f.write(f"api_errors_windows\t{api_errors}\n")
+        f.write(f"api_calls_histone\t{api_calls_histone}\n")
+        f.write(f"api_calls_dnase\t{api_calls_dnase}\n")
+        f.write(f"api_calls_total\t{api_calls_histone + api_calls_dnase}\n")
+        f.write(f"api_errors_histone\t{api_errors_histone}\n")
+        f.write(f"api_errors_dnase\t{api_errors_dnase}\n")
+        f.write(f"api_errors_total\t{api_errors_histone + api_errors_dnase}\n")
         f.write(f"combined_png_count\t{n_combined}\n")
         for cls in ["high_confidence", "enhancer_like", "promoter_like", "not_enhancer_like"]:
             f.write(f"{cls}_rows\t{class_counts.get(cls, 0)}\n")
 
     elapsed = time.time() - t0
     print(f"[Dual] Done. rows_ok={n_ok}, rows_error={n_err}, elapsed={elapsed:.1f}s")
-    print(f"[Dual] API calls={api_calls} (unique windows), api_errors={api_errors}")
+    print(
+        "[Dual] API calls "
+        f"histone={api_calls_histone}, dnase={api_calls_dnase}, total={api_calls_histone + api_calls_dnase} | "
+        f"errors histone={api_errors_histone}, dnase={api_errors_dnase}, total={api_errors_histone + api_errors_dnase}"
+    )
     print(f"[Dual] enhancer_png={len(list(enhancer_dir.glob('*.png')))}, promoter_png={len(list(promoter_dir.glob('*.png')))}, combined_png={len(list(combined_dir.glob('*.png')))}")
     print(f"[Dual] Summary: {summary_path}")
     print(f"[Dual] Pair summary: {pair_summary_path}")
