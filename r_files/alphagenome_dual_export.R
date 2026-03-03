@@ -5,8 +5,8 @@
 # - choose top genes from filtered loops
 # - keep single-sided loops
 # - define enhancer anchor (opposite side) and promoter anchor (annotated side)
-# - build 1Mb windows for both anchors
-# - if both anchors fit in one 1Mb window, use a shared window (API can be reused once)
+# - build 1,048,576bp windows centered on each anchor midpoint (role-specific windows)
+# - keep enhancer/promoter windows separate (no shared-window merge)
 # - fetch rn7 DNA via UCSC API for unique windows
 # - export A_dual.csv for dual-role AlphaGenome analysis
 ################################################################################################
@@ -44,7 +44,7 @@ ag.output.dir <- file.path(ag.project.root, "data", "alphagenome", "top54_genes_
 ag.genome <- "rn7"
 ag.api.sleep.sec <- 0.02
 ag.log.every <- 25
-ag.window.bp <- 1000000L
+ag.window.bp <- 1048576L
 ag.window.half.size <- as.integer(ag.window.bp / 2L)
 ag.chrom.size.path <- file.path(ag.project.root, "data", "rn7_chromosome_length_from_ucsc.tsv")
 
@@ -117,7 +117,7 @@ get_chr_len <- function(chr) {
   as.integer(v[[1]])
 }
 
-compute_window_1mb <- function(chr, mid, window_bp = 1000000L) {
+compute_window_1mb <- function(chr, mid, window_bp = 1048576L) {
   half <- as.integer(window_bp / 2L)
   chr_len <- get_chr_len(chr)
   ws <- as.integer(max(0L, as.integer(mid) - half))
@@ -137,30 +137,11 @@ anchors_fit_in_window <- function(window_start0, window_end, s1, e1, s2, e2) {
 
 compute_pair_windows <- function(promoter_chr, promoter_start0, promoter_end, promoter_mid,
                                  enhancer_chr, enhancer_start0, enhancer_end, enhancer_mid) {
+  # Use anchor-centered windows only: each role gets its own midpoint-based 1,048,576bp window.
+  # Do not merge to shared windows, to keep per-anchor midpoint semantics exact.
   shared_window_used <- FALSE
   promoter_window_chr <- promoter_chr
   enhancer_window_chr <- enhancer_chr
-
-  if (!is.na(promoter_chr) && !is.na(enhancer_chr) && promoter_chr == enhancer_chr) {
-    shared_mid <- as.integer(floor((as.integer(promoter_mid) + as.integer(enhancer_mid)) / 2))
-    shared_win <- compute_window_1mb(promoter_chr, shared_mid, ag.window.bp)
-    if (anchors_fit_in_window(
-      shared_win$start0, shared_win$end,
-      as.integer(promoter_start0), as.integer(promoter_end),
-      as.integer(enhancer_start0), as.integer(enhancer_end)
-    )) {
-      shared_window_used <- TRUE
-      return(list(
-        shared_window_used = TRUE,
-        promoter_window_chr = promoter_window_chr,
-        promoter_window_start0 = shared_win$start0,
-        promoter_window_end = shared_win$end,
-        enhancer_window_chr = enhancer_window_chr,
-        enhancer_window_start0 = shared_win$start0,
-        enhancer_window_end = shared_win$end
-      ))
-    }
-  }
 
   prom_win <- compute_window_1mb(promoter_chr, promoter_mid, ag.window.bp)
   enh_win <- compute_window_1mb(enhancer_chr, enhancer_mid, ag.window.bp)
