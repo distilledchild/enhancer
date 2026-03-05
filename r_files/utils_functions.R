@@ -1084,7 +1084,11 @@ plotting_and_filtering_summary <- function(df_counts, count_col, output_prefix) 
 #' @param chr Chromosome to plot
 #' @note Requires df.circos.input.log.final.loop and resolution_colors in environment
 plot_circos_for_chromosome <- function(chr) {
-    df_filtered <- subset(df.circos.input.log.final.loop, chr1_clean == chr)
+    if ("chr2_clean" %in% names(df.circos.input.log.final.loop)) {
+        df_filtered <- subset(df.circos.input.log.final.loop, chr1_clean == chr | chr2_clean == chr)
+    } else {
+        df_filtered <- subset(df.circos.input.log.final.loop, chr1_clean == chr)
+    }
 
     if (nrow(df_filtered) > 0) {
         chromosomes_to_display <- unique(c(df_filtered$chr1, df_filtered$chr2))
@@ -1211,5 +1215,4 @@ compare_df <- function(df1, df2) {
 }
 
 message("All utility functions loaded successfully!")
-
 

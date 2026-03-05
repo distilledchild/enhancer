@@ -1196,13 +1196,15 @@ df.circos.input.log.final.loop <- df.circos.input.final.loop %>%
 # Convert resolution to factor
 df.circos.input.log.final.loop$distance <- as.factor(df.circos.input.log.final.loop$distance)
 
-# Convert chromosome to factor
-chromosome_order <- c(as.character(1:20), "X")
+# Convert chromosome to factor (include chrY)
+chromosome_order <- c(as.character(1:20), "X", "Y")
 
 df.circos.input.log.final.loop <- df.circos.input.log.final.loop %>%
   mutate(
     chr1_clean = gsub("chr", "", chr1),
-    chr1_clean = factor(chr1_clean, levels = chromosome_order)
+    chr1_clean = factor(chr1_clean, levels = chromosome_order),
+    chr2_clean = gsub("chr", "", chr2),
+    chr2_clean = factor(chr2_clean, levels = chromosome_order)
   )
 
 # Assign colors to each resolution level
@@ -1247,8 +1249,12 @@ legend("bottomright", legend = resolution_levels, fill = resolution_colors, titl
 # Clear global plot
 circos.clear()
 
-# Plot per chromosome
-unique_chromosomes <- levels(df.circos.input.log.final.loop$chr1_clean)
+# Plot per chromosome in fixed order: chr1..chr20, chrX, chrY
+present_chromosomes <- union(
+  as.character(na.omit(unique(df.circos.input.log.final.loop$chr1_clean))),
+  as.character(na.omit(unique(df.circos.input.log.final.loop$chr2_clean)))
+)
+unique_chromosomes <- chromosome_order[chromosome_order %in% present_chromosomes]
 for (chr in unique_chromosomes) {
   plot_circos_for_chromosome(chr) # utils_functions.R
 }
@@ -1285,16 +1291,18 @@ outfile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/c
 # 1) PDF → 이미지 리스트로 읽기
 imgs <- image_read_pdf(infile, density = 300) # density 높이면 더 선명
 
-# 2) 22장 이미지 → 2열 11행 콜라주 (image_append 사용)
-# image_montage의 geometry 에러를 방지하기 위해 수동으로 병합
+# 2) 전체 페이지를 2열 row-major(좌→우, 위→아래)로 병합
+# image_montage geometry 이슈를 피하기 위해 수동 병합
+n_pages <- length(imgs)
+n_cols <- 2
+row_tiles <- list()
 
-# 첫 11장 (1열)
-col1 <- image_append(imgs[1:11], stack = TRUE)
-# 다음 11장 (2열)
-col2 <- image_append(imgs[12:22], stack = TRUE)
+for (i in seq(1, n_pages, by = n_cols)) {
+  row_imgs <- imgs[i:min(i + n_cols - 1, n_pages)]
+  row_tiles[[length(row_tiles) + 1]] <- image_append(row_imgs, stack = FALSE)
+}
 
-# 두 열을 가로로 병합
-collage <- image_append(c(col1, col2), stack = FALSE)
+collage <- image_append(do.call(c, row_tiles), stack = TRUE)
 
 # 3) PNG로 저장
 image_write(collage, path = outfile, format = "png")
