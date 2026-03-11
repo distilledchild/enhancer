@@ -672,7 +672,8 @@ merging_pdf_pages_to_single_image <- function(pdf_path, output_pdf_path, output_
 #' @param output_dir Output directory for plots
 checking_component_distribution <- function(data, component_name, output_dir = "./figures/submission/lt2mb") {
     chromosomes <- c(1:20, "X", "Y")
-    plot_list <- list()
+    hist_list <- list() # histogram 별도 저장
+    dens_list <- list() # density  별도 저장
 
     for (chr in chromosomes) {
         tryCatch(
@@ -682,32 +683,38 @@ checking_component_distribution <- function(data, component_name, output_dir = "
                 data_chr <- data %>%
                     filter(str_detect(loop.id, paste0("_chr", chr, "_")))
 
-                # Density plot
-                plot_dens <- data_chr %>%
-                    ggplot(aes(x = value)) +
-                    geom_density(fill = "skyblue", color = "black", alpha = 0.5) +
-                    ylim(c(0, 1)) +
-                    labs(
-                        title = paste0("Density of ", toupper(component_name), " Found over Loop on Chr", chr),
-                        x = "Relative Position to Loop",
-                        y = "Density"
-                    ) +
-                    theme(plot.title = element_text(hjust = 0.5))
+                if (nrow(data_chr) == 0) {
+                    message("  Skipping chr", chr, ": no data")
+                    next
+                }
 
                 # Histogram
                 plot_hist <- data_chr %>%
                     ggplot(aes(x = value)) +
                     geom_histogram(fill = "skyblue", color = "black", alpha = 0.5, bins = 200) +
                     labs(
-                        title = paste0("Histogram of ", toupper(component_name), " Found over Loop on Chr", chr),
-                        x = "Relative Position to Loop",
+                        title = paste0("Chr", chr),
+                        x = "Relative Position",
                         y = "Count"
                     ) +
-                    theme(plot.title = element_text(hjust = 0.5))
+                    theme_bw(base_size = 9) +
+                    theme(plot.title = element_text(hjust = 0.5, face = "bold"))
 
-                # merging density & histogram
-                combined_plot <- plot_hist + plot_dens
-                plot_list[[chr]] <- combined_plot
+                # Density plot
+                plot_dens <- data_chr %>%
+                    ggplot(aes(x = value)) +
+                    geom_density(fill = "skyblue", color = "black", alpha = 0.5) +
+                    ylim(c(0, 1)) +
+                    labs(
+                        title = paste0("Chr", chr),
+                        x = "Relative Position",
+                        y = "Density"
+                    ) +
+                    theme_bw(base_size = 9) +
+                    theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+                hist_list[[as.character(chr)]] <- plot_hist
+                dens_list[[as.character(chr)]] <- plot_dens
 
                 message("END: Processing chromosome: ", chr)
             },
@@ -718,28 +725,66 @@ checking_component_distribution <- function(data, component_name, output_dir = "
         )
     }
 
-    pdf_path <- file.path(output_dir, paste0("overall_distribution_of_", component_name, "_by_chromosome_wo_capping_lt2mb.pdf"))
-    png_path <- paste0(file_path_sans_ext(pdf_path), ".png")
+    n_cols_grid <- 3 # 3열 고정
 
-    # saving PDF
-    pdf(pdf_path, width = 11 * 0.8, height = 8.5 * 0.8)
-    num_plots <- length(plot_list)
-    plots_per_page <- 4
+    # ── 1. Histogram PDF/PNG ──────────────────────────────────────────────
+    hist_pdf <- file.path(output_dir, paste0("overall_distribution_hist_of_", component_name, "_by_chromosome_lt2mb.pdf"))
+    hist_png <- file.path(output_dir, paste0("overall_distribution_hist_of_", component_name, "_by_chromosome_lt2mb.png"))
 
-    for (i in seq(1, num_plots, by = plots_per_page)) {
-        end_idx <- min(i + plots_per_page - 1, num_plots)
-        page_plots <- plot_list[i:end_idx]
-        combined_page <- plot_grid(plotlist = page_plots, ncol = 1, nrow = 4)
-        print(combined_page)
-    }
+    n_hist <- length(hist_list)
+    # A4 landscape 기준: 각 행당 높이 2.8인치, 3열
+    n_rows_hist <- ceiling(n_hist / n_cols_grid)
+    fig_h_hist <- max(4, n_rows_hist * 2.8)
 
+    pdf(hist_pdf, width = 11, height = fig_h_hist)
+    grid_hist <- plot_grid(
+        plotlist = hist_list,
+        ncol     = n_cols_grid,
+        align    = "hv"
+    )
+    title_hist <- ggdraw() +
+        draw_label(
+            paste0("Histogram of ", toupper(component_name), " Found over Loop by Chromosome"),
+            fontface = "bold", size = 13, hjust = 0.5
+        )
+    print(plot_grid(title_hist, grid_hist, ncol = 1, rel_heights = c(0.05, 1)))
     dev.off()
 
-    # converting PDF → PNG
-    merging_pdf_pages_to_single_image(pdf_path, output_pdf_path = pdf_path, output_png_path = png_path)
+    # PDF → PNG (단일 페이지이므로 직접 변환)
+    img_hist <- image_read_pdf(hist_pdf, density = 150)
+    image_write(img_hist, path = hist_png, format = "png")
 
+    message("Histogram saved: ", hist_png)
+
+    # ── 2. Density PDF/PNG ────────────────────────────────────────────────
+    dens_pdf <- file.path(output_dir, paste0("overall_distribution_density_of_", component_name, "_by_chromosome_lt2mb.pdf"))
+    dens_png <- file.path(output_dir, paste0("overall_distribution_density_of_", component_name, "_by_chromosome_lt2mb.png"))
+
+    n_dens <- length(dens_list)
+    n_rows_dens <- ceiling(n_dens / n_cols_grid)
+    fig_h_dens <- max(4, n_rows_dens * 2.8)
+
+    pdf(dens_pdf, width = 11, height = fig_h_dens)
+    grid_dens <- plot_grid(
+        plotlist = dens_list,
+        ncol     = n_cols_grid,
+        align    = "hv"
+    )
+    title_dens <- ggdraw() +
+        draw_label(
+            paste0("Density of ", toupper(component_name), " Found over Loop by Chromosome"),
+            fontface = "bold", size = 13, hjust = 0.5
+        )
+    print(plot_grid(title_dens, grid_dens, ncol = 1, rel_heights = c(0.05, 1)))
+    dev.off()
+
+    img_dens <- image_read_pdf(dens_pdf, density = 150)
+    image_write(img_dens, path = dens_png, format = "png")
+
+    message("Density saved: ", dens_png)
     message("Completed processing for: ", toupper(component_name))
 }
+
 
 ################################################################################
 # 13. Loop Validity and Functionality Functions
@@ -1013,7 +1058,7 @@ approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5
     df.gene_loop_count <- df.filtered %>%
         # filter(UP == "OK" | DOWN == "OK") %>%
         # filter(!is.na(gene_start)) %>% # in order to exclude NA values
-        count(gene_id, sort = TRUE) # descend gene_id n 
+        count(gene_id, sort = TRUE) # descend gene_id n
 
     df.top_genes <- df.gene_loop_count %>%
         slice_max(n, n = top_n_genes) %>%
@@ -1045,11 +1090,10 @@ approach_2nd_analyze_loops_by_threshold <- function(df, threshold_distance = 2e5
     # Task 3: Print top genes
 
     top_genes <- df.gene_loop_count %>%
-    slice_max(n, n = print_top_n)
+        slice_max(n, n = print_top_n)
 
     cat("Top", print_top_n, "genes:\n")
-    print(top_genes, n = Inf)    
-
+    print(top_genes, n = Inf)
 }
 
 #' Plot and save filtering summary histogram
@@ -1196,23 +1240,22 @@ process_feature_bins <- function(feature_df, chromosome_ends, bin_size = 1e6, la
 ################################################################################
 
 compare_df <- function(df1, df2) {
-  cat("df1 rows:", nrow(df1), "\n")
-  cat("df2 rows:", nrow(df2), "\n")
-  
-  if (nrow(df1) != nrow(df2)) {
-    cat("Different number of rows!\n")
-    return(FALSE)
-  }
-  
-  # 정렬 후 비교
-  df1_sorted <- df1 %>% arrange(across(everything()))
-  df2_sorted <- df2 %>% arrange(across(everything()))
-  
-  result <- identical(df1_sorted, df2_sorted)
-  cat("Identical:", result, "\n")
-  
-  return(result)
+    cat("df1 rows:", nrow(df1), "\n")
+    cat("df2 rows:", nrow(df2), "\n")
+
+    if (nrow(df1) != nrow(df2)) {
+        cat("Different number of rows!\n")
+        return(FALSE)
+    }
+
+    # 정렬 후 비교
+    df1_sorted <- df1 %>% arrange(across(everything()))
+    df2_sorted <- df2 %>% arrange(across(everything()))
+
+    result <- identical(df1_sorted, df2_sorted)
+    cat("Identical:", result, "\n")
+
+    return(result)
 }
 
 message("All utility functions loaded successfully!")
-

@@ -1106,7 +1106,7 @@ df.final.DISTINCT.loop.joined <- df.final.loop %>%
 df.final.DISTINCT.loop.joined %>% dim()
 df.final.DISTINCT.loop.joined %>% head(2)
 
-df.final.loop %>% distinct(loop.id) # 23460// 18681// 18684// 12234
+df.final.loop %>% distinct(loop.id) # 15085
 
 ##########################################################
 # ideogram                                        Figure 4
