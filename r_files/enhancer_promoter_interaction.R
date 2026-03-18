@@ -1212,42 +1212,15 @@ colors <- brewer.pal(n = 3, name = "Set1")
 resolution_levels <- levels(df.circos.input.log.final.loop$resolution)
 # resolution_colors <- setNames(colors, resolution_levels)
 resolution_colors <- c(
-  # "5K" = "#377EB8",
-  # "10K" = "lightcoral",
-  # "25K" = "springgreen"
-  # "5K" = "#a6cee3",
-  # "10K" = "#1f78b4",
-  # "25K" = "#1f3a93"
   "5K" = "#f8766d",
   "10K" = "#629bfe",
   "25K" = "#32ba36"
-  # values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")
 )
 # Output PDF file
-pdf(file = "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.200kb.pdf", height = 11 * 0.8, width = 8.5 * 0.8)
-
-# Initialize circos with ideogram for rat genome
-circos.initializeWithIdeogram(species = "rn7")
-
-df.circos.input.log.final.loop %>% head()
-
-# Draw global links
-for (i in 1:nrow(df.circos.input.log.final.loop)) {
-  circos.genomicLink(
-    region1 = df.circos.input.log.final.loop[i, c("chr1", "midx", "midx")],
-    region2 = df.circos.input.log.final.loop[i, c("chr2", "midy", "midy")],
-    col = resolution_colors[as.character(df.circos.input.log.final.loop$resolution[i])],
-    h = df.circos.input.log.final.loop$height[i],
-    border = "black"
-  )
-}
-
-# Add legend
-legend("bottomright", legend = resolution_levels, fill = resolution_colors, title = "Resolution")
-# Add title
-# title("Circos Plot for Functional Loop", line = -1)
-# Clear global plot
-circos.clear()
+pdf(
+  file = "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.200kb.pdf",
+  height = 5.2, width = 5.2
+)
 
 # Plot per chromosome in fixed order: chr1..chr20, chrX, chrY
 present_chromosomes <- union(
@@ -1256,28 +1229,52 @@ present_chromosomes <- union(
 )
 unique_chromosomes <- chromosome_order[chromosome_order %in% present_chromosomes]
 for (chr in unique_chromosomes) {
-  plot_circos_for_chromosome(chr) # utils_functions.R
+  plot_circos_for_chromosome(
+    chr = chr,
+    page_label = paste("Chromosome", chr),
+    show_legend = identical(chr, "1")
+  ) # utils_functions.R
 }
 
 dev.off()
 
 # 1. Load first two pages from PDF
-pdf_path <- "./figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.200kb.pdf"
-img_list <- image_read_pdf(pdf_path, pages = 1:2, density = 300)
-
 # Create labeled plots using ggdraw
+# Build Figure 8 directly so panel a is whole-genome and panel b is chr1.
+panel_a_path <- "./figures/submission/lt2mb/circos_all_chromosomes_F8_panel_a.ENSEMBL.mid.mid.final.200kb.png"
+panel_b_path <- "./figures/submission/lt2mb/circos_chr1_F8_panel_b.ENSEMBL.mid.mid.final.200kb.png"
+
+png(filename = panel_a_path, width = 2400, height = 1800, res = 300, bg = "white")
+par(mar = c(1.2, 1.2, 1.2, 8), xpd = NA)
+plot_circos_all_chromosomes(
+  show_legend = TRUE,
+  legend_position = "right",
+  legend_inset = c(-0.22, 0),
+  legend_cex = 1.1,
+  legend_xpd = NA
+) # utils_functions.R
+dev.off()
+
+png(filename = panel_b_path, width = 2000, height = 1800, res = 300, bg = "white")
+par(mar = c(1.2, 1.2, 1.2, 1.2))
+plot_circos_for_chromosome(
+  chr = "1",
+  show_legend = FALSE
+) # utils_functions.R
+dev.off()
+
 plot_a <- ggdraw() +
-  draw_image(img_list[[1]]) +
+  draw_image(panel_a_path) +
   draw_label("a", x = 0.02, y = 0.88, hjust = 0, vjust = 1, fontface = "bold", size = 16)
 
 plot_b <- ggdraw() +
-  draw_image(img_list[[2]]) +
+  draw_image(panel_b_path) +
   draw_label("b", x = 0.02, y = 0.88, hjust = 0, vjust = 1, fontface = "bold", size = 16)
 
 # Combine into 1-row, 2-column layout
-combined_plot <- plot_grid(plot_a, plot_b, nrow = 1)
+combined_plot <- plot_grid(plot_a, plot_b, nrow = 1, rel_widths = c(1.15, 1))
 
-# 5. Save as PNG
+# 5. Save as PNG for FIGURE 8
 saving_plot_dual( # utils_functions.R
   output_dir = "./figures/submission/lt2mb",
   filename_base = "circos_first_two_panels_F8.ENSEMBL.mid.mid.final.200kb",
@@ -1289,12 +1286,23 @@ infile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/ci
 outfile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.200kb.png"
 
 # 1) PDF → 이미지 리스트로 읽기
-imgs <- image_read_pdf(infile, density = 300) # density 높이면 더 선명
+imgs <- image_read_pdf(infile, density = 600) # density 높이면 더 선명
 
-# 2) 전체 페이지를 2열 row-major(좌→우, 위→아래)로 병합
+# Preserve the full page legend area when rasterizing the PDF pages for collage.
+page_info <- image_info(imgs)
+padded_width <- ceiling(max(page_info$width) * 1.12)
+padded_height <- max(page_info$height)
+imgs <- image_extent(
+  imgs,
+  geometry = paste0(padded_width, "x", padded_height),
+  gravity = "west",
+  color = "white"
+)
+
+# 2) 전체 페이지를 5열 row-major(좌→우, 위→아래)로 병합
 # image_montage geometry 이슈를 피하기 위해 수동 병합
 n_pages <- length(imgs)
-n_cols <- 2
+n_cols <- 5
 row_tiles <- list()
 
 for (i in seq(1, n_pages, by = n_cols)) {

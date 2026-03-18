@@ -2,3 +2,13 @@
 submission.md
 research_notes.md
 results/
+
+# local secrets (do not commit)
+r_files/.env.alphagenome.local
+
+# python cache
+__pycache__/
+*.pyc
+
+# local virtualenv
+r_files/.venv-alphagenome/

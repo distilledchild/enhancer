@@ -1124,10 +1124,106 @@ plotting_and_filtering_summary <- function(df_counts, count_col, output_prefix) 
 # 17. Circos Plotting Functions
 ################################################################################
 
+#' Draw a set of circos links using the shared resolution color map
+#' @param df_links Data frame with chr1/chr2 and midx/midy columns
+draw_circos_links <- function(df_links) {
+    if (nrow(df_links) == 0) {
+        return(invisible(NULL))
+    }
+
+    for (i in seq_len(nrow(df_links))) {
+        circos.genomicLink(
+            region1 = df_links[i, c("chr1", "midx", "midx")],
+            region2 = df_links[i, c("chr2", "midy", "midy")],
+            col = resolution_colors[as.character(df_links$resolution[i])]
+        )
+    }
+}
+
+#' Draw the shared resolution legend for circos plots
+#' @param position Legend keyword position
+#' @param inset Legend inset
+#' @param cex Legend text size
+#' @param xpd Whether the legend can draw outside the plot region
+draw_circos_resolution_legend <- function(position = "bottomright",
+                                          inset = c(0.02, 0.02),
+                                          cex = 1,
+                                          xpd = FALSE) {
+    legend(
+        position,
+        inset = inset,
+        legend = names(resolution_colors),
+        fill = resolution_colors,
+        title = "Resolution",
+        bty = "n",
+        cex = cex,
+        xpd = xpd
+    )
+}
+
+#' Draw the circos legend in the page margin so plot size stays unchanged
+draw_circos_resolution_legend_in_page <- function() {
+    usr <- par("usr")
+    x_span <- usr[2] - usr[1]
+    y_span <- usr[4] - usr[3]
+
+    legend(
+        x = usr[2] - 0.06 * x_span,
+        y = usr[3] + 0.0225 * y_span,
+        legend = names(resolution_colors),
+        fill = resolution_colors,
+        title = "Resolution",
+        bty = "n",
+        cex = 0.92,
+        xjust = 0,
+        yjust = 0,
+        xpd = NA
+    )
+}
+
+#' Plot a whole-genome circos diagram
+#' @param page_label Optional bottom label for the page
+#' @param show_legend Whether to draw the resolution legend
+#' @param legend_position Legend keyword position
+#' @param legend_inset Legend inset
+#' @param legend_cex Legend text size
+#' @param legend_xpd Whether the legend can draw outside the plot region
+plot_circos_all_chromosomes <- function(page_label = NULL,
+                                        show_legend = FALSE,
+                                        legend_position = "bottomright",
+                                        legend_inset = c(0.02, 0.02),
+                                        legend_cex = 1,
+                                        legend_xpd = FALSE) {
+    if (nrow(df.circos.input.log.final.loop) == 0) {
+        return(invisible(NULL))
+    }
+
+    circos.clear()
+    circos.initializeWithIdeogram(species = "rn7")
+    draw_circos_links(df.circos.input.log.final.loop)
+
+    if (show_legend) {
+        draw_circos_resolution_legend(
+            position = legend_position,
+            inset = legend_inset,
+            cex = legend_cex,
+            xpd = legend_xpd
+        )
+    }
+
+    if (!is.null(page_label)) {
+        mtext(page_label, side = 1, line = 0.5, cex = 1.1, font = 2)
+    }
+
+    circos.clear()
+}
+
 #' Plot Circos diagram for a specific chromosome
 #' @param chr Chromosome to plot
+#' @param page_label Optional bottom label for the page
+#' @param show_legend Whether to draw the resolution legend
 #' @note Requires df.circos.input.log.final.loop and resolution_colors in environment
-plot_circos_for_chromosome <- function(chr) {
+plot_circos_for_chromosome <- function(chr, page_label = NULL, show_legend = FALSE) {
     if ("chr2_clean" %in% names(df.circos.input.log.final.loop)) {
         df_filtered <- subset(df.circos.input.log.final.loop, chr1_clean == chr | chr2_clean == chr)
     } else {
@@ -1136,17 +1232,33 @@ plot_circos_for_chromosome <- function(chr) {
 
     if (nrow(df_filtered) > 0) {
         chromosomes_to_display <- unique(c(df_filtered$chr1, df_filtered$chr2))
+        original_par <- par(no.readonly = TRUE)
+        on.exit(par(original_par), add = TRUE)
 
-        circos.par(gap.degree = 25)
+        # Keep the same plotting region for every chromosome page.
+        par(
+            mar = c(1.5, 2.2, 0.8, 3.6),
+            xpd = NA
+        )
+
+        circos.clear()
+        circos.par(
+            gap.degree = 25,
+            canvas.xlim = c(-0.78, 0.9),
+            canvas.ylim = c(-0.82, 0.86),
+            points.overflow.warning = FALSE
+        )
         circos.initializeWithIdeogram(species = "rn7", chromosome.index = chromosomes_to_display)
+        draw_circos_links(df_filtered)
 
-        for (i in 1:nrow(df_filtered)) {
-            circos.genomicLink(
-                region1 = df_filtered[i, c("chr1", "midx", "midx")],
-                region2 = df_filtered[i, c("chr2", "midy", "midy")],
-                col = resolution_colors[as.character(df_filtered$resolution[i])],
-            )
+        if (show_legend) {
+            draw_circos_resolution_legend_in_page()
         }
+
+        if (!is.null(page_label)) {
+            mtext(page_label, side = 1, line = -0.2, cex = 1.1, font = 2)
+        }
+
         circos.clear()
     }
 }
