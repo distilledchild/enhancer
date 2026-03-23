@@ -1245,34 +1245,70 @@ panel_a_path <- "./figures/submission/lt2mb/circos_all_chromosomes_F8_panel_a.EN
 panel_b_path <- "./figures/submission/lt2mb/circos_chr1_F8_panel_b.ENSEMBL.mid.mid.final.200kb.png"
 
 png(filename = panel_a_path, width = 2400, height = 1800, res = 300, bg = "white")
-par(mar = c(1.2, 1.2, 1.2, 8), xpd = NA)
+par(mar = c(1.2, 1.2, 1.2, 1.2), xpd = NA)
 plot_circos_all_chromosomes(
-  show_legend = TRUE,
-  legend_position = "right",
-  legend_inset = c(-0.22, 0),
-  legend_cex = 1.1,
-  legend_xpd = NA
+  page_label = NULL,
+  show_legend = FALSE
 ) # utils_functions.R
 dev.off()
 
-png(filename = panel_b_path, width = 2000, height = 1800, res = 300, bg = "white")
+png(filename = panel_b_path, width = 2400, height = 1800, res = 300, bg = "white")
 par(mar = c(1.2, 1.2, 1.2, 1.2))
 plot_circos_for_chromosome(
   chr = "1",
+  page_label = NULL,
   show_legend = FALSE
 ) # utils_functions.R
 dev.off()
 
 plot_a <- ggdraw() +
-  draw_image(panel_a_path) +
+  draw_image(panel_a_path, scale = 1.1) +
   draw_label("a", x = 0.02, y = 0.88, hjust = 0, vjust = 1, fontface = "bold", size = 16)
 
 plot_b <- ggdraw() +
-  draw_image(panel_b_path) +
+  draw_image(panel_b_path, scale = 0.9345) +
   draw_label("b", x = 0.02, y = 0.88, hjust = 0, vjust = 1, fontface = "bold", size = 16)
 
-# Combine into 1-row, 2-column layout
-combined_plot <- plot_grid(plot_a, plot_b, nrow = 1, rel_widths = c(1.15, 1))
+legend_df <- tibble(
+  resolution = factor(names(resolution_colors), levels = names(resolution_colors)),
+  x = 1,
+  y = 1
+)
+
+legend_plot <- ggplot(legend_df, aes(x = x, y = y, fill = resolution)) +
+  geom_point(shape = 22, size = 2.7, stroke = 0.24) +
+  scale_fill_manual(values = resolution_colors) +
+  guides(
+    fill = guide_legend(
+      title = "Resolution",
+      title.position = "top",
+      ncol = 1,
+      byrow = TRUE
+    )
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical",
+    legend.title = element_text(size = 7.2, face = "plain"),
+    legend.text = element_text(size = 6.6),
+    legend.key.height = grid::unit(0.108, "in"),
+    legend.key.width = grid::unit(0.108, "in"),
+    legend.spacing.x = grid::unit(0.048, "in"),
+    legend.spacing.y = grid::unit(0.012, "in"),
+    legend.margin = margin(0, 0, 0, 0),
+    legend.box.margin = margin(0, 0, 0, 0)
+  )
+
+legend_grob <- get_legend(legend_plot)
+
+base_panels <- plot_grid(plot_a, plot_b, nrow = 1, rel_widths = c(1, 1))
+
+combined_plot <- ggdraw() +
+  draw_plot(base_panels, x = 0, y = 0.12, width = 1, height = 0.88) +
+  draw_grob(legend_grob, x = 0.468, y = 0.228, width = 0.06, height = 0.132) +
+  draw_label("All chromosomes", x = 0.24, y = 0.25, fontface = "bold", size = 10) +
+  draw_label("Chromosome 1", x = 0.76, y = 0.25, fontface = "bold", size = 10)
 
 # 5. Save as PNG for FIGURE 8
 saving_plot_dual( # utils_functions.R
@@ -1280,6 +1316,35 @@ saving_plot_dual( # utils_functions.R
   filename_base = "circos_first_two_panels_F8.ENSEMBL.mid.mid.final.200kb",
   plot_obj = combined_plot
 )
+
+f8_base <- "./figures/submission/lt2mb/circos_first_two_panels_F8.ENSEMBL.mid.mid.final.200kb"
+f8_png_path <- paste0(f8_base, ".png")
+f8_pdf_path <- paste0(f8_base, ".pdf")
+f8_img <- image_read(f8_png_path)
+f8_data <- image_data(f8_img, channels = "rgb")
+img_width <- dim(f8_data)[2]
+img_height <- dim(f8_data)[3]
+non_white_rows <- apply(
+  f8_data,
+  3,
+  function(slice) any(slice != as.raw(255))
+)
+
+if (any(non_white_rows)) {
+  max_content_row <- max(which(non_white_rows))
+  bottom_whitespace <- img_height - max_content_row
+  crop_pixels <- floor(bottom_whitespace / 2)
+
+  if (crop_pixels > 0) {
+    cropped_height <- img_height - crop_pixels
+    f8_img <- image_crop(
+      f8_img,
+      geometry = paste0(img_width, "x", cropped_height, "+0+0")
+    )
+    image_write(f8_img, path = f8_png_path, format = "png")
+    image_write(f8_img, path = f8_pdf_path, format = "pdf")
+  }
+}
 
 # 입력/출력 경로
 infile <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/circos_loops_by_resolution_either.6.lt2mb.ENSEMBL.mid.mid.final.200kb.pdf"

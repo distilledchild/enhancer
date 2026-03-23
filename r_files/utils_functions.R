@@ -1212,7 +1212,7 @@ plot_circos_all_chromosomes <- function(page_label = NULL,
     }
 
     if (!is.null(page_label)) {
-        mtext(page_label, side = 1, line = 0.5, cex = 1.1, font = 2)
+        mtext(page_label, side = 1, line = 0.35, cex = 2.2, font = 2)
     }
 
     circos.clear()
@@ -1237,7 +1237,7 @@ plot_circos_for_chromosome <- function(chr, page_label = NULL, show_legend = FAL
 
         # Keep the same plotting region for every chromosome page.
         par(
-            mar = c(1.5, 2.2, 0.8, 3.6),
+            mar = c(2.2, 2.2, 0.8, 3.6),
             xpd = NA
         )
 
@@ -1256,7 +1256,7 @@ plot_circos_for_chromosome <- function(chr, page_label = NULL, show_legend = FAL
         }
 
         if (!is.null(page_label)) {
-            mtext(page_label, side = 1, line = -0.2, cex = 1.1, font = 2)
+            mtext(page_label, side = 1, line = 0.05, cex = 2.2, font = 2)
         }
 
         circos.clear()
