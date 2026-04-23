@@ -6,6 +6,7 @@ library("circlize")
 library("RColorBrewer")
 library("magick")
 library("RIdeogram")
+library("rsvg")
 
 options(tibble.width = Inf)
 options(tibble.print_max = Inf)
@@ -924,7 +925,7 @@ approach_2nd_analyze_loops_by_threshold(
 # AlphaGenome input generation (STEPWISE, UCSC API only)
 ################################################################################################
 ################################################################################################
-source("./alphagenome_export.R")
+# source("./alphagenome_export.R") # Not needed per user request
 
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
   count(component) #  |     # 200kb
@@ -1070,9 +1071,9 @@ overlapping_loops$ctcf_promoter_only # PASS// 6648 // final: 3,973// final: 4712
 overlapping_loops$ctcf_tss_only # PASS// 8613 // final: 8261// final: 9111// 200kb: 10,125
 overlapping_loops$ctcf_promoter_tss_overlap # PASS// 3423// final: 0 // 200kb: 0
 
-df.ctcf.promoter.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_only, category = "CP", stringsAsFactors = FALSE)
-df.ctcf.tss.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_tss_only, category = "CT", stringsAsFactors = FALSE)
-df.ctcf.promoter.tss.overlap.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_tss_overlap, category = "CPT", stringsAsFactors = FALSE)
+df.ctcf.promoter.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_only, category = rep("CP", length(overlapping_loops$ctcf_promoter_only)), stringsAsFactors = FALSE)
+df.ctcf.tss.only.loop <- data.frame(loop.id = overlapping_loops$ctcf_tss_only, category = rep("CT", length(overlapping_loops$ctcf_tss_only)), stringsAsFactors = FALSE)
+df.ctcf.promoter.tss.overlap.loop <- data.frame(loop.id = overlapping_loops$ctcf_promoter_tss_overlap, category = rep("CPT", length(overlapping_loops$ctcf_promoter_tss_overlap)), stringsAsFactors = FALSE)
 
 df.ctcf.promoter.only.loop %>% dim() # 5497//3973// final : 4712// 200kb: 4,960
 df.ctcf.tss.only.loop %>% dim() # 7799// 8261// final: 9111// 200kb: 10,125
@@ -1111,9 +1112,51 @@ df.final.loop %>% distinct(loop.id) # 15085
 ##########################################################
 # ideogram                                        Figure 4
 ##########################################################
+
+########################
+# Loading df.chromosome.data (originally in enhancer_promoter_interaction_figures.R)
+########################
+cache_file_chromosome_data <- "../data/df.chromosome.data.rds"
+
+if (file.exists(cache_file_chromosome_data)) {
+  message("Loading cached chromosome data from: ", cache_file_chromosome_data)
+  df.chromosome.data <- readRDS(cache_file_chromosome_data)
+} else {
+  message("Processing and caching chromosome data...")
+  df.chromosome.data <- read.table(file = "../data/rn7_chromosome_length_from_ucsc.tsv", sep = "\t") %>%
+    mutate(start = 0) %>%
+    dplyr::rename(chr = V1, end = V2)
+
+  saveRDS(df.chromosome.data, cache_file_chromosome_data)
+}
+
 df.chromosome.data %>% head(3)
 df.chromosome.data <- df.chromosome.data %>% mutate(CE_start = NA, CE_end = NA)
 df.chromosome.data
+
+########################
+# Loading df.DISTINCT.fimo.2nd.trial.ctcf (originally in enhancer_promoter_interaction_figures.R)
+########################
+cache_file_distinct_fimo_2nd_ctcf <- "../data/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
+
+if (file.exists(cache_file_distinct_fimo_2nd_ctcf)) {
+  message("Loading cached DISTINCT fimo 2nd trial ctcf data from: ", cache_file_distinct_fimo_2nd_ctcf)
+  df.DISTINCT.fimo.2nd.trial.ctcf <- readRDS(cache_file_distinct_fimo_2nd_ctcf)
+} else {
+  message("Processing and caching DISTINCT fimo 2nd trial ctcf data...")
+  df.init.ctcf <- read.table(file = "~/dropbox/Gateway_to_Hao/enhancer/data/ctcf/submission/E4/fimo_E4_submission_trial.txt", header = TRUE, sep = "\t") %>%
+    dplyr::rename(chr = sequence_name, end = stop) %>%
+    mutate(length = end - start)
+
+  df.DISTINCT.fimo.2nd.trial.ctcf <- df.init.ctcf %>%
+    distinct(chr, start, end) %>% # .4:3191859 ************** NO STRAND INFO
+    mutate(start = as.numeric(start)) %>%
+    mutate(end = as.numeric(end)) %>%
+    mutate(ctcf_pos = as.numeric(round((start + end) / 2))) %>%
+    mutate(id = str_c(chr, "_", start, "_", end, "_", ctcf_pos))
+
+  saveRDS(df.DISTINCT.fimo.2nd.trial.ctcf, cache_file_distinct_fimo_2nd_ctcf)
+}
 
 # CTCF for ideogram: df_ctcf
 df.DISTINCT.fimo.2nd.trial.ctcf %>% head()
@@ -1124,43 +1167,128 @@ df_ctcf_ideogram <- df.DISTINCT.fimo.2nd.trial.ctcf %>%
 
 df_ctcf_ideogram
 
-bin_size <- 1000000
+# Gene positions for chromosome-level density comparison
+analysis_options <- c("A", "B")
 
-df_binned <- df_ctcf_ideogram %>%
-  mutate(
-    StartBin = floor(start / bin_size) * bin_size + 1,
-    EndBin = StartBin + bin_size - 1
+# To store results for comparison
+density_results_list <- list()
+
+# Define analysis function for refactoring
+run_density_analysis <- function(df_gene_input, opt_label, chrom_data, ctcf_data, out_dir) {
+  message(paste0(">>> Running Analysis with Option ", opt_label))
+
+  bin_size <- 1000000
+
+  # 1. Density Calculation
+  gene_dens <- process_feature_bins(df_gene_input, chrom_data, bin_size, label = "Gene") %>%
+    dplyr::select(-last_col())
+
+  ctcf_dens <- process_feature_bins(ctcf_data, chrom_data, bin_size, label = "CTCF") %>%
+    dplyr::select(-last_col())
+
+  # 2. Summary Table
+  density_summary <- chrom_data %>%
+    mutate(
+      chr = str_remove(as.character(chr), "chr"),
+      chromosome_length_mb = end / 1e6
+    ) %>%
+    dplyr::select(chr, chromosome_length_mb) %>%
+    left_join(
+      df_gene_input %>%
+        mutate(chr = str_remove(as.character(chr), "chr")) %>%
+        count(chr, name = "gene_count"),
+      by = "chr"
+    ) %>%
+    left_join(
+      ctcf_data %>%
+        mutate(chr = str_remove(as.character(chr), "chr")) %>%
+        count(chr, name = "ctcf_count"),
+      by = "chr"
+    ) %>%
+    mutate(
+      gene_count = replace_na(gene_count, 0L),
+      ctcf_count = replace_na(ctcf_count, 0L),
+      genes_per_mb = gene_count / chromosome_length_mb,
+      ctcf_per_mb = ctcf_count / chromosome_length_mb
+    ) %>%
+    arrange(desc(ctcf_per_mb))
+
+  # 3. Correlation Test
+  cor_pearson <- cor.test(density_summary$genes_per_mb, density_summary$ctcf_per_mb, method = "pearson")
+  cor_spearman <- cor.test(density_summary$genes_per_mb, density_summary$ctcf_per_mb, method = "spearman")
+
+  stats_df <- tibble(
+    option = opt_label,
+    method = c("pearson", "spearman"),
+    estimate = c(unname(cor_pearson$estimate), unname(cor_spearman$estimate)),
+    p_value = c(cor_pearson$p.value, cor_spearman$p.value)
   )
 
-# Step 4: counting components per bin
-gene_density <- df_binned %>%
-  group_by(Chr = chr, Start = StartBin, End = EndBin) %>%
-  summarise(Value = n(), .groups = "drop") %>%
-  arrange(Chr, Start)
+  # 4. Save CSV Results
+  write.csv(density_summary, file = file.path(out_dir, paste0("chromosome_gene_ctcf_density_summary_Option", opt_label, ".csv")), row.names = FALSE)
+  write.csv(stats_df, file = file.path(out_dir, paste0("chromosome_gene_ctcf_density_correlation_Option", opt_label, ".csv")), row.names = FALSE)
 
-head(gene_density)
+  # 5. Scatter Plot
+  plot_obj <- density_summary %>%
+    ggplot(aes(x = genes_per_mb, y = ctcf_per_mb)) +
+    geom_point(size = 2.5, color = "#1B4F72") +
+    geom_smooth(method = "lm", se = FALSE, color = "#C0392B", linewidth = 0.8) +
+    geom_text(aes(label = chr), nudge_y = 0.6, size = 3, check_overlap = TRUE) +
+    labs(
+      title = paste0("Option ", opt_label, ": Association between gene density and CTCF density"),
+      subtitle = paste0("Pearson r = ", round(cor_pearson$estimate, 3), " (p = ", formatC(cor_pearson$p.value, format = "e", digits = 2), ")"),
+      x = "Genes per Mb", y = "CTCF sites per Mb"
+    ) +
+    theme_bw(base_size = 10)
 
-getwd()
-ctcf_density <- process_feature_bins(df_ctcf_ideogram, df.chromosome.data, bin_size, label = "CTCF") %>% dplyr::select(-last_col()) # color = "#E41A1C" # utils_functions.R
-ctcf_density
+  ggsave(filename = file.path(out_dir, paste0("chromosome_gene_ctcf_density_scatter_Option", opt_label, ".pdf")), plot = plot_obj, width = 6, height = 5)
+  ggsave(filename = file.path(out_dir, paste0("chromosome_gene_ctcf_density_scatter_Option", opt_label, ".png")), plot = plot_obj, width = 6, height = 5, dpi = 300)
 
-ideogram(
-  karyotype = df.chromosome.data %>% dplyr::rename(Chr = chr, Start = start, End = end) %>% mutate(Chr = str_remove(Chr, "chr")),
-  overlaid = ctcf_density %>% dplyr::rename(Chr = chr, Start = start, End = end) %>% mutate(Chr = str_remove(Chr, "chr")),
+  # 6. Ideogram
+  svg_name <- paste0("chromosome_Option", opt_label, ".svg")
+  ideogram(
+    karyotype = chrom_data %>% dplyr::rename(Chr = chr, Start = start, End = end) %>% mutate(Chr = str_remove(Chr, "chr")),
+    overlaid = ctcf_dens %>% dplyr::rename(Chr = chr, Start = start, End = end) %>% mutate(Chr = str_remove(Chr, "chr")),
+    output = svg_name
+  )
+  rsvg_pdf(svg_name, file.path(out_dir, paste0("chromosome_ideogram_Option", opt_label, ".pdf")))
+  rsvg_png(svg_name, file.path(out_dir, paste0("chromosome_ideogram_Option", opt_label, ".png")))
+
+  return(list(summary = density_summary, stats = stats_df))
+}
+
+# Initial Setup
+output_dir <- "./figures/submission/lt2mb"
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+density_results_list <- list()
+
+##########################################################
+# Task 1: Option A  (Protein-coding TSS)
+##########################################################
+df_gene_A <- df.ensembl.gtf.for.tss.DISTINCT.geneid %>%
+  distinct(gene_id, .keep_all = TRUE) %>%
+  dplyr::select(chr, start, end, gene_id, gene_name)
+
+density_results_list[["A"]] <- run_density_analysis(df_gene_A, "A", df.chromosome.data, df_ctcf_ideogram, output_dir)
+
+##########################################################
+# Task 2: Option B  (All Ensembl genes)
+##########################################################
+df_gene_B <- readRDS("../data/df_ensembl_gtf_for_exon_attribute.rds") %>%
+  distinct(gene_id, .keep_all = TRUE) %>%
+  dplyr::select(chr, start, end, gene_id, gene_name)
+
+density_results_list[["B"]] <- run_density_analysis(df_gene_B, "B", df.chromosome.data, df_ctcf_ideogram, output_dir)
+
+##########################################################
+# Task 3: comparison
+##########################################################
+message("\n>>> Comparing Correlation Statistics between Option A and Option B:")
+comparison_stats <- bind_rows(
+  density_results_list[["A"]]$stats,
+  density_results_list[["B"]]$stats
 )
-
-base_dir <- getwd()
-
-# filenames
-svg_file <- file.path(base_dir, "chromosome.svg")
-pdf_file <- file.path(base_dir, "chromosome.pdf")
-png_file <- file.path(base_dir, "chromosome.png")
-
-# SVG → PDF
-rsvg_pdf(svg_file, pdf_file)
-
-# SVG → PNG (dpi=300 for high resolution)
-rsvg_png(svg_file, png_file)
+print(comparison_stats)
 
 ########################
 ########################
