@@ -1290,6 +1290,29 @@ comparison_stats <- bind_rows(
 )
 print(comparison_stats)
 
+##########################################################
+# additional for discussion
+##########################################################
+# Check correlation between chromosome length and CTCF density
+message("\n>>> Checking correlation between Chromosome Length and CTCF Density:")
+df_len_ctcf <- density_results_list[["A"]]$summary %>%
+  dplyr::select(chr, chromosome_length_mb, ctcf_per_mb)
+
+cor_len_ctcf_pearson <- cor.test(df_len_ctcf$chromosome_length_mb, df_len_ctcf$ctcf_per_mb, method = "pearson")
+cor_len_ctcf_spearman <- cor.test(df_len_ctcf$chromosome_length_mb, df_len_ctcf$ctcf_per_mb, method = "spearman")
+
+message(paste0(
+  "Pearson correlation (Length vs CTCF Density): r = ", round(cor_len_ctcf_pearson$estimate, 3),
+  ", p-value = ", formatC(cor_len_ctcf_pearson$p.value, format = "e", digits = 2)
+))
+message(paste0(
+  "Spearman correlation (Length vs CTCF Density): rho = ", round(cor_len_ctcf_spearman$estimate, 3),
+  ", p-value = ", formatC(cor_len_ctcf_spearman$p.value, format = "e", digits = 2)
+))
+
+# Save this summary to a separate file for record
+write.csv(df_len_ctcf, file = file.path(output_dir, "chromosome_length_vs_ctcf_density_summary.csv"), row.names = FALSE)
+
 ########################
 ########################
 # circos plot for loops
