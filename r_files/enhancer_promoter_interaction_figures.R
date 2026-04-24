@@ -314,34 +314,34 @@ plot_df <- sample_loop_counts %>%
 plot_df
 
 # Step 4: bar plot
-shared_loops_by_resolution <- ggplot(plot_df, aes(x = resolution, y = mean_shared_loops, fill = resolution)) +
-    geom_bar(stat = "identity", width = 0.6) +
-    geom_errorbar(
-        aes(
-            ymin = mean_shared_loops - sd_shared_loops,
-            ymax = mean_shared_loops + sd_shared_loops
-        ),
-        width = 0.2, color = "black"
-    ) +
-    labs(
-        title = "a. Shared Loop by Resolution",
-        x = "Resolution",
-        y = "Shared Loops (Average)"
-    ) +
-    theme_minimal() +
-    theme(
-        plot.title = element_text(hjust = 0.5),
-        legend.position = "none"
-    ) +
-    scale_fill_manual(values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93"))
+# shared_loops_by_resolution <- ggplot(plot_df, aes(x = resolution, y = mean_shared_loops, fill = resolution)) +
+#     geom_bar(stat = "identity", width = 0.6) +
+#     geom_errorbar(
+#         aes(
+#             ymin = mean_shared_loops - sd_shared_loops,
+#             ymax = mean_shared_loops + sd_shared_loops
+#         ),
+#         width = 0.2, color = "black"
+#     ) +
+#     labs(
+#         title = "a. Shared Loop by Resolution",
+#         x = "Resolution",
+#         y = "Shared Loops (Average)"
+#     ) +
+#     theme_minimal() +
+#     theme(
+#         plot.title = element_text(hjust = 0.5),
+#         legend.position = "none"
+#     ) +
+#     scale_fill_manual(values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93"))
 
-shared_loops_by_resolution
+# shared_loops_by_resolution
 
-saving_plot_dual( # utils_functions.R
-    plot_obj = shared_loops_by_resolution,
-    filename_base = "shared_loops_by_resolution_F3a",
-    output_dir = "./figures/submission/lt2mb",
-)
+# saving_plot_dual( # utils_functions.R
+#     plot_obj = shared_loops_by_resolution,
+#     filename_base = "shared_loops_by_resolution_F3a",
+#     output_dir = "./figures/submission/lt2mb",
+# )
 
 ########################################################################
 # 1. Loop
@@ -908,7 +908,7 @@ tss.select.sparate %>% dim() # 17849
 #############################
 # tss resource 2: deprecated (EXON used)
 #############################
-df.refgene.gtf <- read_tsv("~/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_refGene.gtf", # download from ucsc: https://hgdownload.soe.ucsc.edu/goldenPath/rn7/bigZips/genes/
+df.refgene.gtf <- read_tsv("~/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_refGene.gtf", # download from ucsc: https://hgdownload.soe.ucsc.edu/goldenPath/rn7/bigZips/genes/refGene.gtf.gz
     comment = "#",
     col_names = c("chr", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"),
     col_types = cols(.default = "c")
@@ -1564,7 +1564,8 @@ readr::write_tsv(
 message("Wrote bedGraph: ", ctcf_bedgraph_path)
 
 # Sort and convert bedGraph -> bigWig (kent tools)
-system(sprintf("LC_ALL=C sort -k1,1 -k2,2n %s > %s",
+system(sprintf(
+    "LC_ALL=C sort -k1,1 -k2,2n %s > %s",
     shQuote(ctcf_bedgraph_path),
     shQuote(ctcf_sorted_bedgraph_path)
 ))
@@ -1573,7 +1574,8 @@ message("Wrote sorted bedGraph: ", ctcf_sorted_bedgraph_path)
 if (Sys.which("bedGraphToBigWig") == "") {
     message("Skipping bigWig export: bedGraphToBigWig not found on PATH. Install kent-tools (mac: `brew install kent-tools`).")
 } else {
-    system(sprintf("bedGraphToBigWig %s %s %s",
+    system(sprintf(
+        "bedGraphToBigWig %s %s %s",
         shQuote(ctcf_sorted_bedgraph_path),
         shQuote(rn7_chrom_sizes_path),
         shQuote(ctcf_bigwig_path)
