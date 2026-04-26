@@ -1118,6 +1118,7 @@ df.final.loop %>% distinct(loop.id) # 15085
 # Loading df.chromosome.data (originally in enhancer_promoter_interaction_figures.R)
 ########################
 cache_file_chromosome_data <- "../data/df.chromosome.data.rds"
+cache_file_chromosome_data
 
 if (file.exists(cache_file_chromosome_data)) {
   message("Loading cached chromosome data from: ", cache_file_chromosome_data)
@@ -1180,7 +1181,9 @@ make_file_tag <- function(...) {
     str_replace_all("[^a-z0-9]+", "_") %>%
     str_replace_all("^_|_$", "")
 }
-
+##############################################
+# functions for reading gtf files (Ensembl)
+##############################################
 read_ensembl_gene_catalog <- function(gtf_file) {
   message("Reading Ensembl gene catalog from: ", gtf_file)
 
@@ -1206,71 +1209,60 @@ read_ensembl_gene_catalog <- function(gtf_file) {
     dplyr::select(chr, start, end, strand, gene_id, gene_name, gene_biotype)
 }
 
-read_ncbi_refseq_gene_catalog <- function(gtf_file) {
-  message("Reading NCBI RefSeq transcript catalog from: ", gtf_file)
+##############################################
+# functions for reading gtf files (NCBI)
+##############################################
+# NC_* accession to chr name mapping for mRatBN7.2 (GCF_015227675.2)
+# NC_051336.1=chr1 .. NC_051355.1=chr20, NC_051356.1=chrX, NC_051357.1=chrY, NC_001665.2=chrM
+ncbi_accession_to_chr <- c(
+  "NC_051336.1" = "chr1",  "NC_051337.1" = "chr2",  "NC_051338.1" = "chr3",
+  "NC_051339.1" = "chr4",  "NC_051340.1" = "chr5",  "NC_051341.1" = "chr6",
+  "NC_051342.1" = "chr7",  "NC_051343.1" = "chr8",  "NC_051344.1" = "chr9",
+  "NC_051345.1" = "chr10", "NC_051346.1" = "chr11", "NC_051347.1" = "chr12",
+  "NC_051348.1" = "chr13", "NC_051349.1" = "chr14", "NC_051350.1" = "chr15",
+  "NC_051351.1" = "chr16", "NC_051352.1" = "chr17", "NC_051353.1" = "chr18",
+  "NC_051354.1" = "chr19", "NC_051355.1" = "chr20",
+  "NC_051356.1" = "chrX",  "NC_051357.1" = "chrY",  "NC_001665.2" = "chrM"
+)
 
-  refseq_transcript_raw <- read_tsv(
-    gtf_file,
+read_ncbi_gff3_gene_catalog <- function(gff3_file) {
+  message("Reading NCBI RefSeq gene catalog from GFF3: ", gff3_file)
+
+  gff3_raw <- read_tsv(
+    gff3_file,
     comment = "#",
     col_names = c("chr", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"),
     col_types = cols(.default = "c")
   ) %>%
-    filter(feature == "transcript") %>%
-    filter(chr %in% valid_chromosomes) %>%
+    filter(feature == "gene") %>%
+    filter(chr %in% names(ncbi_accession_to_chr)) %>%
     mutate(
+      chr = ncbi_accession_to_chr[chr],
       start = as.numeric(start),
       end = as.numeric(end)
-    )
-  # 98852
-  refseq_transcript_keys <- get_attribute_keys(refseq_transcript_raw$attribute)
-  # > refseq_transcript_keys
-  # [1] "gene_id"       "gene_name"     "transcript_id"
+    ) %>%
+    filter(chr %in% valid_chromosomes)
 
-  refseq_transcript_raw %>%
-    bind_cols(refseq_transcript_raw$attribute %>% map_dfr(~ extracting_attributes(.x, keys = refseq_transcript_keys))) %>%
+  # GFF3 attribute: key=value;key=value format
+  gff3_raw %>%
     mutate(
-      gene_id = coalesce(gene_id, gene_name),
-      refseq_accession_prefix = str_extract(transcript_id, "^[A-Z]+_"),
-      refseq_transcript_class = case_when(
-        str_detect(transcript_id, "^[NX]M_") ~ "NM/XM",
-        str_detect(transcript_id, "^[NX]R_") ~ "NR/XR",
-        TRUE ~ "other"
-      )
+      gene_id = str_match(attribute, "ID=gene-([^;]+)")[, 2],
+      gene_name = str_match(attribute, "gene=([^;]+)")[, 2],
+      gene_biotype = str_match(attribute, "gene_biotype=([^;]+)")[, 2]
     ) %>%
-    group_by(gene_id) %>%
-    summarise(
-      chr = dplyr::first(chr),
-      start = min(start, na.rm = TRUE),
-      end = max(end, na.rm = TRUE),
-      strand = dplyr::first(strand),
-      gene_name = dplyr::first(gene_name),
-      transcript_count = n_distinct(transcript_id),
-      refseq_accession_prefixes = str_c(sort(unique(refseq_accession_prefix)), collapse = ","),
-      has_nm_xm_transcript = any(refseq_transcript_class == "NM/XM", na.rm = TRUE),
-      has_nr_xr_transcript = any(refseq_transcript_class == "NR/XR", na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    mutate(
-      refseq_transcript_group = case_when(
-        has_nm_xm_transcript ~ "NM/XM",
-        has_nr_xr_transcript ~ "NR/XR",
-        TRUE ~ "other"
-      )
-    ) %>%
-    dplyr::select(
-      chr, start, end, strand, gene_id, gene_name, refseq_transcript_group,
-      transcript_count, refseq_accession_prefixes,
-      has_nm_xm_transcript, has_nr_xr_transcript
-    )
+    distinct(gene_id, .keep_all = TRUE) %>%
+    dplyr::select(chr, start, end, strand, gene_id, gene_name, gene_biotype)
 }
 
-build_density_summary <- function(df_gene_input, chrom_data, ctcf_data) {
+# function to build density summary (6 CSV files, A, B, C(ENSEMBL) and D, E, F(NCBI))
+build_density_summary <- function(chrom_data, df_gene_input, ctcf_data) {
   chrom_data %>%
     mutate(
       chr = str_remove(as.character(chr), "^chr"),
-      chromosome_length_mb = end / 1e6
+      chromosome_length_mb = end / 1e6 # Unit for mb
     ) %>%
-    dplyr::select(chr, chromosome_length_mb) %>%
+    group_by(chr) %>%
+    summarise(chromosome_length_mb = max(chromosome_length_mb, na.rm = TRUE), .groups = "drop") %>%
     left_join(
       df_gene_input %>%
         mutate(chr = str_remove(as.character(chr), "^chr")) %>%
@@ -1295,7 +1287,7 @@ build_density_summary <- function(df_gene_input, chrom_data, ctcf_data) {
 run_density_analysis <- function(df_gene_input, panel_label, source_label, gene_category, chrom_data, ctcf_data, out_dir) {
   message(paste0(">>> Running panel ", panel_label, ": ", source_label, " / ", gene_category))
 
-  density_summary <- build_density_summary(df_gene_input, chrom_data, ctcf_data)
+  density_summary <- build_density_summary(chrom_data, df_gene_input, ctcf_data)
   cor_pearson <- cor.test(density_summary$genes_per_mb, density_summary$ctcf_per_mb, method = "pearson")
 
   stats_df <- tibble(
@@ -1341,11 +1333,16 @@ run_density_analysis <- function(df_gene_input, panel_label, source_label, gene_
   return(list(summary = density_summary, stats = stats_df, plot = plot_obj))
 }
 
+# data location
 ensembl_gtf_file <- "../data/Rattus_norvegicus.mRatBN7.2.113.gtf"
-ncbi_refseq_gtf_file <- "../data/ncbiRefSeq.gtf" # https://hgdownload.soe.ucsc.edu/goldenPath/rn7/bigZips/genes/
+ncbi_refseq_gff3_file <- "../data/GCF_015227675.2_mRatBN7.2_genomic.gff" # https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/015/227/675/GCF_015227675.2_mRatBN7.2/
+# ../data/ncbiRefSeq.gtf is from https://hgdownload.soe.ucsc.edu/goldenPath/rn7/bigZips/genes/
 
+################################################
+# Run density analysis for each category (panels A–D)
+################################################
 df_ensembl_gene_catalog <- read_ensembl_gene_catalog(ensembl_gtf_file)
-df_ncbi_refseq_gene_catalog <- read_ncbi_refseq_gene_catalog(ncbi_refseq_gtf_file)
+df_ncbi_refseq_gene_catalog <- read_ncbi_gff3_gene_catalog(ncbi_refseq_gff3_file)
 
 df_ensembl_gene_catalog %>% head()
 df_ncbi_refseq_gene_catalog %>% head()
@@ -1353,26 +1350,25 @@ df_ncbi_refseq_gene_catalog %>% head()
 df_ensembl_gene_catalog %>%
   count(gene_biotype, name = "count") %>%
   arrange(desc(count))
-
 #    gene_biotype         count
 #    <chr>                <int>
 #  1 protein_coding       23038
 #  2 lncRNA                2465
 
 df_ncbi_refseq_gene_catalog %>%
-  count(refseq_transcript_group, name = "count") %>%
+  count(gene_biotype, name = "count") %>%
   arrange(desc(count))
-#   refseq_transcript_group count
-# 1 NM/XM                  22180
-# 2 NR/XR                  10955
+#    gene_biotype   count
+#  1 protein_coding 21944
+#  2 lncRNA          7815
 
 gene_sets <- list(
   ensembl_total = df_ensembl_gene_catalog,
   ensembl_protein_coding = df_ensembl_gene_catalog %>% filter(gene_biotype == "protein_coding"),
   ensembl_lncRNA = df_ensembl_gene_catalog %>% filter(gene_biotype == "lncRNA"),
-  ncbi_refseq_total = df_ncbi_refseq_gene_catalog %>% filter(refseq_transcript_group != "other"),
-  ncbi_refseq_nm_xm = df_ncbi_refseq_gene_catalog %>% filter(refseq_transcript_group == "NM/XM"),
-  ncbi_refseq_nr_xr = df_ncbi_refseq_gene_catalog %>% filter(refseq_transcript_group == "NR/XR")
+  ncbi_refseq_total = df_ncbi_refseq_gene_catalog,
+  ncbi_refseq_protein_coding = df_ncbi_refseq_gene_catalog %>% filter(gene_biotype == "protein_coding"),
+  ncbi_refseq_lncRNA = df_ncbi_refseq_gene_catalog %>% filter(gene_biotype == "lncRNA")
 )
 
 analysis_design <- tribble(
@@ -1381,10 +1377,11 @@ analysis_design <- tribble(
   "B", "Ensembl", "Protein-coding genes", "ensembl_protein_coding",
   "C", "Ensembl", "lncRNA genes", "ensembl_lncRNA",
   "D", "NCBI RefSeq", "All genes", "ncbi_refseq_total",
-  "E", "NCBI RefSeq", "NM/XM genes", "ncbi_refseq_nm_xm",
-  "F", "NCBI RefSeq", "NR/XR genes", "ncbi_refseq_nr_xr"
+  "E", "NCBI RefSeq", "Protein-coding genes", "ncbi_refseq_protein_coding",
+  "F", "NCBI RefSeq", "lncRNA genes", "ncbi_refseq_lncRNA"
 )
 
+# generating 6 csv files
 density_results_list <- pmap(
   analysis_design,
   function(panel, annotation_source, gene_category, gene_set_key) {
@@ -1404,6 +1401,7 @@ names(density_results_list) <- analysis_design$panel
 comparison_stats <- bind_rows(map(density_results_list, "stats"))
 comparison_summary <- bind_rows(map(density_results_list, "summary"))
 
+# 6 CSV files merged into one file: chromosome_gene_ctcf_density_summary_six_panel.csv, AND correlation: chromosome_gene_ctcf_density_correlation_six_panel.csv
 write.csv(comparison_stats, file = file.path(output_dir, "chromosome_gene_ctcf_density_correlation_six_panel.csv"), row.names = FALSE)
 write.csv(comparison_summary, file = file.path(output_dir, "chromosome_gene_ctcf_density_summary_six_panel.csv"), row.names = FALSE)
 
@@ -1416,6 +1414,7 @@ six_panel_gene_ctcf_density <- cowplot::plot_grid(
   label_fontface = "bold"
 )
 
+# saving 6 panel plot (ENSEMBL vs NCBI RefSeq genes with CTCF)
 saving_plot_dual(
   plot_obj = six_panel_gene_ctcf_density,
   filename_base = "chromosome_gene_ctcf_density_six_panel_ensembl_ncbi_refseq",
@@ -1431,6 +1430,104 @@ message("\n>>> Six-panel Pearson correlation statistics:")
 print(comparison_stats)
 
 ##########################################################
+# Figure 4: CTCF density ideogram + NCBI RefSeq density
+##########################################################
+
+# ── Panel a: CTCF binding site density ideogram ──────────────────────────────
+# Prepare karyotype data for RIdeogram (Chr, Start, End format)
+karyotype_data <- df.chromosome.data %>%
+  mutate(
+    Chr = str_remove(chr, "^chr"),
+    Start = 0,
+    End = as.numeric(end)
+  ) %>%
+  filter(Chr %in% chromosome_levels) %>%
+  dplyr::select(Chr, Start, End) %>%
+  arrange(factor(Chr, levels = chromosome_levels))
+
+# CTCF density bins for ideogram heatmap overlay
+bin_size_ideogram <- 1000000
+ctcf_density_for_ideogram <- process_feature_bins(
+  feature_df = df_ctcf_ideogram %>% mutate(chr = str_remove(chr, "^chr")),
+  chromosome_ends = karyotype_data %>% dplyr::rename(chr = Chr, end = End),
+  bin_size = bin_size_ideogram,
+  label = "CTCF"
+) %>%
+  dplyr::rename(Chr = chr, Start = start, End = end, Value = Value) %>%
+  dplyr::select(Chr, Start, End, Value)
+
+# Generate ideogram SVG via RIdeogram
+ideogram(
+  karyotype = karyotype_data,
+  overlaid = ctcf_density_for_ideogram
+)
+
+# Convert SVG to PNG
+ideogram_svg <- "chromosome.svg"
+ideogram_png <- file.path(output_dir, "figure4_panel_a_ctcf_ideogram.png")
+rsvg::rsvg_png(ideogram_svg, file = ideogram_png, width = 2400)
+
+# White background and trim excess whitespace so panel (a) fills its slot.
+image_read(ideogram_png) %>%
+  image_background(color = "white") %>%
+  image_trim(fuzz = 5) %>%
+  image_border(color = "white", geometry = "80x80") %>%
+  image_write(ideogram_png)
+
+# Clean up SVG
+if (file.exists(ideogram_svg)) file.remove(ideogram_svg)
+
+message(">>> Figure 4 panel (a) ideogram saved: ", ideogram_png)
+
+# ── Panels b, c, d: NCBI RefSeq density scatter plots ──────────────────────
+# Extract the three NCBI RefSeq plots (D, E, F from the six-panel)
+format_figure4_correlation_plot <- function(plot_obj, plot_title) {
+  plot_obj +
+    labs(title = plot_title) +
+    theme(
+      aspect.ratio = 1,
+      plot.title = element_text(face = "bold", size = 13),
+      plot.subtitle = element_text(size = 11),
+      axis.title = element_text(size = 11),
+      axis.text = element_text(size = 9),
+      plot.margin = margin(7, 6, 4, 6)
+    )
+}
+
+plot_ncbi_all <- format_figure4_correlation_plot(density_results_list[["D"]]$plot, "All genes")
+plot_ncbi_protein <- format_figure4_correlation_plot(density_results_list[["E"]]$plot, "Protein-coding genes")
+plot_ncbi_lncRNA <- format_figure4_correlation_plot(density_results_list[["F"]]$plot, "lncRNA genes")
+
+# ── Combine all panels into Figure 4 ────────────────────────────────────────
+# Panel a: ideogram (read as ggdraw image, no label here — labels added by plot_grid)
+panel_a <- ggdraw() +
+  draw_image(ideogram_png, scale = 1.00)
+
+# ── Figure 4: 1 row x 4 columns layout ─────────────────────────────────────
+figure_4_1x4 <- cowplot::plot_grid(
+  panel_a, plot_ncbi_all, plot_ncbi_protein, plot_ncbi_lncRNA,
+  labels = c("a", "b", "c", "d"),
+  ncol = 4,
+  align = "hv",
+  label_size = 16,
+  label_fontface = "bold",
+  rel_widths = c(1.35, 1, 1, 1)
+)
+
+saving_plot_dual(
+  plot_obj = figure_4_1x4,
+  filename_base = "figure_4_ctcf_ideogram_ncbi_refseq_density_1x4",
+  output_dir = output_dir,
+  width_in = 16,
+  height_in = 5,
+  scale_x = 0.9,
+  scale_y = 0.9,
+  dpi = 300
+)
+
+message(">>> Figure 4 (1x4) saved to: ", output_dir)
+
+##########################################################
 # additional for discussion
 ##########################################################
 # Check correlation between chromosome length and CTCF density
@@ -1439,14 +1536,67 @@ df_len_ctcf <- density_results_list[["A"]]$summary %>%
   dplyr::select(chr, chromosome_length_mb, ctcf_per_mb)
 
 cor_len_ctcf_pearson <- cor.test(df_len_ctcf$chromosome_length_mb, df_len_ctcf$ctcf_per_mb, method = "pearson")
+cor_len_ctcf_spearman <- cor.test(df_len_ctcf$chromosome_length_mb, df_len_ctcf$ctcf_per_mb, method = "spearman")
+
+len_ctcf_correlation_stats <- tibble(
+  comparison = "Chromosome length vs CTCF density",
+  method = c("pearson", "spearman"),
+  estimate = c(
+    unname(cor_len_ctcf_pearson$estimate),
+    unname(cor_len_ctcf_spearman$estimate)
+  ),
+  p_value = c(
+    cor_len_ctcf_pearson$p.value,
+    cor_len_ctcf_spearman$p.value
+  )
+)
 
 message(paste0(
   "Pearson correlation (Length vs CTCF Density): r = ", round(cor_len_ctcf_pearson$estimate, 3),
   ", p-value = ", formatC(cor_len_ctcf_pearson$p.value, format = "e", digits = 2)
 ))
+message(paste0(
+  "Spearman correlation (Length vs CTCF Density): rho = ", round(cor_len_ctcf_spearman$estimate, 3),
+  ", p-value = ", formatC(cor_len_ctcf_spearman$p.value, format = "e", digits = 2)
+))
 
-# Save this summary to a separate file for record
+# Save chromosome-level summary and correlation statistics for record
 write.csv(df_len_ctcf, file = file.path(output_dir, "chromosome_length_vs_ctcf_density_summary.csv"), row.names = FALSE)
+write.csv(len_ctcf_correlation_stats, file = file.path(output_dir, "chromosome_length_vs_ctcf_density_correlation.csv"), row.names = FALSE)
+
+plot_len_ctcf <- df_len_ctcf %>%
+  ggplot(aes(x = chromosome_length_mb, y = ctcf_per_mb)) +
+  geom_point(size = 2.6, color = "#2F5597") +
+  geom_smooth(method = "lm", se = FALSE, color = "#C44E52", linewidth = 0.8) +
+  geom_text(aes(label = chr), nudge_y = max(df_len_ctcf$ctcf_per_mb, na.rm = TRUE) * 0.03, size = 3, check_overlap = TRUE) +
+  labs(
+    title = "Chromosome length vs CTCF density",
+    subtitle = paste0(
+      "Pearson r = ", round(cor_len_ctcf_pearson$estimate, 3),
+      " (p = ", formatC(cor_len_ctcf_pearson$p.value, format = "e", digits = 2), "); ",
+      "Spearman rho = ", round(cor_len_ctcf_spearman$estimate, 3),
+      " (p = ", formatC(cor_len_ctcf_spearman$p.value, format = "e", digits = 2), ")"
+    ),
+    x = "Chromosome length (Mb)",
+    y = "CTCF sites per Mb"
+  ) +
+  theme_bw(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", size = 12),
+    plot.subtitle = element_text(size = 9),
+    panel.grid.minor = element_blank()
+  )
+
+saving_plot_dual(
+  plot_obj = plot_len_ctcf,
+  filename_base = "chromosome_length_vs_ctcf_density_correlation",
+  output_dir = output_dir,
+  width_in = 5.5,
+  height_in = 4.5,
+  scale_x = 1,
+  scale_y = 1,
+  dpi = 300
+)
 
 ########################
 ########################
