@@ -1494,25 +1494,26 @@ format_figure4_correlation_plot <- function(plot_obj, plot_title) {
     )
 }
 
-plot_ncbi_all <- format_figure4_correlation_plot(density_results_list[["D"]]$plot, "All genes")
-plot_ncbi_protein <- format_figure4_correlation_plot(density_results_list[["E"]]$plot, "Protein-coding genes")
-plot_ncbi_lncRNA <- format_figure4_correlation_plot(density_results_list[["F"]]$plot, "lncRNA genes")
+plot_ncbi_all <- format_figure4_correlation_plot(density_results_list[["D"]]$plot, "b. All genes")
+plot_ncbi_protein <- format_figure4_correlation_plot(density_results_list[["E"]]$plot, "c. Protein-coding genes")
+plot_ncbi_lncRNA <- format_figure4_correlation_plot(density_results_list[["F"]]$plot, "d. lncRNA genes")
 
 # ── Combine all panels into Figure 4 ────────────────────────────────────────
 # Panel a: ideogram (read as ggdraw image, no label here — labels added by plot_grid)
 panel_a <- ggdraw() +
-  draw_image(ideogram_png, scale = 1.00)
+  draw_image(ideogram_png, scale = 0.9) +
+  draw_label("a", x = 0.08, y = 0.985, hjust = 0, vjust = 1, fontface = "bold", size = 13)
 
 # ── Figure 4: 1 row x 4 columns layout ─────────────────────────────────────
-figure_4_1x4 <- cowplot::plot_grid(
+figure_4_1x4_grid <- cowplot::plot_grid(
   panel_a, plot_ncbi_all, plot_ncbi_protein, plot_ncbi_lncRNA,
-  labels = c("a", "b", "c", "d"),
   ncol = 4,
   align = "hv",
-  label_size = 16,
-  label_fontface = "bold",
   rel_widths = c(1.35, 1, 1, 1)
 )
+
+figure_4_1x4 <- ggdraw() +
+  draw_plot(figure_4_1x4_grid, x = -0.028, y = 0, width = 1, height = 1)
 
 saving_plot_dual(
   plot_obj = figure_4_1x4,
