@@ -169,6 +169,8 @@ df.promoter.rn7.epd.GR <- GRanges(
     end = df.promoter.rn7.epd$end
   )
 )
+
+df.promoter.rn7.epd %>% dim() # 12,529
 # ensembl_exon_id
 # 1 chr1:1807644:1807710:-:ENSRNOG00000040300:LOC120093164:6
 # refseq_exon_id                         start     end
@@ -706,6 +708,7 @@ df.final.up.down.directional.point.all.in.one.decision.histogram <- df.final.up.
   theme(plot.title = element_text(hjust = 0.5))
 df.final.up.down.directional.point.all.in.one.decision.histogram
 
+# Figure 8
 df.final.up.down.directional.point.all.in.one.decision.200kb <- df.final.up.down.directional.point.decision %>%
   ggplot(aes(x = distance)) +
   # geom_density(fill = "skyblue") +
@@ -715,7 +718,8 @@ df.final.up.down.directional.point.all.in.one.decision.200kb <- df.final.up.down
   # annotate("text", y = 1, x = stats_decision$Q3, label = paste0("Q3=", round(stats_decision$Q3, 2)), vjust = -0.5, hjust = 1, color = "blue") +
   labs(
     # title = "Density plot of distance between TSS/Promoter and anchor",
-    y = "Distance"
+    y = "Count",
+    x = "Distance"
   ) +
   # scale_y_log10() +
   theme_minimal() +
@@ -1513,14 +1517,14 @@ figure_4_1x4_grid <- cowplot::plot_grid(
 )
 
 figure_4_1x4 <- ggdraw() +
-  draw_plot(figure_4_1x4_grid, x = -0.028, y = 0, width = 1, height = 1)
+  draw_plot(figure_4_1x4_grid, x = -0.05, y = -0.055, width = 1.043, height = 1.11)
 
 saving_plot_dual(
   plot_obj = figure_4_1x4,
   filename_base = "figure_4_ctcf_ideogram_ncbi_refseq_density_1x4",
   output_dir = output_dir,
-  width_in = 16,
-  height_in = 5,
+  width_in = 15.4,
+  height_in = 4.3,
   scale_x = 0.9,
   scale_y = 0.9,
   dpi = 300
@@ -1816,3 +1820,167 @@ collage <- image_append(do.call(c, row_tiles), stack = TRUE)
 
 # 3) PNG로 저장
 image_write(collage, path = outfile, format = "png")
+
+
+##############################################################
+##############################################################
+# pre-requisites for submission files
+##############################################################
+##############################################################
+##############################################################
+# Check merged-vs-replicate HICCUPS loop files for 592 and 607
+##############################################################
+# This block is for manual provenance/QC checks before deciding whether
+# to use a merged sample or an individual replicate.
+medium_resolution_loop_dir <- "/Users/pete/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/medium_resolution_5k10k25k"
+
+replicate_check_files <- tibble::tribble(
+  ~sample_family, ~sample_code, ~sample_type, ~loop_file, ~qc_file,
+  "592", "592", "merged", file.path(medium_resolution_loop_dir, "592_inter_30.hiccups.5k10k25k", "merged_loops.bedpe"),
+  "/Users/pete/Desktop/playground/enhancer/data/QC/592_intact_inter_30.txt",
+  "592", "592AA", "replicate", file.path(medium_resolution_loop_dir, "592AA_inter_30.hiccups.5k10k25k", "merged_loops.bedpe"),
+  "/Users/pete/Desktop/playground/enhancer/data/QC/592AA_intact_inter_30.txt",
+  "592", "592BB", "replicate_used", file.path(medium_resolution_loop_dir, "592BB_inter_30.hiccups.5k10k25k", "merged_loops.bedpe"),
+  "/Users/pete/Desktop/playground/enhancer/data/QC/592BB_intact_inter_30.txt",
+  "607", "607", "merged_used", file.path(medium_resolution_loop_dir, "607_inter_30.hiccups.5k10k25k", "merged_loops.bedpe"),
+  "/Users/pete/Desktop/playground/enhancer/data/QC/607_intact_inter_30.txt",
+  "607", "607BB", "replicate", file.path(medium_resolution_loop_dir, "607BB_inter_30.hiccups.5k10k25k", "merged_loops.bedpe"),
+  "/Users/pete/Desktop/playground/enhancer/data/QC/607BB_intact_inter_30.txt",
+  "607", "607CC", "replicate", file.path(medium_resolution_loop_dir, "607CC_inter_30.hiccups.5k10k25k", "merged_loops.bedpe"),
+  "/Users/pete/Desktop/playground/enhancer/data/QC/607CC_intact_inter_30.txt"
+)
+
+analysis_loop_files_to_check <- tibble::tribble(
+  ~sample_family, ~sample_code, ~analysis_file,
+  "592", "592BB", "/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/loops/592BB_merged_loops_5k10k25k.bedpe",
+  "607", "607", "/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/loops/607_intact_merged_loops_5k10k25k.bedpe"
+)
+
+sha256_file <- function(file) {
+  if (!file.exists(file)) {
+    return(NA_character_)
+  }
+
+  str_split(system2("shasum", c("-a", "256", shQuote(file)), stdout = TRUE), "\\s+", simplify = TRUE)[1]
+}
+
+read_hiccups_loop_check_bedpe <- function(file) {
+  header_line <- readLines(file, n = 1)
+  column_names <- str_split(str_remove(header_line, "^#"), "\t", simplify = TRUE) %>% as.character()
+
+  readr::read_tsv(
+    file,
+    comment = "#",
+    col_names = column_names,
+    col_types = readr::cols(.default = readr::col_character()),
+    show_col_types = FALSE
+  ) %>%
+    mutate(
+      x1 = as.integer(x1),
+      x2 = as.integer(x2),
+      y1 = as.integer(y1),
+      y2 = as.integer(y2),
+      resolution = x2 - x1,
+      loop_key = str_c(chr1, x1, x2, chr2, y1, y2, sep = "_")
+    )
+}
+
+parse_qc_stat_line <- function(lines, pattern) {
+  line <- lines[str_detect(lines, fixed(pattern))]
+  if (length(line) == 0) {
+    return(NA_character_)
+  }
+
+  str_squish(str_remove(line[1], paste0("^\\s*", pattern, ":\\s*")))
+}
+
+read_juicer_qc_summary <- function(file) {
+  if (!file.exists(file)) {
+    return(tibble(
+      qc_file_exists = FALSE,
+      sequenced_read_pairs = NA_character_,
+      normal_paired = NA_character_,
+      pcr_duplicates = NA_character_,
+      library_complexity_estimate = NA_character_,
+      hic_contacts = NA_character_
+    ))
+  }
+
+  lines <- readLines(file, warn = FALSE)
+  tibble(
+    qc_file_exists = TRUE,
+    sequenced_read_pairs = parse_qc_stat_line(lines, "Sequenced Read Pairs"),
+    normal_paired = parse_qc_stat_line(lines, "Normal Paired"),
+    pcr_duplicates = parse_qc_stat_line(lines, "PCR Duplicates"),
+    library_complexity_estimate = parse_qc_stat_line(lines, "Library Complexity Estimate"),
+    hic_contacts = parse_qc_stat_line(lines, "Hi-C Contacts")
+  )
+}
+
+replicate_loop_data <- replicate_check_files %>%
+  mutate(
+    loop_file_exists = file.exists(loop_file),
+    qc_file_exists = file.exists(qc_file),
+    sha256 = map_chr(loop_file, sha256_file),
+    data = map(loop_file, read_hiccups_loop_check_bedpe)
+  )
+
+loop_qc_summary <- replicate_loop_data %>%
+  transmute(
+    sample_family,
+    sample_code,
+    sample_type,
+    loop_file,
+    loop_file_exists,
+    sha256,
+    n_loops = map_int(data, nrow),
+    n_unique_loop_keys = map_int(data, ~ n_distinct(.x$loop_key)),
+    resolution_distribution = map_chr(data, ~ .x %>%
+      count(resolution, name = "n") %>%
+      arrange(resolution) %>%
+      mutate(label = str_c(resolution, "=", n)) %>%
+      pull(label) %>%
+      str_c(collapse = "; ")),
+    qc_file
+  ) %>%
+  bind_cols(map_dfr(replicate_check_files$qc_file, read_juicer_qc_summary))
+
+loop_overlap_summary <- replicate_loop_data %>%
+  dplyr::select(sample_family, sample_code, data) %>%
+  group_by(sample_family) %>%
+  group_modify(~ {
+    pair_grid <- t(combn(.x$sample_code, 2)) %>% as_tibble(.name_repair = "minimal")
+    names(pair_grid) <- c("sample_a", "sample_b")
+
+    pair_grid %>%
+      rowwise() %>%
+      mutate(
+        loops_a = list(.x$data[[match(sample_a, .x$sample_code)]]$loop_key),
+        loops_b = list(.x$data[[match(sample_b, .x$sample_code)]]$loop_key),
+        n_a = length(loops_a),
+        n_b = length(loops_b),
+        n_intersect = length(intersect(loops_a, loops_b)),
+        n_a_only = length(setdiff(loops_a, loops_b)),
+        n_b_only = length(setdiff(loops_b, loops_a)),
+        identical_loop_sets = setequal(loops_a, loops_b)
+      ) %>%
+      ungroup() %>%
+      dplyr::select(-loops_a, -loops_b)
+  }) %>%
+  ungroup()
+
+analysis_file_identity_summary <- analysis_loop_files_to_check %>%
+  mutate(
+    analysis_file_exists = file.exists(analysis_file),
+    analysis_sha256 = map_chr(analysis_file, sha256_file)
+  ) %>%
+  left_join(
+    loop_qc_summary %>%
+      dplyr::select(sample_family, sample_code, source_sha256 = sha256, source_loop_file = loop_file),
+    by = c("sample_family", "sample_code")
+  ) %>%
+  mutate(analysis_file_identical_to_source = analysis_sha256 == source_sha256)
+
+print(loop_qc_summary, n = Inf, width = Inf)
+print(loop_overlap_summary, n = Inf, width = Inf)
+print(analysis_file_identity_summary, n = Inf, width = Inf)
