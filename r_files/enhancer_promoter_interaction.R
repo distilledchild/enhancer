@@ -1856,6 +1856,7 @@ analysis_loop_files_to_check <- tibble::tribble(
   "607", "607", "/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/loops/607_intact_merged_loops_5k10k25k.bedpe"
 )
 
+# sha256 for integrity check
 sha256_file <- function(file) {
   if (!file.exists(file)) {
     return(NA_character_)
@@ -1984,3 +1985,63 @@ analysis_file_identity_summary <- analysis_loop_files_to_check %>%
 print(loop_qc_summary, n = Inf, width = Inf)
 print(loop_overlap_summary, n = Inf, width = Inf)
 print(analysis_file_identity_summary, n = Inf, width = Inf)
+
+##############################################################
+# submission files
+##############################################################
+# 1. loops
+
+write.csv(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.csv", row.names = FALSE)
+
+# 1-1. Raw HICCUPS loop results with functional-loop annotation
+# Keep every original BEDPE column and prepend sample metadata plus a functional flag.
+loop_file_metadata <- tibble::tribble(
+  ~sample_code, ~sample_name, ~file,
+  "592BB", "SHR/OlaIpcv", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/592BB_merged_loops_5k10k25k.bedpe",
+  "607", "HXB10", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/607_intact_merged_loops_5k10k25k.bedpe",
+  "74AA", "F344/Stm", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/74AA_intact_merged_loops5k10k25k.bedpe",
+  "A2DB", "LE/Stm", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/A2DB_merged_loops_5k10k25k.bedpe",
+  "D765A", "BXH6", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/D765A_intact_merged_loops_5k10k25k.bedpe",
+  "DA08A", "HXB2", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/DA08A_intact_merged_loops_5k10k25k.bedpe",
+  "DA21A", "SHR/OlaIpcvxBN/NHsdMcwi", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/DA21A_intact_merged_loops_5k10k25k.bedpe",
+  "DA68A", "HXB31", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/DA68A_intact_merged_loops_5k10k25k.bedpe",
+  "DBA9A", "HXB23", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/DBA9A_intact_merged_loops_5k10k25k.bedpe",
+  "DE8BA", "BN-Lx", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/DE8BA_intact_merged_loops_5k10k25k.bedpe"
+) %>%
+  mutate(file = path.expand(file))
+loop_file_metadata
+
+read_hiccups_bedpe <- function(file) {
+  header_line <- readLines(file, n = 1)
+  column_names <- str_split(str_remove(header_line, "^#"), "\t", simplify = TRUE) %>% as.character()
+
+  readr::read_tsv(
+    file,
+    comment = "#",
+    col_names = column_names,
+    col_types = readr::cols(.default = readr::col_character()),
+    show_col_types = FALSE
+  )
+}
+
+final_loop_ids <- df.final.loop %>%
+  distinct(loop.id) %>%
+  pull(loop.id)
+
+df.raw.hiccups.loops.with.functional <- loop_file_metadata %>%
+  mutate(data = purrr::map(file, read_hiccups_bedpe)) %>%
+  dplyr::select(-file) %>%
+  tidyr::unnest(data) %>%
+  mutate(
+    loop.id = str_c(chr1, x1, x2, chr2, y1, y2, as.numeric(x2) - as.numeric(x1), sep = "_"),
+    functional = loop.id %in% final_loop_ids
+  ) %>%
+  dplyr::select(sample_code, sample_name, functional, dplyr::everything(), -loop.id)
+
+df.raw.hiccups.loops.with.functional %>% head(2)
+
+write.csv(
+  df.raw.hiccups.loops.with.functional,
+  file = "./figures/submission/lt2mb/raw_hiccups_loops_with_functional_annotation.csv",
+  row.names = FALSE
+)
