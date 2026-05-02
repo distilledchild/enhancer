@@ -1856,7 +1856,7 @@ analysis_loop_files_to_check <- tibble::tribble(
   "607", "607", "/Users/pete/dropbox/Gateway_to_Hao/enhancer/data/loops/607_intact_merged_loops_5k10k25k.bedpe"
 )
 
-# sha256 for integrity check
+# Calculate a SHA-256 checksum so source and analysis loop files can be compared byte-for-byte.
 sha256_file <- function(file) {
   if (!file.exists(file)) {
     return(NA_character_)
@@ -1865,6 +1865,7 @@ sha256_file <- function(file) {
   str_split(system2("shasum", c("-a", "256", shQuote(file)), stdout = TRUE), "\\s+", simplify = TRUE)[1]
 }
 
+# Read one HICCUPS BEDPE file for replicate checks and add resolution plus a stable loop key.
 read_hiccups_loop_check_bedpe <- function(file) {
   header_line <- readLines(file, n = 1)
   column_names <- str_split(str_remove(header_line, "^#"), "\t", simplify = TRUE) %>% as.character()
@@ -1886,6 +1887,7 @@ read_hiccups_loop_check_bedpe <- function(file) {
     )
 }
 
+# Pull one requested metric line, such as PCR duplicates, from a Juicer QC text report.
 parse_qc_stat_line <- function(lines, pattern) {
   line <- lines[str_detect(lines, fixed(pattern))]
   if (length(line) == 0) {
@@ -1895,6 +1897,7 @@ parse_qc_stat_line <- function(lines, pattern) {
   str_squish(str_remove(line[1], paste0("^\\s*", pattern, ":\\s*")))
 }
 
+# Summarize the Juicer inter_30 QC metrics needed to compare merged and replicate samples.
 read_juicer_qc_summary <- function(file) {
   if (!file.exists(file)) {
     return(tibble(
@@ -1925,6 +1928,7 @@ replicate_loop_data <- replicate_check_files %>%
     sha256 = map_chr(loop_file, sha256_file),
     data = map(loop_file, read_hiccups_loop_check_bedpe)
   )
+replicate_loop_data
 
 loop_qc_summary <- replicate_loop_data %>%
   transmute(
@@ -1945,6 +1949,15 @@ loop_qc_summary <- replicate_loop_data %>%
     qc_file
   ) %>%
   bind_cols(map_dfr(replicate_check_files$qc_file, read_juicer_qc_summary))
+loop_qc_summary
+#   qc_file_exists sequenced_read_pairs normal_paired        pcr_duplicates          library_complexity_estimate hic_contacts
+#   <lgl>          <chr>                <chr>                <chr>                   <chr>                       <chr>
+# 1 TRUE           952,935,229          449,085,823 (47.13%) 427,615,729 (44.87%)    527,118,517                 315,152,713 (33.07% / 74.69%)
+# 2 TRUE           531,466,699          246,391,353 (46.36%) 376,207,048 (70.79%)    98,406,062                  55,894,479 (10.52% / 57.26%)
+# 3 TRUE           421,468,530          202,694,261 (48.09%) 50,034,603 (11.87%)     1,282,469,101               259,873,924 (61.66% / 79.79%)
+# 4 TRUE           671,477,361          354,240,739 (52.76%) 77,514,001 (11.54%)     2,156,982,361               420,553,241 (62.63% / 79.68%)
+# 5 TRUE           338,261,639          178,771,797 (52.85%) 45,234,532 (13.37%)     919,287,504                 205,104,481 (60.63% / 79.17%)
+# 6 TRUE           333,215,722          175,468,875 (52.66%) 29,925,948 (8.98%)      1,411,666,180               216,923,918 (65.10% / 80.02%)
 
 loop_overlap_summary <- replicate_loop_data %>%
   dplyr::select(sample_family, sample_code, data) %>%
@@ -1969,6 +1982,14 @@ loop_overlap_summary <- replicate_loop_data %>%
       dplyr::select(-loops_a, -loops_b)
   }) %>%
   ungroup()
+loop_overlap_summary
+#   sample_family sample_a sample_b   n_a   n_b n_intersect n_a_only n_b_only identical_loop_sets
+# 1 592           592      592AA     6373   726         104     6269      622  FALSE
+# 2 592           592      592BB     6373  5263        3647     2726     1616  FALSE
+# 3 592           592AA    592BB      726  5263          98      628     5165  FALSE
+# 4 607           607      607BB     7336  4094        1823     5513     2271  FALSE
+# 5 607           607      607CC     7336  3865        1589     5747     2276  FALSE
+# 6 607           607BB    607CC     4094  3865        1211     2883     2654  FALSE
 
 analysis_file_identity_summary <- analysis_loop_files_to_check %>%
   mutate(
@@ -1982,6 +2003,7 @@ analysis_file_identity_summary <- analysis_loop_files_to_check %>%
   ) %>%
   mutate(analysis_file_identical_to_source = analysis_sha256 == source_sha256)
 
+analysis_file_identity_summary
 print(loop_qc_summary, n = Inf, width = Inf)
 print(loop_overlap_summary, n = Inf, width = Inf)
 print(analysis_file_identity_summary, n = Inf, width = Inf)
@@ -2011,6 +2033,7 @@ loop_file_metadata <- tibble::tribble(
   mutate(file = path.expand(file))
 loop_file_metadata
 
+# Read raw HICCUPS BEDPE rows for the submission export without dropping original columns.
 read_hiccups_bedpe <- function(file) {
   header_line <- readLines(file, n = 1)
   column_names <- str_split(str_remove(header_line, "^#"), "\t", simplify = TRUE) %>% as.character()

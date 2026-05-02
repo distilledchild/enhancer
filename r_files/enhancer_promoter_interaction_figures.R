@@ -45,10 +45,158 @@ setwd("~/dropbox/Gateway_to_Hao/enhancer/r_files")
 getwd()
 source("~/Desktop/playground/enhancer/r_files/utils_functions.R") # Load all utility functions
 
+sample_strain_map <- tibble::tribble(
+    ~sample, ~strain,
+    "592BB", "SHR/OlaIpcv",
+    "607", "HXB10",
+    "74AA", "F344/Stm",
+    "A2DB", "LE/Stm",
+    "D765A", "BXH6",
+    "DE8BA", "BN-Lx",
+    "DBA9A", "HXB23",
+    "DA21A", "SHR/OlaIpcvxBN/NHsdMcwi",
+    "DA08A", "HXB2",
+    "DA68A", "HXB31"
+)
+
 ####################################
 # Sequencing stats ###### Figure 1.a
 ####################################
-seq.data <- read.table("../data/library_complexity.tsv", header = TRUE, sep = "\t")
+library_complexity_original_file <- "../data/library_complexity.tsv"
+library_complexity_592BB_file <- "../data/library_complexity_592BB.tsv"
+library_complexity_comparison_file <- "../data/library_complexity_vs_592BB_comparison.tsv"
+library_complexity_qc_dir <- path.expand("~/Desktop/playground/enhancer/data/QC")
+
+library_complexity_original <- read.delim(library_complexity_original_file, check.names = FALSE)
+library_complexity_sample_qc_files <- library_complexity_original %>%
+    dplyr::select(Strain) %>%
+    left_join(
+        sample_strain_map %>% transmute(Strain = strain, sample_code = sample),
+        by = "Strain"
+    )
+library_complexity_sample_qc_files
+
+if (any(is.na(library_complexity_sample_qc_files$sample_code))) {
+    stop(
+        "Missing sample code for strain(s): ",
+        paste(library_complexity_sample_qc_files$Strain[is.na(library_complexity_sample_qc_files$sample_code)], collapse = ", "),
+        call. = FALSE
+    )
+}
+
+library_complexity_metric_patterns <- c(
+    Sequenced_RP = "Sequenced Read Pairs",
+    Normal_Paired = "Normal Paired",
+    Chimeric_Paired = "Chimeric Paired",
+    Chimeric_Ambiguous = "Chimeric Ambiguous",
+    Unmapped = "Unmapped",
+    Alignable_Normal_N_Chimeric = "Alignable \\(Normal\\+Chimeric Paired\\)",
+    Unique_Reads = "Unique Reads",
+    PCR_Duplicates = "PCR Duplicates",
+    Optical_Duplicates = "Optical Duplicates",
+    Below_MAPQ_Threshold = "Below MAPQ Threshold",
+    `Hi-C_Contacts` = "Hi-C Contacts",
+    `Inter-chromosomal` = "Inter-chromosomal",
+    `Intra-chromosomal` = "Intra-chromosomal",
+    Short_Range_20Kb = "Short Range \\(<20Kb\\)",
+    Long_Range_20Kb = "Long Range \\(>20Kb\\)"
+)
+
+# extract the number of raw reads from the QC file
+parse_juicer_count_for_library_complexity <- function(lines, metric_pattern) {
+    metric_line <- grep(paste0("^\\s*", metric_pattern, ":"), lines, value = TRUE)
+
+    if (length(metric_line) == 0) {
+        stop("Missing metric: ", metric_pattern, call. = FALSE)
+    }
+
+    count_text <- sub("^\\s*[^:]+:\\s*([0-9,]+).*", "\\1", metric_line[1])
+    as.integer(gsub(",", "", count_text))
+}
+
+# read_library_complexity_qc_row(strain: character, sample_code: character) -> data.frame
+read_library_complexity_qc_row <- function(strain, sample_code) {
+    qc_file <- file.path(library_complexity_qc_dir, paste0(sample_code, "_intact_inter_30.txt"))
+
+    if (!file.exists(qc_file)) {
+        stop("Missing QC file: ", qc_file, call. = FALSE)
+    }
+
+    lines <- readLines(qc_file, warn = FALSE)
+    metric_values <- vapply(
+        library_complexity_metric_patterns,
+        parse_juicer_count_for_library_complexity,
+        integer(1),
+        lines = lines
+    )
+
+    data.frame(
+        Strain = strain,
+        as.data.frame(as.list(metric_values), check.names = FALSE),
+        check.names = FALSE
+    )
+}
+
+library_complexity_592BB <- do.call(
+    rbind,
+    Map(
+        read_library_complexity_qc_row,
+        library_complexity_sample_qc_files$Strain,
+        library_complexity_sample_qc_files$sample_code
+    )
+)
+
+write.table(
+    library_complexity_592BB,
+    file = library_complexity_592BB_file,
+    sep = "\t",
+    quote = FALSE,
+    row.names = FALSE
+)
+
+library_complexity_comparison <- merge(
+    reshape(
+        library_complexity_original,
+        varying = names(library_complexity_original)[names(library_complexity_original) != "Strain"],
+        v.names = "original_value",
+        timevar = "metric",
+        times = names(library_complexity_original)[names(library_complexity_original) != "Strain"],
+        idvar = "Strain",
+        direction = "long"
+    ),
+    reshape(
+        library_complexity_592BB,
+        varying = names(library_complexity_592BB)[names(library_complexity_592BB) != "Strain"],
+        v.names = "library_complexity_592BB_value",
+        timevar = "metric",
+        times = names(library_complexity_592BB)[names(library_complexity_592BB) != "Strain"],
+        idvar = "Strain",
+        direction = "long"
+    ),
+    by = c("Strain", "metric"),
+    sort = FALSE
+)
+
+library_complexity_comparison$difference <- library_complexity_comparison$library_complexity_592BB_value - library_complexity_comparison$original_value
+library_complexity_comparison$changed <- library_complexity_comparison$difference != 0
+library_complexity_comparison <- library_complexity_comparison[
+    order(match(library_complexity_comparison$Strain, library_complexity_sample_qc_files$Strain)),
+]
+
+write.table(
+    library_complexity_comparison,
+    file = library_complexity_comparison_file,
+    sep = "\t",
+    quote = FALSE,
+    row.names = FALSE
+)
+
+print(table(library_complexity_comparison$Strain[library_complexity_comparison$changed]))
+
+seq.data <- read.table("../data/library_complexity_592BB.tsv", header = TRUE, sep = "\t", check.names = FALSE)
+# seq.data <- read.table("../data/library_complexity.tsv", header = TRUE, sep = "\t")
+print(seq.data)
+
 seq.data[, -1] <- lapply(seq.data[, -1], function(x) as.numeric(as.character(x)))
 colnames.of.seq.data <- colnames(seq.data)
 colnames.of.seq.data
@@ -93,6 +241,41 @@ summary_stats <- seq.data_melted %>%
 
 summary_stats
 
+###################################################################################
+# Manuscript stats (592BB): QC summary for Results section
+###################################################################################
+# mean Sequenced_RP (million)
+manuscript.mean.reads.million <- round(mean(seq.data$Sequenced_RP) / 1e6, 1)
+# unmapped %
+manuscript.unmapped.pct <- round(mean(seq.data$Unmapped / seq.data$Sequenced_RP * 100), 1)
+# unalignable %
+manuscript.unalignable.pct <- round(mean((seq.data$Chimeric_Ambiguous + seq.data$Unmapped) / seq.data$Sequenced_RP * 100), 1)
+# unalignable std
+manuscript.unalignable.std <- round(sd((seq.data$Chimeric_Ambiguous + seq.data$Unmapped) / seq.data$Sequenced_RP * 100), 1)
+# dup %
+manuscript.dup.pct <- round(mean(seq.data$Duplicates / seq.data$Sequenced_RP * 100), 1)
+# dup std
+manuscript.dup.std <- round(sd(seq.data$Duplicates / seq.data$Sequenced_RP * 100), 1)
+strain.col <- if ("Strain" %in% names(seq.data)) "Strain" else "strain"
+# SHR/OlaIpcv dup %
+shr.idx <- seq.data[[strain.col]] == "SHR/OlaIpcv"
+manuscript.shr.dup.pct <- round(
+    seq.data$Duplicates[shr.idx] / seq.data$Sequenced_RP[shr.idx] * 100, 1
+)
+# unique reads %
+manuscript.unique.pct.mean <- round(mean(seq.data$Unique_Reads_Percentage), 0)
+# unique reads std
+manuscript.unique.pct.std <- round(sd(seq.data$Unique_Reads_Percentage), 1)
+
+cat("\n── Manuscript QC Stats ──────────────────────────────────────\n")
+cat("Mean Sequenced_RP (million):", manuscript.mean.reads.million, "\n")
+cat("Unalignable % (mean / STD):", manuscript.unalignable.pct, "/", manuscript.unalignable.std, "\n")
+cat("Unmapped % (mean):", manuscript.unmapped.pct, "\n")
+cat("Dup rate % (mean / STD):", manuscript.dup.pct, "/", manuscript.dup.std, "\n")
+cat("SHR/OlaIpcv dup %:", manuscript.shr.dup.pct, "\n")
+cat("Unique reads % (mean ± STD):", manuscript.unique.pct.mean, "±", manuscript.unique.pct.std, "\n")
+cat("────────────────────────────────────────────────────────────\n\n")
+
 # 5. Stacked Bar Plot
 sequencing_basic_stats <- ggplot(seq.data_melted, aes(x = Strain, y = Percentage, fill = Category)) +
     geom_bar(stat = "identity", position = "fill") +
@@ -121,7 +304,7 @@ sequencing_basic_stats
 
 saving_plot_dual( # utils_functions.R
     plot_obj = sequencing_basic_stats,
-    filename_base = "sequencing_basic_stats_F1a",
+    filename_base = "sequencing_basic_stats_F1a_592BB", # previous: sequencing_basic_stats_F1a
     output_dir = "./figures/submission/lt2mb",
 )
 
@@ -168,19 +351,7 @@ if (file.exists(cache_file_loop_deep_sample_all)) {
 
     # creating loop.id, sample.loop.id
     df.loop.deep.sample.all <- df.init.loop.bed %>%
-        mutate(strain = case_when(
-            sample == "592BB" ~ "SHR/OlaIpcv",
-            sample == "607" ~ "HXB10",
-            sample == "74AA" ~ "F344/Stm",
-            sample == "A2DB" ~ "LE/Stm",
-            sample == "D765A" ~ "BXH6",
-            sample == "DE8BA" ~ "BN-Lx",
-            sample == "DBA9A" ~ "HXB23",
-            sample == "DA21A" ~ "SHR/OlaIpcvxBN/NHsdMcwi",
-            sample == "DA08A" ~ "HXB2",
-            sample == "DA68A" ~ "HXB31",
-            TRUE ~ NA
-        )) %>%
+        left_join(sample_strain_map, by = "sample") %>%
         mutate(end.distance = x2 - x1) %>%
         mutate(resolution = convert_to_resolution(end.distance)) %>% # Using utility function # utils_functions.R
         mutate(loop.id = str_c(X.chr1, "_", x1, "_", x2, "_", chr2, "_", y1, "_", y2, "_", end.distance)) %>% # loop.id
@@ -355,7 +526,7 @@ strain_pairs <- shared_loops %>%
     dplyr::select(loop.id, strain) %>%
     distinct() %>%
     group_by(loop.id) %>%
-    summarise(strains = list(unique(strain)), .groups = "drop") %>%
+    summarise(strains = list(sort(unique(strain))), .groups = "drop") %>%
     mutate(pairs = map(strains, ~ combn(.x, 2, simplify = FALSE))) %>%
     dplyr::select(pairs) %>%
     unnest(pairs) %>%
@@ -363,7 +534,8 @@ strain_pairs <- shared_loops %>%
         from = map_chr(pairs, 1),
         to = map_chr(pairs, 2)
     ) %>%
-    count(from, to, name = "weight") # number of shared loops
+    count(from, to, name = "weight") %>% # number of shared loops
+    arrange(from, to)
 
 strain_pairs
 
@@ -371,6 +543,7 @@ strain_pairs
 network_graph <- graph_from_data_frame(strain_pairs, directed = FALSE)
 
 # Plot
+set.seed(20260501)
 network_plot_for_shared_loops <- ggraph(network_graph, layout = "fr") + # fr: force-directed layout
     geom_edge_link(aes(width = weight), alpha = 0.7, color = figure_green) +
     geom_node_point(size = 5, color = figure_orange) +
@@ -382,7 +555,7 @@ network_plot_for_shared_loops
 
 saving_plot_dual( # utils_functions.R
     plot_obj = network_plot_for_shared_loops,
-    filename_base = "network_plot_for_shared_loops_S2",
+    filename_base = "network_plot_for_shared_loops_S2_592BB", # previous: network_plot_for_shared_loops_S2
     output_dir = "./figures/submission/lt2mb"
 )
 
@@ -402,6 +575,13 @@ seq.data
 # Step 2: sequencing info & join
 merged_df <- loop_counts_by_sample %>%
     inner_join(seq.data, by = "strain")
+
+names(merged_df) <- dplyr::recode(
+    names(merged_df),
+    "Hi.C_Contacts" = "Hi-C_Contacts",
+    "Inter.chromosomal" = "Inter-chromosomal",
+    "Intra.chromosomal" = "Intra-chromosomal"
+)
 
 merged_df %>% head(5)
 
@@ -437,11 +617,15 @@ correlation_results <- df_long_for_plot %>%
     )
 
 correlation_results
-#   Sequencing_Metric estimate statistic  p.value parameter conf.low conf.high      label
-#   <chr>                <dbl>     <dbl>    <dbl>     <int>    <dbl>     <dbl>      <chr>
-# 1 Alignable Reads      0.787      3.61 0.00689          8    0.312     0.9471      R = 0.79, p = 0.0069
-# 2 Total Reads          0.780      3.52 0.00783          8    0.295     0.9452      R = 0.78, p = 0.0078
-# 3 Unique Reads         0.884      5.35 0.000688         8    0.574     0.9723      R = 0.88, p = 0.0007
+
+################################################################################
+# Manuscript correlation stats: loops vs sequencing depth
+# correlation_results already contains estimate (r) and p.value per metric.
+################################################################################
+correlation_results %>%
+    arrange(desc(abs(estimate))) %>%
+    transmute(Metric = Sequencing_Metric, r = round(estimate, 3), p = p.value) %>%
+    print(n = Inf)
 
 annot_positions <- data.frame(
     Sequencing_Metric = c("Alignable Reads", "Total Reads", "Unique Reads"),
@@ -489,7 +673,7 @@ line_graph_for_loops_per_depth
 
 saving_plot_dual( # utils_functions.R
     plot_obj = line_graph_for_loops_per_depth,
-    filename_base = "line_graph_for_loops_per_depth_hao_w_new_label_F1b",
+    filename_base = "line_graph_for_loops_per_depth_hao_w_new_label_F1b_592BB", # line_graph_for_loops_per_depth_hao_w_new_label_F1b
     output_dir = "./figures/submission/lt2mb"
 )
 
@@ -500,11 +684,91 @@ figure1_combined
 
 saving_plot_dual( # utils_functions.R
     plot_obj = figure1_combined,
-    filename_base = "figure1_combined_F1",
+    filename_base = "figure1_combined_F1_592BB", # figure1_combined_F1
     output_dir = "./figures/submission/lt2mb",
     height = 5.5, ############ NOT 8.5
     scale_x = 1,
     scale_y = 1
+)
+
+########################################################################
+# 1. Loop
+# 1-1-5. figure: loop counts vs Hi-C QC metrics correlation ##### Figure S1
+########################################################################
+loop_qc_correlation_columns <- c(
+    "Chimeric_Paired",
+    "Chimeric_Ambiguous",
+    "Normal_Paired",
+    "Sequenced_RP",
+    "Alignable_Normal_N_Chimeric",
+    "Inter-chromosomal",
+    "Long_Range_20Kb",
+    "Short_Range_20Kb",
+    "Number_of_Loops",
+    "Below_MAPQ_Threshold",
+    "Intra-chromosomal",
+    "Unique_Reads",
+    "Hi-C_Contacts",
+    "Optical_Duplicates",
+    "Unmapped",
+    "PCR_Duplicates"
+)
+
+loop_qc_correlation_input <- merged_df %>%
+    dplyr::rename(Number_of_Loops = num_loop) %>%
+    dplyr::select(all_of(loop_qc_correlation_columns)) %>%
+    mutate(across(everything(), as.numeric))
+
+loop_qc_correlation_matrix <- cor(
+    loop_qc_correlation_input,
+    use = "pairwise.complete.obs",
+    method = "pearson"
+)
+
+loop_qc_correlation_long <- reshape2::melt(loop_qc_correlation_matrix) %>%
+    mutate(
+        Var1 = factor(Var1, levels = loop_qc_correlation_columns),
+        Var2 = factor(Var2, levels = loop_qc_correlation_columns),
+        label = sub("\\.?0+$", "", sprintf("%.2f", value))
+    )
+
+loop_qc_correlation_heatmap <- ggplot(loop_qc_correlation_long, aes(x = Var2, y = Var1, fill = value)) +
+    geom_tile(color = "white", linewidth = 0.15) +
+    geom_text(aes(label = label), size = 2.2, color = "black") +
+    scale_fill_gradient2(
+        low = "blue",
+        mid = "white",
+        high = "red",
+        midpoint = 0,
+        limits = c(-1, 1),
+        name = "Pearson\nCorrelation"
+    ) +
+    labs(
+        title = "Correlation between number of loops and Hi-C QC metrics",
+        x = "Var2",
+        y = "Var1"
+    ) +
+    coord_fixed() +
+    theme_minimal(base_size = 9) +
+    theme(
+        plot.title = element_text(hjust = 0.5, size = 10),
+        axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        axis.text.y = element_text(size = 7),
+        panel.grid = element_blank(),
+        legend.title = element_text(size = 8),
+        legend.text = element_text(size = 7)
+    )
+
+loop_qc_correlation_heatmap
+
+saving_plot_dual( # utils_functions.R
+    plot_obj = loop_qc_correlation_heatmap,
+    filename_base = "correlation_loop_qc_metrics_heatmap_S1_592BB",
+    output_dir = "./figures/submission/lt2mb",
+    width_in = 11,
+    height_in = 8.5,
+    scale_x = 0.6,
+    scale_y = 0.6
 )
 
 ########################################################################
