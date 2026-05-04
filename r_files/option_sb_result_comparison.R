@@ -118,7 +118,7 @@ read_hiccups_bedpe <- function(file) {
   )
 }
 
-samples_to_compare <- c("592BB", "607", "74AA", "A2DB", "D765A", "DA08A", "DA21A", "DA68A", "DBA9A", "DE8BA")
+samples_to_compare <- c("592BB", "74AA", "A2DB", "D765A", "DA08A", "DA21A", "DA68A", "DBA9A", "DE8BA", "607")
 key_cols <- c("chr1", "x1", "x2", "chr2", "y1", "y2")
 
 for (sample_name in samples_to_compare) {
@@ -133,8 +133,11 @@ for (sample_name in samples_to_compare) {
   } else {
     old_file <- sprintf("~/dropbox/Gateway_to_Hao/enhancer/data/loops/%s_intact_merged_loops_5k10k25k.bedpe", sample_name)
   }
-  new_file <- sprintf("/Users/pete/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/research/juicer-w-sb-options/%s/hiccups_5k10k25k/merged_loops.bedpe", sample_name)
-
+  if (sample_name == "607") {
+    new_file <- "/Users/pete/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/medium_resolution_5k10k25k/607_inter_30.hiccups.5k10k25k/merged_loops.bedpe"
+  } else {
+    new_file <- sprintf("/Users/pete/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/research/juicer-w-sb-options/%s/hiccups_5k10k25k/merged_loops.bedpe", sample_name)
+  }
   if (!file.exists(path.expand(old_file))) {
     cat(sprintf("Old file not found for %s: %s\n\n", sample_name, old_file))
     next
@@ -205,3 +208,8 @@ for (sample_name in samples_to_compare) {
 # Total loops in old file: 5263
 # Total loops in new file: 5264
 # Overlapping loops: 5258 (5258/5263 = 0.9990500)
+###################### 607 loops (old vs new)
+# Total loops in old file: 7336 
+# Total loops in new file: 7336 
+# Overlapping loops: 7336 (100.0000% of old)
+# Difference (new - old): 0 (0.0000% of old)
