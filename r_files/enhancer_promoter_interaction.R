@@ -2090,5 +2090,5 @@ supplementary.data2.ctcf <- read.table(file = path.expand(ctcf_file_path), heade
 
 readr::write_tsv(
   supplementary.data2.ctcf,
-  file = "./figures/submission/lt2mb/supplementary_data2_CTCF.tsv"
+  file = "./figures/submission/lt2mb/supplementary_data2_CTCF.tsv.gz"
 )
