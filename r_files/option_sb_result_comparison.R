@@ -118,7 +118,7 @@ read_hiccups_bedpe <- function(file) {
   )
 }
 
-samples_to_compare <- c("DA08A", "DA21A", "DA68A", "D765A")
+samples_to_compare <- c("592BB", "607", "74AA", "A2DB", "D765A", "DA08A", "DA21A", "DA68A", "DBA9A", "DE8BA")
 key_cols <- c("chr1", "x1", "x2", "chr2", "y1", "y2")
 
 for (sample_name in samples_to_compare) {
@@ -126,7 +126,13 @@ for (sample_name in samples_to_compare) {
   cat(sprintf("=== Compare %s loops (old vs new)     ===\n", sample_name))
   cat("====================================================\n\n")
 
-  old_file <- sprintf("~/dropbox/Gateway_to_Hao/enhancer/data/loops/%s_intact_merged_loops_5k10k25k.bedpe", sample_name)
+  if (sample_name == "74AA") {
+    old_file <- sprintf("~/dropbox/Gateway_to_Hao/enhancer/data/loops/%s_intact_merged_loops5k10k25k.bedpe", sample_name)
+  } else if (sample_name %in% c("A2DB", "592BB")) {
+    old_file <- sprintf("~/dropbox/Gateway_to_Hao/enhancer/data/loops/%s_merged_loops_5k10k25k.bedpe", sample_name)
+  } else {
+    old_file <- sprintf("~/dropbox/Gateway_to_Hao/enhancer/data/loops/%s_intact_merged_loops_5k10k25k.bedpe", sample_name)
+  }
   new_file <- sprintf("/Users/pete/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/research/juicer-w-sb-options/%s/hiccups_5k10k25k/merged_loops.bedpe", sample_name)
 
   if (!file.exists(path.expand(old_file))) {
@@ -175,3 +181,19 @@ for (sample_name in samples_to_compare) {
 # Total loops in old file: 6568
 # Total loops in new file: 6566
 # Overlapping loops: 6563 (6563/6568 = 0.9992387)
+###################### DBA9A loops (old vs new)
+# Total loops in old file: 7676
+# Total loops in new file: 7682
+# Overlapping loops: 7668 (7668/7676 = 0.9989578)
+###################### 74AA loops (old vs new)
+# Total loops in old file: 2903
+# Total loops in new file: 2902
+# Overlapping loops: 2900 (2900/2903 = 0.9989666)
+###################### A2DB loops (old vs new)
+# Total loops in old file: 2992
+# Total loops in new file: 2996
+# Overlapping loops: 2978 (2978/2992 = 0.9953209)
+###################### 592BB loops (old vs new)
+# Total loops in old file: 5263
+# Total loops in new file: 5264
+# Overlapping loops: 5258 (5258/5263 = 0.9990500)
