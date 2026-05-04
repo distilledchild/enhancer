@@ -160,9 +160,17 @@ for (sample_name in samples_to_compare) {
   overlap <- dplyr::inner_join(old_keys, new_keys, by = key_cols)
 
   # results
-  cat("Total loops in old file:", nrow(old_loops), "\n")
-  cat("Total loops in new file:", nrow(new_loops), "\n")
-  cat("Overlapping loops:", nrow(overlap), "\n\n")
+  n_old <- nrow(old_loops)
+  n_new <- nrow(new_loops)
+  n_overlap <- nrow(overlap)
+  diff_count <- n_new - n_old
+  diff_percent <- (diff_count / n_old) * 100
+  overlap_percent <- (n_overlap / n_old) * 100
+
+  cat("Total loops in old file:", n_old, "\n")
+  cat("Total loops in new file:", n_new, "\n")
+  cat(sprintf("Overlapping loops: %d (%.4f%% of old)\n", n_overlap, overlap_percent))
+  cat(sprintf("Difference (new - old): %d (%.4f%% of old)\n\n", diff_count, diff_percent))
 }
 
 ###################### DA08A loops (old vs new)
