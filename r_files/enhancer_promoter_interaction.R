@@ -2015,10 +2015,13 @@ print(analysis_file_identity_summary, n = Inf, width = Inf)
 
 write.csv(df.final.loop, file = "./figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.csv", row.names = FALSE)
 
-# 1-1. Raw HICCUPS loop results with functional-loop annotation
-# Keep every original BEDPE column and prepend sample metadata plus a functional flag.
+# 1-1. Supplementary Data 1: Raw HICCUPS loop results with functional-loop annotation
+# Combine all 10 sample BEDPE files into one table with sample/strain metadata
+# and flag each loop as functional (TRUE) if it appears in the final curated loop set.
+
+# Sample-to-file mapping (reuse loop_file_metadata defined in QC provenance block above)
 loop_file_metadata <- tibble::tribble(
-  ~sample_code, ~sample_name, ~file,
+  ~sample, ~strain, ~file,
   "592BB", "SHR/OlaIpcv", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/592BB_merged_loops_5k10k25k.bedpe",
   "607", "HXB10", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/607_intact_merged_loops_5k10k25k.bedpe",
   "74AA", "F344/Stm", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/74AA_intact_merged_loops5k10k25k.bedpe",
@@ -2031,9 +2034,8 @@ loop_file_metadata <- tibble::tribble(
   "DE8BA", "BN-Lx", "~/dropbox/Gateway_to_Hao/enhancer/data/loops/DE8BA_intact_merged_loops_5k10k25k.bedpe"
 ) %>%
   mutate(file = path.expand(file))
-loop_file_metadata
 
-# Read raw HICCUPS BEDPE rows for the submission export without dropping original columns.
+# Read raw HICCUPS BEDPE rows preserving all original columns.
 read_hiccups_bedpe <- function(file) {
   header_line <- readLines(file, n = 1)
   column_names <- str_split(str_remove(header_line, "^#"), "\t", simplify = TRUE) %>% as.character()
@@ -2047,11 +2049,19 @@ read_hiccups_bedpe <- function(file) {
   )
 }
 
+# Load final curated loop set
+load("~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.rda")
+
+
+df.final.loop %>% dim()
+# Functional loop IDs from the final curated set
 final_loop_ids <- df.final.loop %>%
   distinct(loop.id) %>%
   pull(loop.id)
+final_loop_ids
 
-df.raw.hiccups.loops.with.functional <- loop_file_metadata %>%
+# Bind all samples, reconstruct loop.id for matching, flag functional loops
+supplementary.data1.loops <- loop_file_metadata %>%
   mutate(data = purrr::map(file, read_hiccups_bedpe)) %>%
   dplyr::select(-file) %>%
   tidyr::unnest(data) %>%
@@ -2059,12 +2069,26 @@ df.raw.hiccups.loops.with.functional <- loop_file_metadata %>%
     loop.id = str_c(chr1, x1, x2, chr2, y1, y2, as.numeric(x2) - as.numeric(x1), sep = "_"),
     functional = loop.id %in% final_loop_ids
   ) %>%
-  dplyr::select(sample_code, sample_name, functional, dplyr::everything(), -loop.id)
+  dplyr::select(sample, strain, functional, dplyr::everything(), -loop.id)
 
-df.raw.hiccups.loops.with.functional %>% head(2)
+supplementary.data1.loops %>% dim()
+supplementary.data1.loops %>% head(2)
+supplementary.data1.loops %>% count(sample, functional)
 
-write.csv(
-  df.raw.hiccups.loops.with.functional,
-  file = "./figures/submission/lt2mb/raw_hiccups_loops_with_functional_annotation.csv",
-  row.names = FALSE
+supplementary.data1.loops %>%
+  filter(functional == TRUE) %>%
+  count(sample)
+
+readr::write_tsv(
+  supplementary.data1.loops,
+  file = "./figures/submission/lt2mb/supplementary_data1_loops.tsv"
+)
+
+# 2. CTCF
+ctcf_file_path <- "~/dropbox/Gateway_to_Hao/enhancer/data/ctcf/submission/E4/fimo_E4_submission_trial.txt"
+supplementary.data2.ctcf <- read.table(file = path.expand(ctcf_file_path), header = TRUE, sep = "\t")
+
+readr::write_tsv(
+  supplementary.data2.ctcf,
+  file = "./figures/submission/lt2mb/supplementary_data2_CTCF.tsv"
 )

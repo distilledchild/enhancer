@@ -101,14 +101,10 @@ cat("UPDATED  SHR PCR dup rate:", round(shr_upd$PCR_Duplicates / shr_upd$Sequenc
 
 
 ################################################################
-# PART 2: Compare DA68A loops (old vs new)
+# PART 2: Compare old vs new (sb-option) loops
 ################################################################
 
-# file paths
-old_file <- "~/dropbox/Gateway_to_Hao/enhancer/data/loops/DA68A_intact_merged_loops_5k10k25k.bedpe"
-new_file <- "/Users/pete/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/research/juicer-w-sb-options/DA68A/hiccups_5k10k25k/merged_loops.bedpe"
-
-# read files
+# Read raw HICCUPS BEDPE rows
 read_hiccups_bedpe <- function(file) {
   header_line <- readLines(file, n = 1)
   column_names <- str_split(str_remove(header_line, "^#"), "\t", simplify = TRUE) %>% as.character()
@@ -122,24 +118,60 @@ read_hiccups_bedpe <- function(file) {
   )
 }
 
-# load data
-old_loops <- read_hiccups_bedpe(path.expand(old_file))
-new_loops <- read_hiccups_bedpe(path.expand(new_file))
-
-# colums for comparison
+samples_to_compare <- c("DA08A", "DA21A", "DA68A", "D765A")
 key_cols <- c("chr1", "x1", "x2", "chr2", "y1", "y2")
 
-old_keys <- old_loops %>%
-  dplyr::select(all_of(key_cols)) %>%
-  dplyr::distinct()
-new_keys <- new_loops %>%
-  dplyr::select(all_of(key_cols)) %>%
-  dplyr::distinct()
+for (sample_name in samples_to_compare) {
+  cat("====================================================\n")
+  cat(sprintf("=== Compare %s loops (old vs new)     ===\n", sample_name))
+  cat("====================================================\n\n")
 
-# overlap loops
-overlap <- dplyr::inner_join(old_keys, new_keys, by = key_cols)
+  old_file <- sprintf("~/dropbox/Gateway_to_Hao/enhancer/data/loops/%s_intact_merged_loops_5k10k25k.bedpe", sample_name)
+  new_file <- sprintf("/Users/pete/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/research/juicer-w-sb-options/%s/hiccups_5k10k25k/merged_loops.bedpe", sample_name)
 
-# results
-cat("Total loops in old file:", nrow(old_loops), "\n") # Total loops in old file: 9131
-cat("Total loops in new file:", nrow(new_loops), "\n") # Total loops in new file: 9136
-cat("Overlapping loops:", nrow(overlap), "\n") # Overlapping loops: 9121
+  if (!file.exists(path.expand(old_file))) {
+    cat(sprintf("Old file not found for %s: %s\n\n", sample_name, old_file))
+    next
+  }
+  if (!file.exists(path.expand(new_file))) {
+    cat(sprintf("New file not found for %s: %s\n\n", sample_name, new_file))
+    next
+  }
+
+  # load data
+  old_loops <- read_hiccups_bedpe(path.expand(old_file))
+  new_loops <- read_hiccups_bedpe(path.expand(new_file))
+
+  # extract keys
+  old_keys <- old_loops %>%
+    dplyr::select(all_of(key_cols)) %>%
+    dplyr::distinct()
+  new_keys <- new_loops %>%
+    dplyr::select(all_of(key_cols)) %>%
+    dplyr::distinct()
+
+  # overlap loops
+  overlap <- dplyr::inner_join(old_keys, new_keys, by = key_cols)
+
+  # results
+  cat("Total loops in old file:", nrow(old_loops), "\n")
+  cat("Total loops in new file:", nrow(new_loops), "\n")
+  cat("Overlapping loops:", nrow(overlap), "\n\n")
+}
+
+###################### DA08A loops (old vs new)
+# Total loops in old file: 4656
+# Total loops in new file: 4653
+# Overlapping loops: 4650 (4650/4656 = 0.9987113)
+###################### DA21A loops (old vs new)
+# Total loops in old file: 5932
+# Total loops in new file: 5930
+# Overlapping loops: 5926 (5926/5932 = 0.9989885)
+###################### DA68A loops (old vs new)
+# Total loops in old file: 9131
+# Total loops in new file: 9136
+# Overlapping loops: 9121 (9121/9131 = 0.9989048)
+###################### D765A loops (old vs new)
+# Total loops in old file: 6568
+# Total loops in new file: 6566
+# Overlapping loops: 6563 (6563/6568 = 0.9992387)
