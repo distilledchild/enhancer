@@ -204,6 +204,11 @@ for (sample_name in samples_to_compare) {
 # Total loops in old file: 5263
 # Total loops in new file: 5264
 # Overlapping loops: 5258 (5258/5263 = 0.9990500)
+###################### DE8BA loops (old vs new)
+# Total loops in old file: 6535 
+# Total loops in new file: 6537 
+# Overlapping loops: 6528 (99.8929% of old)
+# Difference (new - old): 2 (0.0306% of old)
 ###################### 607 loops (old vs new)
 # Total loops in old file: 7336 
 # Total loops in new file: 4094 
