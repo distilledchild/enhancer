@@ -1,6 +1,7 @@
 ####################################################
 # ATAC-seq Validation of P-E Loop Anchors
-# Yuan et al. 2021 (rn7 liftover) x Hi-C loop anchors
+# Duttke et al. 2022 snATAC-seq (rn6 → rn7 liftOver) x Hi-C loop anchors
+# Source: GSM5820551 (rat PFC, filtered peak set)
 # Q: Is enhancer anchor in open chromatin region?
 ####################################################
 library(tidyverse)
@@ -14,8 +15,7 @@ getwd() # /Users/pete/Desktop/playground/enhancer
 
 path.csv.final.loop <- "/Users/pete/Desktop/playground/enhancer/figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.csv"
 path.rds.final.loop <- "~/Dropbox/Gateway_to_Hao/enhancer/data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"
-path.narrowpeak.atac1 <- "/Users/pete/Desktop/playground/epigenetic-analysis-2026/ATAC-seq_2021_Yuan_et_al/out_atac_rn7_pe/SRR13307053/peaks/SRR13307053_peaks.narrowPeak" # PFC
-path.narrowpeak.atac2 <- "/Users/pete/Desktop/playground/epigenetic-analysis-2026/ATAC-seq_2021_Yuan_et_al/out_atac_rn7_pe/SRR13307077/peaks/SRR13307077_peaks.narrowPeak" # PFC
+path.narrowpeak.atac <- "/Users/pete/Desktop/playground/enhancer/data/Duttke2022_snATAC/Duttke2022_snATAC_peaks_rn7.narrowPeak" # Duttke 2022 snATAC (rn6→rn7 liftOver)
 path.dir.out <- "/Users/pete/Desktop/playground/enhancer/r_files"
 
 ####################################################
@@ -108,7 +108,7 @@ print(str_c("Enhancer anchors: ", length(gr.enhancer))) # 15085
 gr.all <- c(gr.promoter, gr.enhancer)
 
 ####################################################
-# 4. Load and integrate ATAC-seq peaks
+# 4. Load Duttke 2022 snATAC-seq peaks (rn7 liftOver)
 ####################################################
 # func1: Load ATAC peaks and convert to GRanges
 load_atac <- function(path, label) {
@@ -119,19 +119,18 @@ load_atac <- function(path, label) {
     ),
     show_col_types = FALSE
   )
-  print(str_c("peaks: ", nrow(df))) # 104342, 56817
+  print(str_c("peaks: ", nrow(df)))
   GRanges(df$chr, IRanges(df$start + 1L, df$end),
     score = df$score, fc = df$fc, sample = label
   )
 }
 
-gr.atac1 <- load_atac(path.narrowpeak.atac1, "PFC_SRR13307053")
-gr.atac2 <- load_atac(path.narrowpeak.atac2, "PFC_SRR13307077")
+gr.atac <- load_atac(path.narrowpeak.atac, "Duttke2022_snATAC_PFC")
 
-# Integrate two PFC samples (union of peaks)
-gr.atac.all <- c(gr.atac1, gr.atac2)
-gr.atac.union <- GenomicRanges::reduce(gr.atac.all)
-print(str_c("PFC ATAC union peaks: ", length(gr.atac.union))) # 106982
+# Merge overlapping peaks
+gr.atac.union <- GenomicRanges::reduce(gr.atac)
+print(str_c("Duttke2022 snATAC peaks (rn7): ", length(gr.atac)))
+print(str_c("After reduce (merged): ", length(gr.atac.union)))
 
 ####################################################
 # 5. Overlap analysis: promoter vs enhancer anchor x ATAC peaks
@@ -219,16 +218,12 @@ for (cat_val in c("CP", "CT")) {
 }
 
 ####################################################
-# 8. Results by individual PFC sample
+# 8. Duttke2022 snATAC single-sample summary
 ####################################################
-for (gr.atac in list(gr.atac1, gr.atac2)) {
-  label <- unique(gr.atac$sample)
-  p.hits <- sum(countOverlaps(gr.promoter, gr.atac) > 0)
-  e.hits <- sum(countOverlaps(gr.enhancer, gr.atac) > 0)
-  print(label) # PFC_SRR13307053, PFC_SRR13307077
-  print(str_c("  Promoter: ", p.hits, " / ", n.promoter, " (", sprintf("%.1f%%", 100 * p.hits / n.promoter), ")")) # SRR13307053: 12077 / 15085 (80.1%), SRR13307077: 8801 / 15085 (58.3%)
-  print(str_c("  Enhancer: ", e.hits, " / ", n.enhancer, " (", sprintf("%.1f%%", 100 * e.hits / n.enhancer), ")")) # SRR13307053: 11900 / 15085 (78.9%), SRR13307077: 8173 / 15085 (54.2%)
-}
+# (Single sample — no per-sample breakdown needed)
+print("Duttke2022_snATAC_PFC (single sample = union)")
+print(str_c("  Promoter: ", n.promoter.atac, " / ", n.promoter, " (", sprintf("%.1f%%", pct.promoter), ")"))
+print(str_c("  Enhancer: ", n.enhancer.atac, " / ", n.enhancer, " (", sprintf("%.1f%%", pct.enhancer), ")"))
 
 ####################################################
 # 9. Save results
@@ -256,3 +251,8 @@ df.detail <- tibble(
   atac_overlap = c(promoter.hits, enhancer.hits)
 )
 write_csv(df.detail, file.path(path.dir.out, "atac_loop_anchor_overlap_detail.csv"))
+
+# Category (C=CTCF structural, P=Promoter functional, T=TSS functional)
+#                           Promoter Anchor       Enhancer Anchor
+# CP (CTCF + Promoter)     4,485/4,960 (90.4%)   4,451/4,960 (89.7%)
+# CT (CTCF + TSS)          8,973/10,125 (88.6%)  8,977/10,125 (88.7%)
