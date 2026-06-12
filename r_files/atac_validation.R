@@ -26,17 +26,17 @@ df.loops.raw <- read_csv(path.csv.final.loop, show_col_types = FALSE) %>%
   dplyr::rename(loop_id = loop.id)
 print(str_c("loops: ", nrow(df.loops.raw))) # 15085
 
-# Split loop_id into coordinates and convert to integers (drop 7th+ fields)
+# Split loop_id into coordinates and preserve the HiCCUPS resolution.
 df.loops <- df.loops.raw %>%
   mutate(loop_id_orig = loop_id) %>%
   separate_wider_delim(
     cols = loop_id_orig,
     delim = "_",
-    names = c("chr1", "start1", "end1", "chr2", "start2", "end2"),
+    names = c("chr1", "start1", "end1", "chr2", "start2", "end2", "resolution"),
     too_many = "drop"
   ) %>%
   mutate(
-    across(c(start1, end1, start2, end2), parse_integer),
+    across(c(start1, end1, start2, end2, resolution), parse_integer),
     start1 = start1 + 1L,
     start2 = start2 + 1L
   )
@@ -72,16 +72,17 @@ print(str_c("Loops with WHERE: ", nrow(df.loops.w))) # 15085
 df.promoter <- bind_rows(
   df.loops.w %>%
     dplyr::filter(WHERE == "UP") %>%
-    dplyr::select(chr = chr1, start = start1, end = end1, loop_id, category),
+    dplyr::select(chr = chr1, start = start1, end = end1, loop_id, category, resolution),
   df.loops.w %>%
     dplyr::filter(WHERE == "DOWN") %>%
-    dplyr::select(chr = chr2, start = start2, end = end2, loop_id, category)
+    dplyr::select(chr = chr2, start = start2, end = end2, loop_id, category, resolution)
 )
 gr.promoter <- GRanges(
   seqnames = df.promoter$chr,
   ranges = IRanges(df.promoter$start, df.promoter$end),
   loop_id = df.promoter$loop_id,
   category = df.promoter$category,
+  resolution = df.promoter$resolution,
   anchor_type = "promoter"
 )
 
@@ -89,16 +90,17 @@ gr.promoter <- GRanges(
 df.enhancer <- bind_rows(
   df.loops.w %>%
     dplyr::filter(WHERE == "UP") %>%
-    dplyr::select(chr = chr2, start = start2, end = end2, loop_id, category),
+    dplyr::select(chr = chr2, start = start2, end = end2, loop_id, category, resolution),
   df.loops.w %>%
     dplyr::filter(WHERE == "DOWN") %>%
-    dplyr::select(chr = chr1, start = start1, end = end1, loop_id, category)
+    dplyr::select(chr = chr1, start = start1, end = end1, loop_id, category, resolution)
 )
 gr.enhancer <- GRanges(
   seqnames = df.enhancer$chr,
   ranges = IRanges(df.enhancer$start, df.enhancer$end),
   loop_id = df.enhancer$loop_id,
   category = df.enhancer$category,
+  resolution = df.enhancer$resolution,
   anchor_type = "enhancer"
 )
 
@@ -164,35 +166,43 @@ enhancer.hits <- countOverlaps(gr.enhancer, gr.atac.union, minoverlap = 50) > 0
 
 n.promoter <- length(gr.promoter) # 15085
 n.enhancer <- length(gr.enhancer) # 15085
-n.promoter.atac <- sum(promoter.hits) # 12160
-n.enhancer.atac <- sum(enhancer.hits) # 11980
-pct.promoter <- round(100 * n.promoter.atac / n.promoter, 1) # 12160/15085 = 80.6
-pct.enhancer <- round(100 * n.enhancer.atac / n.enhancer, 1) # 11980/15085  = 79.4
+n.promoter.atac <- sum(promoter.hits)
+n.enhancer.atac <- sum(enhancer.hits)
+pct.promoter <- round(100 * n.promoter.atac / n.promoter, 1)
+pct.enhancer <- round(100 * n.enhancer.atac / n.enhancer, 1)
 
 ### ATAC overlap results
-print(str_c("Promoter anchors with ATAC peak: ", n.promoter.atac, " / ", n.promoter, " ", sprintf("(%.1f%%)", pct.promoter))) # 12160 / 15085 (80.6%)
-print(str_c("Enhancer anchors with ATAC peak: ", n.enhancer.atac, " / ", n.enhancer, " ", sprintf("(%.1f%%)", pct.enhancer))) # 11980 / 15085 (79.4%)
+print(str_c("Promoter anchors with ATAC peak: ", n.promoter.atac, " / ", n.promoter, " ", sprintf("(%.1f%%)", pct.promoter)))
+print(str_c("Enhancer anchors with ATAC peak: ", n.enhancer.atac, " / ", n.enhancer, " ", sprintf("(%.1f%%)", pct.enhancer)))
 
-# Fisher's exact test: is enhancer anchor more overlapped with ATAC peak?
-mat <- matrix(
-  c(
-    n.enhancer.atac,  n.enhancer - n.enhancer.atac,
-    n.promoter.atac,  n.promoter - n.promoter.atac
-  ),
-  nrow = 2, byrow = TRUE,
-  dimnames = list(c("enhancer", "promoter"), c("ATAC_yes", "ATAC_no"))
+# Resolution-stratified summary prevents 25 kb anchors from inflating the overall estimate.
+df.resolution.summary <- tibble(
+  anchor_type = c(rep("promoter", length(gr.promoter)), rep("enhancer", length(gr.enhancer))),
+  resolution = c(gr.promoter$resolution, gr.enhancer$resolution),
+  atac_overlap = c(promoter.hits, enhancer.hits)
+) %>%
+  group_by(anchor_type, resolution) %>%
+  summarise(
+    n_anchors = n(),
+    n_atac_overlap = sum(atac_overlap),
+    pct_atac_overlap = round(100 * mean(atac_overlap), 1),
+    .groups = "drop"
+  ) %>%
+  arrange(anchor_type, resolution)
+print(df.resolution.summary)
+
+# Promoter and enhancer anchors are paired within each loop, so use McNemar's test.
+paired.mat <- table(
+  promoter_ATAC = promoter.hits,
+  enhancer_ATAC = enhancer.hits
 )
-### Contingency table
-print(mat) # enhancer: 11980 / 3105, promoter: 12160 / 2925
-#          ATAC_yes ATAC_no
-# enhancer    11980    3105
-# promoter    12160    2925
-
-ft <- fisher.test(mat)
-### Fisher's exact test
-print(str_c("OR: ", round(ft$estimate, 3))) # 0.928
-print(str_c("95% CI: ", round(ft$conf.int[1], 3), " - ", round(ft$conf.int[2], 3))) # 0.877 - 0.982
-print(str_c("p-value: ", ft$p.value)) # 0.00996260331658994
+print(paired.mat)
+mt <- mcnemar.test(paired.mat)
+print(str_c("McNemar p-value: ", mt$p.value))
+print(str_c("Both anchors ATAC+: ", sum(promoter.hits & enhancer.hits)))
+print(str_c("Promoter-only ATAC+: ", sum(promoter.hits & !enhancer.hits)))
+print(str_c("Enhancer-only ATAC+: ", sum(!promoter.hits & enhancer.hits)))
+print(str_c("Neither anchor ATAC+: ", sum(!promoter.hits & !enhancer.hits)))
 
 ####################################################
 # 6. Permutation test: random genomic region vs ATAC overlap
@@ -244,7 +254,7 @@ for (cat_val in c("CP", "CT")) {
   idx <- gr.promoter$category == cat_val
   n <- sum(idx)
   h <- sum(promoter.hits[idx])
-  print(str_c(cat_val, " : ", h, " / ", n, " (", sprintf("%.1f%%", 100 * h / n), ")")) # CP: 4094 / 4960 (82.5%), CT: 8066 / 10125 (79.7%)
+  print(str_c(cat_val, " : ", h, " / ", n, " (", sprintf("%.1f%%", 100 * h / n), ")"))
 }
 
 ### Enhancer anchor category
@@ -252,7 +262,7 @@ for (cat_val in c("CP", "CT")) {
   idx <- gr.enhancer$category == cat_val
   n <- sum(idx)
   h <- sum(enhancer.hits[idx])
-  print(str_c(cat_val, " : ", h, " / ", n, " (", sprintf("%.1f%%", 100 * h / n), ")")) # CP: 3991 / 4960 (80.5%), CT: 7989 / 10125 (78.9%)
+  print(str_c(cat_val, " : ", h, " / ", n, " (", sprintf("%.1f%%", 100 * h / n), ")"))
 }
 
 ####################################################
@@ -271,12 +281,16 @@ df.result.summary <- tibble(
   n_anchors        = c(n.promoter, n.enhancer),
   n_atac_overlap   = c(n.promoter.atac, n.enhancer.atac),
   pct_atac_overlap = c(pct.promoter, pct.enhancer),
-  fisher_OR        = c(NA, round(ft$estimate, 3)),
-  fisher_p         = c(NA, ft$p.value),
+  mcnemar_p        = c(NA, mt$p.value),
+  both_atac        = c(NA, sum(promoter.hits & enhancer.hits)),
+  promoter_only    = c(NA, sum(promoter.hits & !enhancer.hits)),
+  enhancer_only    = c(NA, sum(!promoter.hits & enhancer.hits)),
+  neither_atac     = c(NA, sum(!promoter.hits & !enhancer.hits)),
   perm_z           = c(NA, round(zs, 3)),
   perm_p           = c(NA, pp)
 )
 write_csv(df.result.summary, file.path(path.dir.out, "atac_loop_anchor_overlap_summary.csv"))
+write_csv(df.resolution.summary, file.path(path.dir.out, "atac_loop_anchor_overlap_by_resolution.csv"))
 
 # Detailed ATAC overlap by anchor
 df.detail <- tibble(
@@ -286,14 +300,15 @@ df.detail <- tibble(
     rep("enhancer", length(gr.enhancer))
   ),
   category = c(gr.promoter$category, gr.enhancer$category),
+  resolution = c(gr.promoter$resolution, gr.enhancer$resolution),
   atac_overlap = c(promoter.hits, enhancer.hits)
 )
 write_csv(df.detail, file.path(path.dir.out, "atac_loop_anchor_overlap_detail.csv"))
 
 # Category (C=CTCF structural, P=Promoter functional, T=TSS functional)
 #                           Promoter Anchor       Enhancer Anchor
-# CP (CTCF + Promoter)     4,485/4,960 (90.4%)   4,451/4,960 (89.7%)
-# CT (CTCF + TSS)          8,973/10,125 (88.6%)  8,977/10,125 (88.7%)
+# CP (CTCF + Promoter)     4,482/4,960 (90.4%)   4,445/4,960 (89.6%)
+# CT (CTCF + TSS)          8,968/10,125 (88.6%)  8,970/10,125 (88.6%)
 
 ####################################################
 # additional1: TSS Exclusion from Enhancer Anchors
@@ -301,9 +316,9 @@ write_csv(df.detail, file.path(path.dir.out, "atac_loop_anchor_overlap_detail.cs
 # [Rationale & Conclusion]
 # - Rationale: Since Enhancer Anchors are large regions, they may incidentally contain TSSs of nearby genes.
 #   Reviewers might argue that the high ATAC-seq signals observed are merely artifacts (contamination/false positives) from these neighboring TSSs.
-# - Conclusion: After strictly excluding any regions overlapping with known TSSs (±1kb) to isolate "Pure Enhancers", 
-#   the analysis showed that 90.9% of these pure enhancer regions still maintained ATAC-seq peaks (showing exact consistency with previous results).
-# - Impact: This serves as a highly robust defense mechanism to prove to reviewers that "The ATAC signal in Enhancers is NOT an artifact caused by neighboring TSS contamination, but firmly demonstrates the true open chromatin nature of the enhancers themselves."
+# - Conclusion: After excluding known TSS regions (±1kb), most enhancer anchors still retain
+#   ATAC-seq support, arguing that the overlap is not driven only by nearby TSS contamination.
+# - Impact: This is a sensitivity analysis, not direct experimental validation of P-E activity.
 ####################################################
 # 10. Load TSS information used in enhancer_promoter_interaction.R
 cat("\nRunning additional1: TSS Exclusion Analysis\n")
@@ -322,13 +337,15 @@ if(file.exists(path.rds.tss)) {
   # Define TSS exclusion region (± 1kb from TSS)
   # using promoters() which correctly accounts for strand
   tss_regions <- promoters(gr.tss, upstream = 1000, downstream = 1000)
-  tss_regions <- GenomicRanges::reduce(tss_regions)
+  tss_regions <- GenomicRanges::reduce(tss_regions, ignore.strand = TRUE)
   
-  # Exclude TSS from Enhancer Anchors
-  gr.enhancer.pure <- GenomicRanges::setdiff(gr.enhancer, tss_regions)
+  # Exclude TSS-supported ATAC signal first, then test original enhancer anchors.
+  # This preserves the original anchor identity and avoids remapping fragments by overlap.
+  gr.atac.non_tss <- GenomicRanges::setdiff(gr.atac.union, tss_regions, ignore.strand = TRUE)
+  gr.enhancer.pure <- GenomicRanges::setdiff(gr.enhancer, tss_regions, ignore.strand = TRUE)
   
   # --- Fragment-level analysis ---
-  enhancer.pure.hits <- countOverlaps(gr.enhancer.pure, gr.atac.union, minoverlap = 50) > 0
+  enhancer.pure.hits <- countOverlaps(gr.enhancer.pure, gr.atac.non_tss, minoverlap = 50) > 0
   n.enhancer.pure <- length(gr.enhancer.pure)
   n.enhancer.pure.atac <- sum(enhancer.pure.hits)
   pct.enhancer.pure <- round(100 * n.enhancer.pure.atac / n.enhancer.pure, 1)
@@ -336,24 +353,36 @@ if(file.exists(path.rds.tss)) {
   print(str_c("Original Enhancer ATAC overlap: ", sprintf("%.1f%%", pct.enhancer)))
   print(str_c("[Fragment-level] Pure Enhancer ATAC overlap: ", n.enhancer.pure.atac, " / ", n.enhancer.pure, " (", sprintf("%.1f%%", pct.enhancer.pure), ")"))
   
-  # --- Per-anchor analysis (maps fragments back to original anchors) ---
-  # For each original enhancer anchor, check if ANY of its pure fragments overlap ATAC
-  anchor.has.pure.atac <- logical(length(gr.enhancer))
-  anchor.has.pure.frag <- logical(length(gr.enhancer))
-  hits.anchor.to.pure <- findOverlaps(gr.enhancer, gr.enhancer.pure)
-  for (i in seq_along(gr.enhancer)) {
-    frag.idx <- subjectHits(hits.anchor.to.pure)[queryHits(hits.anchor.to.pure) == i]
-    if (length(frag.idx) > 0) {
-      anchor.has.pure.frag[i] <- TRUE
-      anchor.has.pure.atac[i] <- any(enhancer.pure.hits[frag.idx])
-    }
+  # --- Per-anchor analysis ---
+  # For each original enhancer anchor, check if any ATAC peak remains outside known TSS regions.
+  hits.tss <- findOverlaps(gr.enhancer, tss_regions, ignore.strand = TRUE)
+  tss.bp.by.anchor <- numeric(length(gr.enhancer))
+  if (length(hits.tss) > 0) {
+    tss.overlaps <- pintersect(
+      gr.enhancer[queryHits(hits.tss)],
+      tss_regions[subjectHits(hits.tss)],
+      ignore.strand = TRUE
+    )
+    tss.bp.sum <- rowsum(width(tss.overlaps), group = queryHits(hits.tss), reorder = FALSE)
+    tss.bp.by.anchor[as.integer(rownames(tss.bp.sum))] <- tss.bp.sum[, 1]
   }
+  anchor.has.pure.frag <- tss.bp.by.anchor < width(gr.enhancer)
+  anchor.has.pure.atac <- anchor.has.pure.frag &
+    (countOverlaps(gr.enhancer, gr.atac.non_tss, minoverlap = 50) > 0)
   n.anchor.with.pure <- sum(anchor.has.pure.frag)
   n.anchor.pure.atac <- sum(anchor.has.pure.atac)
   pct.anchor.pure.atac <- round(100 * n.anchor.pure.atac / n.anchor.with.pure, 1)
   
   print(str_c("[Per-anchor] Anchors with pure fragments: ", n.anchor.with.pure, " / ", length(gr.enhancer)))
   print(str_c("[Per-anchor] Anchors with pure ATAC overlap: ", n.anchor.pure.atac, " / ", n.anchor.with.pure, " (", sprintf("%.1f%%", pct.anchor.pure.atac), ")"))
+  
+  df.tss.exclusion.summary <- tibble(
+    analysis = c("fragment_level", "per_anchor"),
+    denominator = c(n.enhancer.pure, n.anchor.with.pure),
+    n_atac_overlap = c(n.enhancer.pure.atac, n.anchor.pure.atac),
+    pct_atac_overlap = c(pct.enhancer.pure, pct.anchor.pure.atac)
+  )
+  write_csv(df.tss.exclusion.summary, file.path(path.dir.out, "atac_tss_exclusion_summary.csv"))
 } else {
   print("TSS RDS file not found. Skipping TSS exclusion analysis.")
 }
