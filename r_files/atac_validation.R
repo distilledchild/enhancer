@@ -10,13 +10,14 @@ library(GenomicRanges) # for genomic interval overlap and ranges operation
 options(scipen = 999) # prevent scientific notation in base R
 options(pillar.sigfig = 10) # display up to 10 significant digits in tibbles
 
-setwd("/Users/pete/Desktop/playground/enhancer") # Mac
-getwd() # /Users/pete/Desktop/playground/enhancer
+dropbox <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer"
+setwd(file.path(dropbox, "r_files"))
+getwd()
 
-path.csv.final.loop <- "/Users/pete/Desktop/playground/enhancer/figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.csv"
-path.rds.final.loop <- "~/Dropbox/Gateway_to_Hao/enhancer/data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"
-path.narrowpeak.atac <- "/Users/pete/Desktop/playground/enhancer/data/Duttke2022_snATAC/Duttke2022_snATAC_peaks_rn7.narrowPeak" # Duttke 2022 snATAC (rn6→rn7 liftOver)
-path.dir.out <- "/Users/pete/Desktop/playground/enhancer/r_files"
+path.csv.final.loop <- file.path(dropbox, "data/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.csv")
+path.rds.final.loop <- file.path(dropbox, "data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
+path.narrowpeak.atac <- file.path(dropbox, "data/Duttke2022_snATAC_peaks_rn7.narrowPeak") # Duttke 2022 snATAC (rn6→rn7 liftOver)
+path.dir.out <- file.path(dropbox, "r_files/figures/submission/lt2mb")
 
 ####################################################
 # 1. Loop load and anchor parsing
