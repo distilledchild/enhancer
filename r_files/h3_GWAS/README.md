@@ -1,0 +1,40 @@
+# h3_GWAS Project Files
+
+This directory contains lightweight code and documentation for HS rat GWAS,
+cMAGMA, and H-MAGMA analyses. Large generated GWAS/MAGMA outputs are stored on
+the external SSD and ignored by git.
+
+## Dataset Folders
+
+| Folder | Role |
+|---|---|
+| `BMI/` | Wright BMI proof-of-principle summary-stat cMAGMA/H-MAGMA workflow. |
+| `Cocaine2026/` | Public cocaine self-administration `.mlma` summary-stat conversion and cMAGMA/H-MAGMA analysis. |
+| `Gunturkun2022/` | Practical local GCTA MLMA/MLMA-LOCO pipeline for GeneNetwork HS rat behavioral traits. |
+| `King2025/` | Cue-reactivity/sign-tracking summary-stat validation and cMAGMA/H-MAGMA discovery analysis. |
+| `Kuhn2025/` | Near-exact heroin/nociception GWAS reproduction/validation plus downstream cMAGMA/H-MAGMA. |
+| `Lara2024_delaydiscounting/` | Deposited delay-discounting `.mlma` validation and selected cMAGMA/H-MAGMA analysis. |
+| `nicotine/` | Historical nicotine SA MAGMA/H-MAGMA scripts and strict annotation files used by the project. |
+| `docs/` | General GCTA GWAS pipeline and result interpretation guides. |
+
+## Git Policy
+
+Track:
+
+- `.md` documentation
+- `.R`, `.py`, `.sh` scripts
+- lightweight reproducibility notes
+
+Ignore:
+
+- `.mlma`, `.genes.out`, `.genes.raw`, `.log`
+- MAGMA p-value inputs
+- large CSV/TSV outputs
+- downloaded data folders
+- PDFs and compressed archives
+
+The corresponding external work root is:
+
+```text
+/Volumes/external_1000GB_all/playground/enhancer/r_files/h3_GWAS
+```

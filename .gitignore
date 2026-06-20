@@ -12,3 +12,28 @@ __pycache__/
 
 # local virtualenv
 r_files/.venv-alphagenome/
+
+# h3_GWAS generated outputs and large analysis artifacts
+r_files/h3_GWAS/**/*.genes.out
+r_files/h3_GWAS/**/*.genes.raw
+r_files/h3_GWAS/**/*.log
+r_files/h3_GWAS/**/*.stdout.log
+r_files/h3_GWAS/**/*.mlma
+r_files/h3_GWAS/**/*.loco.mlma
+r_files/h3_GWAS/**/*.magma.tsv
+r_files/h3_GWAS/**/*.magma_pval.tsv
+r_files/h3_GWAS/**/*.csv
+r_files/h3_GWAS/**/*.tsv
+r_files/h3_GWAS/**/*.bed
+r_files/h3_GWAS/**/*.bim
+r_files/h3_GWAS/**/*.fam
+r_files/h3_GWAS/**/*.zip
+r_files/h3_GWAS/**/*.pdf
+r_files/h3_GWAS/**/*.annot
+r_files/h3_GWAS/**/*.txt
+r_files/h3_GWAS/**/data/
+r_files/h3_GWAS/**/data
+r_files/h3_GWAS/**/results/
+r_files/h3_GWAS/**/logs/
+r_files/h3_GWAS/**/magma_inputs/
+r_files/h3_GWAS/**/reports/repeated_gene_locus_figures/

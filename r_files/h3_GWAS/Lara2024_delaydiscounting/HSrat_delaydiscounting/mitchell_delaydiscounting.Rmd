@@ -1,0 +1,443 @@
+---
+title: "Delay Discounting: Mitchell Lab"
+author: "Montana Kay Lara"
+date: "2023-09-20"
+output: html_document
+---
+
+Update: September 27, 2023
+
+The following markdown is used for delay discounting analysis. From the adjusting amount procedure done in HS rats, raw data should include indifference points for different time delays 'T'. Each animal is identified by 'rfid' codes. For each delay curve for each animal, this script will calculate the AUC and fit both hyperbolic and exponential functions. Additionally, each function is fit both with and wihtout bias. The resulting data table will have calculated bias, AUC, hyperbolic k parameter, exponential k parameter, and r^2 values for the models. These values are compared at the end, and these trait measures for delay discounting are used in GWAS. 
+
+I. Setup
+II. Import raw dataset and cleanup
+III. Calculate bias (b) 
+IV. AUC
+V. Hyperbolic with bias
+VI. Hyperbolic without bias
+VII. Exponential with bias
+VIII. Expontneital without bias
+IX. Checking values
+
+
+## I. Setup
+This chunk imports all the necessary packages to run the rest of the code. (If you do not have the packages installed, use the function 'install.packages()')
+
+```{r setup, results='hide', message=FALSE}
+all.packages <- c("tidyverse", 
+                  "ggplot2", 
+                  "here", 
+                  "readxl",
+                  "conflicted",
+                  "readr",
+                  "ggdist",
+                  "ggbeeswarm",
+                  "ggforce", 
+                  "ggpubr",
+                  "readr",
+                  "minpack.lm", 
+                  "AICcmodavg", 
+                  "e1071")
+for(i in 1:length(all.packages)){library(all.packages[i], character.only = TRUE)} 
+conflict_prefer("filter", "dplyr")
+```
+
+
+## II. Import dataset for dd gwas
+
+The import requires a spreadsheet (either excel or csv), with: 
+* rows = animals
+* columns = traits
+
+```{r import}
+#processed_data_ready was taken from the Palmer lab csv used in GWAS, which has calculated values from the Mitchell lab
+dd_processeddata <- read_csv("data/processed_data_ready.csv", col_types = cols(rfid = col_character()))
+#dd_rawdata has just the raw values for the delays and the animal information
+dd_rawdata <- read_csv("data/dd_rawdata.csv", col_types = cols(rfid = col_character()))
+```
+
+```{r comparisonNEW}
+#add spreadsheet from suzanne that had NEW (correct) values
+dd_newdata <- read_csv("data/parameters_forGWAS_paper.csv", col_types = cols(rfid = col_character()))
+
+#had to create "full_rfid" to be able to match values based on rfid in all the dataframes
+dd_newdata$full_rfid <- dd_newdata$rfid
+for (i in 1:nrow(dd_newdata)) {
+  partial <- dd_newdata$rfid[i]
+  matching_row <- sapply(dd_processeddata$rfid, function(full_rfid) grepl(partial, full_rfid))
+  if (any(matching_row)) {
+    dd_newdata$full_rfid[i] <- dd_processeddata$rfid[matching_row]
+  }
+}
+dd_newdata$rfid <- dd_newdata$full_rfid
+```
+
+
+```{r filterNA}
+#create new dataframe with only the animals who have values for indifference points (filtering out all NAs)
+dd_data <- dd_rawdata %>% 
+  filter_at(vars(dd_indiff_0, dd_indiff_2, dd_indiff_4, dd_indiff_8, dd_indiff_16, dd_indiff_24), all_vars(!is.na(.)))
+```
+
+
+
+## III. Calculate bias
+Bias (b) is calculated as the indifference point at delay 0s divided by the fixed delay reward (150ul)
+
+```{r bias}
+dd_data$bias <- dd_data$dd_indiff_0/150
+```
+
+```{r resultsdf}
+#this is just to create a new dataframe to store results in
+dd_fittedmodels <- dd_data
+```
+
+
+## IV. Melt data
+This chunk creates the dataframe "dd_pivot" which takes the delays and puts them into a single column "T" and takes each indifference point value and puts them into another column "indiff_point" corresponding to the Delay T. Once the data is structured this way, we can use the functions in the subsequent chunks to fit the models. 
+
+```{r}
+dd_pivot <- dd_data %>% 
+  pivot_longer(cols = dd_indiff_0:dd_indiff_24,
+               names_to = "Delay", 
+               values_to = "indiff_point") %>% 
+  mutate(Delay = factor(Delay, levels = c("dd_indiff_0", "dd_indiff_2", "dd_indiff_4", "dd_indiff_8", "dd_indiff_16", "dd_indiff_24"))) %>% 
+  mutate(T = case_when(Delay == "dd_indiff_0" ~ 0, 
+                       Delay == "dd_indiff_2" ~ 2, 
+                       Delay == "dd_indiff_4" ~ 4,
+                       Delay == "dd_indiff_8" ~ 8,
+                       Delay == "dd_indiff_16" ~ 16,
+                       Delay == "dd_indiff_24" ~ 24))
+```
+
+
+
+
+## IV. AUC
+
+```{r AUC}
+#this creates the values for the trapezoids from NORMALIZED T values (which is the T/24)
+trap0_2 <- (2/24) - (0/24)
+trap2_4 <- (4/24) - (2/24)
+trap4_8 <- (8/24) - (4/24)
+trap8_16 <- (16/24) - (8/24)
+trap16_24 <- (24/24) - (16/24)
+
+#traparea calculates the area of the trapezoid for each time bin
+#AUC is the sum of those trapezoids
+dd_AUC <- dd_data %>% 
+  mutate("traparea0_2" = trap0_2 * ((dd_indiff_0/150 + dd_indiff_2/150)/2), 
+         "traparea2_4" = trap2_4 * ((dd_indiff_2/150 + dd_indiff_4/150)/2), 
+         "traparea4_8" = trap4_8 * ((dd_indiff_4/150 + dd_indiff_8/150)/2), 
+         "traparea8_16" = trap8_16 * ((dd_indiff_8/150 + dd_indiff_16/150)/2), 
+         "traparea16_24" = trap16_24 * ((dd_indiff_16/150 + dd_indiff_24/150)/2)) %>% 
+  mutate("AUC" = traparea0_2 + traparea2_4 + traparea4_8 + traparea8_16 + traparea16_24) %>% 
+  select(rfid, traparea0_2:AUC)
+
+
+#add AUC to results dataframe
+dd_fittedmodels <- dd_fittedmodels %>% 
+  left_join(dd_AUC, by = 'rfid')
+```
+
+
+
+
+
+
+## V. Hyperbolic model with bias
+
+First we define the hyperbolic function, including the bias variable "b"
+```{r hypbias}
+# Defining the hyperbolic model function with A = 150
+A <- 150
+hyperbolic_bias_model <- function(T, b, A, k) {
+  return((b * A) / (1 + k * T))}
+```
+
+This chunk fits the hyperbolic model with bias and iterates over each animal. The results is a list of k, residual sum of squares, and r^2 values for each animal
+```{r fithypbias}
+# the nlsLM() function will fit the hyperbolic model and start with a k value of 0
+initial_k <- 0
+# initialize an empty vector where the k values, sum of squared (SS) residuals, and r^2 values will be stored
+best_k_values_hypbias <- list()
+residualSS_hypbias <- list()
+r2_hypbias <- list()
+
+# Iterate over each unique animal rfid to fit the hyperbolic function
+unique_rfids <- unique(dd_pivot$rfid)
+for (single_rfid in unique_rfids) {
+  animal_data <- subset(dd_pivot, rfid == single_rfid)
+  # Fit the model with 'b' fixed for the current animal
+  fit <- nlsLM(indiff_point ~ hyperbolic_bias_model(T, bias, A, k), data = animal_data, start = list(k = initial_k))
+  # Store the best 'k' value for the current animal
+  best_k_values_hypbias[[single_rfid]] <- coef(fit)
+  #calculate residuals
+  residuals_hypbias <- residuals(fit)
+  sum_residuals_hypbias <- sum(residuals_hypbias^2)
+  r_squared <- 1 - (sum_residuals_hypbias / sum((animal_data$indiff_point - mean(animal_data$indiff_point))^2))
+  # store SS residuals for the current animal
+  residualSS_hypbias[[single_rfid]] <- sum_residuals_hypbias
+  # store r2 values
+  r2_hypbias[[single_rfid]] <- r_squared
+}
+```
+
+This chunk takes the lists of values for each animal and formats them to be able to be put into a new dataframe that can be accessed for analysis 
+```{r dfhypbias}
+#make lists into dataframes/vectors
+hyperbolic_bias_k <- as.data.frame(do.call(rbind, best_k_values_hypbias))[["k"]]
+hyperbolic_bias_residualSS <- as.data.frame(do.call(rbind, residualSS_hypbias))[["V1"]]
+hyperbolic_bias_r2 <- as.data.frame(do.call(rbind, r2_hypbias))[["V1"]]
+#put it all together into a dataframe
+hypbias_results <- data.frame(rfid = unique_rfids, hyperbolic_bias_k, hyperbolic_bias_residualSS, hyperbolic_bias_r2)
+
+#add hyp bias to results dataframe
+dd_fittedmodels <- dd_fittedmodels %>% 
+  left_join(hypbias_results, by = 'rfid')
+```
+
+
+
+
+
+
+## VI. Hyperbolic model withOUT bias
+
+First we define the hyperbolic function, (without the bias variable "b")
+```{r hyp}
+# Defining the hyperbolic model function with A = 150
+A <- 150
+hyperbolic_model <- function(T, A, k) {
+  return((A) / (1 + k * T))}
+```
+
+This chunk fits the hyperbolic model (without bias) and iterates over each animal. The results is a list of k, residual sum of squares, and r^2 values for each animal
+```{r fithyp}
+# the nlsLM() function will fit the hyperbolic model and start with a k value of 0
+initial_k <- 0
+# initialize an empty vector where the k values, sum of squared (SS) residuals, and r^2 values will be stored
+best_k_values_hyp <- list()
+residualSS_hyp <- list()
+r2_hyp <- list()
+
+# Iterate over each unique animal rfid to fit the hyperbolic function
+unique_rfids <- unique(dd_pivot$rfid)
+for (single_rfid in unique_rfids) {
+  animal_data <- subset(dd_pivot, rfid == single_rfid)
+  # Fit the model for the current animal
+  fit <- nlsLM(indiff_point ~ hyperbolic_model(T, A, k), data = animal_data, start = list(k = initial_k))
+  # Store the best 'k' value for the current animal
+  best_k_values_hyp[[single_rfid]] <- coef(fit)
+  #calculate residuals
+  residuals_hyp <- residuals(fit)
+  sum_residuals_hyp <- sum(residuals_hyp^2)
+  r_squared <- 1 - (sum_residuals_hyp / sum((animal_data$indiff_point - mean(animal_data$indiff_point))^2))
+  # store SS residuals for the current animal
+  residualSS_hyp[[single_rfid]] <- sum_residuals_hyp
+  # store r2 values
+  r2_hyp[[single_rfid]] <- r_squared
+}
+```
+
+This chunk takes the lists of values for each animal and formats them to be able to be put into a new dataframe that can be accessed for analysis 
+```{r dfhyp}
+#make lists into dataframes/vectors
+hyperbolic_k <- as.data.frame(do.call(rbind, best_k_values_hyp))[["k"]]
+hyperbolic_residualSS <- as.data.frame(do.call(rbind, residualSS_hyp))[["V1"]]
+hyperbolic_r2 <- as.data.frame(do.call(rbind, r2_hyp))[["V1"]]
+#put it all together into a dataframe
+hyp_results <- data.frame(rfid = unique_rfids, hyperbolic_k, hyperbolic_residualSS, hyperbolic_r2)
+
+#add hyp bias to results dataframe
+dd_fittedmodels <- dd_fittedmodels %>% 
+  left_join(hyp_results, by = 'rfid')
+```
+
+
+
+
+
+
+
+
+
+
+## VII. Exponential model with bias
+
+First we define the exponential function, including the bias variable "b"
+```{r expbias}
+# Defining the exponential model function with A = 150
+A <- 150
+exponential_bias_model <- function(T, b, A, k) {
+  return(b * A * exp(-k * T))}
+```
+
+This chunk fits the exponential model with bias and iterates over each animal. The results is a list of k, residual sum of squares, and r^2 values for each animal
+```{r fitexpbias}
+# the nlsLM() function will fit the exponential model and start with a k value of 0
+initial_k <- 0
+# initialize an empty vector where the k values, sum of squared (SS) residuals, and r^2 values will be stored
+best_k_values_expbias <- list()
+residualSS_expbias <- list()
+r2_expbias <- list()
+
+# Iterate over each unique animal rfid to fit the exponential function
+unique_rfids <- unique(dd_pivot$rfid)
+for (single_rfid in unique_rfids) {
+  animal_data <- subset(dd_pivot, rfid == single_rfid)
+  # Fit the model with 'b' fixed for the current animal
+  fit <- nlsLM(indiff_point ~ exponential_bias_model(T, bias, A, k), data = animal_data, start = list(k = initial_k))
+  # Store the best 'k' value for the current animal
+  best_k_values_expbias[[single_rfid]] <- coef(fit)
+  #calculate residuals
+  residuals_expbias <- residuals(fit)
+  sum_residuals_expbias <- sum(residuals_expbias^2)
+  r_squared <- 1 - (sum_residuals_expbias / sum((animal_data$indiff_point - mean(animal_data$indiff_point))^2))
+  # store SS residuals for the current animal
+  residualSS_expbias[[single_rfid]] <- sum_residuals_expbias
+  # store r2 values
+  r2_expbias[[single_rfid]] <- r_squared
+}
+```
+
+This chunk takes the lists of values for each animal and formats them to be able to be put into a new dataframe that can be accessed for analysis 
+```{r dfexpbias}
+#make lists into dataframes/vectors
+exponential_bias_k <- as.data.frame(do.call(rbind, best_k_values_expbias))[["k"]]
+exponential_bias_residualSS <- as.data.frame(do.call(rbind, residualSS_expbias))[["V1"]]
+exponential_bias_r2 <- as.data.frame(do.call(rbind, r2_expbias))[["V1"]]
+#put it all together into a dataframe
+expbias_results <- data.frame(rfid = unique_rfids, exponential_bias_k, exponential_bias_residualSS, exponential_bias_r2)
+
+#add exp bias to results dataframe
+dd_fittedmodels <- dd_fittedmodels %>% 
+  left_join(expbias_results, by = 'rfid')
+```
+
+
+
+
+
+## VIII. Exponential model withOUT bias
+
+First we define the exponential function, (without the bias variable "b")
+```{r exp}
+# Defining the exponential model function with A = 150
+A <- 150
+exponential_model <- function(T, A, k) {
+  return(A * exp(-k * T))}
+```
+
+This chunk fits the exponential model (without bias) and iterates over each animal. The results is a list of k, residual sum of squares, and r^2 values for each animal
+```{r fitexp}
+# the nlsLM() function will fit the exponential model and start with a k value of 0
+initial_k <- 0
+# initialize an empty vector where the k values, sum of squared (SS) residuals, and r^2 values will be stored
+best_k_values_exp <- list()
+residualSS_exp <- list()
+r2_exp <- list()
+
+# Iterate over each unique animal rfid to fit the exponential function
+unique_rfids <- unique(dd_pivot$rfid)
+for (single_rfid in unique_rfids) {
+  animal_data <- subset(dd_pivot, rfid == single_rfid)
+  # Fit the model for the current animal
+  fit <- nlsLM(indiff_point ~ exponential_model(T, A, k), data = animal_data, start = list(k = initial_k))
+  # Store the best 'k' value for the current animal
+  best_k_values_exp[[single_rfid]] <- coef(fit)
+  #calculate residuals
+  residuals_exp <- residuals(fit)
+  sum_residuals_exp <- sum(residuals_exp^2)
+  r_squared <- 1 - (sum_residuals_exp / sum((animal_data$indiff_point - mean(animal_data$indiff_point))^2))
+  # store SS residuals for the current animal
+  residualSS_exp[[single_rfid]] <- sum_residuals_exp
+  # store r2 values
+  r2_exp[[single_rfid]] <- r_squared
+}
+```
+
+This chunk takes the lists of values for each animal and formats them to be able to be put into a new dataframe that can be accessed for analysis 
+```{r dfexp}
+#make lists into dataframes/vectors
+exponential_k <- as.data.frame(do.call(rbind, best_k_values_exp))[["k"]]
+exponential_residualSS <- as.data.frame(do.call(rbind, residualSS_exp))[["V1"]]
+exponential_r2 <- as.data.frame(do.call(rbind, r2_exp))[["V1"]]
+#put it all together into a dataframe
+exp_results <- data.frame(rfid = unique_rfids, exponential_k, exponential_residualSS, exponential_r2)
+
+#add exp bias to results dataframe
+dd_fittedmodels <- dd_fittedmodels %>% 
+  left_join(exp_results, by = 'rfid')
+```
+
+
+
+
+
+
+## IX. Checking values
+
+
+```{r}
+write.csv(dd_fittedmodels, here("results/dd_modelresults.csv"))
+```
+
+
+```{r}
+models <- list(age.mod, sex.mod, consumption.mod, age.sex.mod, combination.mod, interaction.mod)
+
+model.names <- c('age.mod', 'sex.mod', 'consumption.mod', 'age.sex.mod', 'combination.mod', 'interaction.mod')
+```
+
+
+```{r}
+test_merged_df <- merge(dd_newdata, dd_AUC, by = "rfid", suffixes = c("_df1", "_df2"), all = TRUE)
+ggplot(test_merged_df, aes(x = `ObjectiveAUC-normD`, y = AUC)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+
+ggplot(dd_fittedmodels, aes(x = hyperbolic_k, y = AUC)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+```
+
+```{r}
+skewness(dd_fittedmodels$dd_indiff_2)
+kurtosis(dd_fittedmodels$dd_indiff_2)
+hist(dd_fittedmodels$dd_indiff_2)
+```
+```{r}
+skewness(dd_fittedmodels$AUC)
+kurtosis(dd_fittedmodels$AUC)
+hist(dd_fittedmodels$AUC)
+```
+
+```{r}
+skewness(dd_fittedmodels$exponential_bias_k)
+kurtosis(dd_fittedmodels$exponential_bias_k)
+hist(dd_fittedmodels$exponential_bias_k)
+```
+```{r}
+skewness(dd_fittedmodels$exponential_k)
+kurtosis(dd_fittedmodels$exponential_k)
+hist(dd_fittedmodels$exponential_k)
+```
+
+```{r}
+skewness(dd_fittedmodels$hyperbolic_bias_k)
+kurtosis(dd_fittedmodels$hyperbolic_bias_k)
+hist(dd_fittedmodels$hyperbolic_bias_k)
+```
+
+
+```{r}
+skewness(dd_fittedmodels$hyperbolic_k)
+kurtosis(dd_fittedmodels$hyperbolic_k)
+hist(dd_fittedmodels$hyperbolic_k)
+```
+
+
+
+

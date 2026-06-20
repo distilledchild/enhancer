@@ -1,0 +1,995 @@
+---
+title: "Mitchell_gwas"
+author: "Montana Kay Lara"
+date: '2023-08-09'
+output: html_document
+---
+
+I. setup
+II. import dataset and cleanup
+III. dd curve figure
+IV. hist for each dd measure
+
+## I. Setup
+
+```{r setup, results='hide', message=FALSE}
+all.packages <- c("tidyverse", 
+                  "ggplot2", 
+                  "here", 
+                  "readxl",
+                  "conflicted",
+                  "readr",
+                  "ggdist",
+                  "ggbeeswarm",
+                  "ggforce", 
+                  "ggpubr",
+                  "gganimate", 
+                  "gifski")
+for(i in 1:length(all.packages)){library(all.packages[i], character.only = TRUE)} 
+conflict_prefer("filter", "dplyr")
+```
+
+## II. import dataset for dd gwas
+
+```{r import}
+processed_data_ready <- read_csv("data/processed_data_ready.csv", col_types = cols(rfid = col_character()))
+new_data <- read_csv("data/parameters_forGWAS_paper.csv", col_types = cols(rfid = col_character()))
+processed_data_ready <- read_csv("data/dd_modelresults.csv", col_types = cols(rfid = col_character()))
+```
+
+## III. dataset cleanup and pivot table
+
+```{r ddtable}
+dd_indiff_table <- as_tibble(processed_data_ready)
+  # select(rfid:dd_hyperbolic_k, dd_auc_trad, dd_expon_k) %>% 
+  # filter_at(vars(dd_indiff_0, dd_indiff_2, dd_indiff_4, dd_indiff_8, dd_indiff_16, dd_indiff_24), all_vars(!is.na(.)))
+```
+
+```{r pivottable}
+#create large pivot table ifor each of the indifference points
+BEHAVIOR_pivot <- dd_indiff_table %>% 
+  pivot_longer(cols = dd_indiff_0:dd_indiff_24, 
+               names_to = "dd_indiff_point", 
+               values_to = "intake") %>% 
+  mutate(dd_indiff_point = factor(dd_indiff_point, 
+                                  levels = c("dd_indiff_0", "dd_indiff_2", "dd_indiff_4", "dd_indiff_8", "dd_indiff_16", "dd_indiff_24"))) %>% 
+  mutate(x = case_when(dd_indiff_point == "dd_indiff_0" ~ 0, 
+                       dd_indiff_point == "dd_indiff_2" ~ 2, 
+                       dd_indiff_point == "dd_indiff_4" ~ 4,
+                       dd_indiff_point == "dd_indiff_8" ~ 8,
+                       dd_indiff_point == "dd_indiff_16" ~ 16,
+                       dd_indiff_point == "dd_indiff_24" ~ 24))
+```
+
+```{r summarytable}
+# summarise
+dd_summary <- BEHAVIOR_pivot %>% 
+  group_by(dd_indiff_point, .drop = FALSE) %>% 
+  summarise(mean_intake = mean(intake), 
+            n = n(), 
+            sd = sd(intake),
+            se = sd/sqrt(n), .groups = "keep") %>% 
+  rename(intake = mean_intake) %>% 
+  mutate(x = case_when(dd_indiff_point == "dd_indiff_0" ~ 0, 
+                       dd_indiff_point == "dd_indiff_2" ~ 2, 
+                       dd_indiff_point == "dd_indiff_4" ~ 4,
+                       dd_indiff_point == "dd_indiff_8" ~ 8,
+                       dd_indiff_point == "dd_indiff_16" ~ 16,
+                       dd_indiff_point == "dd_indiff_24" ~ 24))
+```
+
+
+III. dd curve
+
+```{r plotjitter}
+jitterset <- position_jitter(width = 0.15, seed = 123)
+high <- quantile(BEHAVIOR_pivot$AUC, probs = .99)
+low <- quantile(BEHAVIOR_pivot$AUC, probs = .05)
+
+ggplot(NULL, aes(x = dd_indiff_point, y = intake)) +
+  geom_point(data = BEHAVIOR_pivot,
+             aes(x = dd_indiff_point, y = intake,
+                 color = dd_auc_trad,
+                 group = dd_auc_trad),
+             position = jitterset, size = 3, alpha = .3) +
+  geom_line(data = BEHAVIOR_pivot,
+            aes(x = dd_indiff_point, y = intake, 
+                color = dd_auc_trad, 
+                group = dd_auc_trad),
+            position = jitterset, alpha = .05) +
+  geom_violin(data = BEHAVIOR_pivot, 
+              aes(group = dd_indiff_point), 
+              color = "gray10", size = 0.5, fill = "transparent") +
+  geom_errorbar(data = dd_summary, 
+                aes(ymin = intake-se, ymax = intake+se), 
+                color = "gray10", width = 0.15) +
+  geom_line(data = dd_summary, 
+            aes(group = 1), 
+            color = "gray10") +
+  theme_classic() +
+  scale_color_viridis_c(option = "C", 
+                        direction = -1, 
+                        breaks = c(low, high),
+                        labels = c("High \n AUC", "Low \n AUC")) +
+  labs(title = "Delay Discounting Function (n=629)", 
+       y = "Indifference Point (ul)", 
+       x = "Delay (seconds)",
+       color = "Animal") +
+  scale_x_discrete(labels = c("0", "2", "4", "8", "16", "24")) +
+  theme(axis.text.x = element_text(size = 20), 
+        axis.text.y = element_text(size = 15),
+        axis.title = element_text(size = 20),
+        title = element_text(size = 20), 
+        legend.position = "right",
+        legend.title = element_text(size = 15), 
+        legend.text = element_text(size = 12)) +
+  guides(fill = guide_colorbar(ticks.colour = NA))
+
+ggsave("mitchell_dd_violinoutline_continuous.pdf", path = here("figures"), height = 5.5, width = 10, units = "in")
+```
+
+
+```{r plotbeeswarm}
+ggplot(NULL, aes(x = dd_indiff_point, y = intake)) +
+  geom_line(data = BEHAVIOR_pivot,
+            aes(x = dd_indiff_point, y = intake, 
+                color = dd_auc_trad, 
+                group = dd_auc_trad),
+            alpha = .4) +
+  geom_quasirandom(data = BEHAVIOR_pivot,
+                   aes(x = dd_indiff_point, y = intake,
+                       color = dd_auc_trad,
+                       group = dd_auc_trad),
+                   size = 3, alpha = 0.3, ) +
+  stat_halfeye(data = BEHAVIOR_pivot,
+               aes(group = dd_indiff_point), 
+               # side = "left",
+               slab_fill = "gray50",
+               slab_alpha = 0.5,
+               slab_color = "gray10",
+               slab_linewidth = 1,
+               # adjust = 0.75,
+               .width = 0,
+               point_colour = NA) +
+  geom_errorbar(data = dd_summary, 
+                aes(ymin = intake-se, ymax = intake+se), 
+                color = "gray10", width = 0.15) +
+  geom_line(data = dd_summary, 
+            aes(group = 1), 
+            color = "gray10") +
+  theme_classic() +
+  scale_color_viridis_c(option = "C", 
+                        direction = -1, 
+                        breaks = c(high, low),
+                        labels = c("High \nAUC", "Low \nAUC")) +
+  labs(title = "Delay Discounting Function (n=629)", 
+       y = "Indifference Point (ul)", 
+       x = "Delay (seconds)",
+       color = "Animal") +
+  scale_x_discrete(labels = c("0", "2", "4", "8", "16", "24")) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        title = element_text(size = 20), 
+        legend.position = "right",
+        legend.title = element_text(size = 15), 
+        legend.text = element_text(size = 12)) 
+  # guides(fill = guide_colorbar(ticks = FALSE))
+
+ggsave("mitchell_dd_beeswarm_continuous_new.pdf", path = here("figures"), height = 5.5, width = 10, units = "in")
+```
+
+
+Don't use
+```{r plotraincloud}
+# jitterset <- position_jitter(width = 0.15, seed = 123)
+# 
+# ggplot(NULL, aes(x = dd_indiff_point, y = intake)) +
+#   geom_point(data = BEHAVIOR_pivot, 
+#              aes(x = dd_indiff_point, y = intake, 
+#                  color = fct_reorder(rfid, dd_auc_trad, .desc = TRUE), 
+#                  group = fct_reorder(rfid, dd_auc_trad, .desc = TRUE)), 
+#              size = 3, alpha = .2) +
+#   geom_line(data = BEHAVIOR_pivot,
+#             aes(x = dd_indiff_point, y = intake, 
+#                 color = fct_reorder(rfid, dd_auc_trad, .desc = TRUE), 
+#                 group = fct_reorder(rfid, dd_auc_trad, .desc = TRUE)),
+#             alpha = .05) +
+#   stat_halfeye(data = BEHAVIOR_pivot,
+#                aes(group = dd_indiff_point), 
+#                justification = -0.04,
+#                slab_fill = "gray50",
+#                slab_alpha = 0.5,
+#                slab_color = "gray10",
+#                slab_linewidth = 1,
+#                adjust = 0.75,
+#                .width = 0,
+#                point_colour = NA) +
+#   geom_errorbar(data = dd_summary, 
+#                 aes(ymin = intake-se, ymax = intake+se), 
+#                 color = "gray10", width = 0.15) +
+#   geom_line(data = dd_summary, 
+#             aes(group = 1), 
+#             color = "gray10") +
+#   theme_classic() +
+#   scale_color_viridis_d(option = "C") +
+#   labs(title = "Delay Discounting Function (n=644)", y = "Indifference Point (ul)", x = "Delay (seconds)") +
+#   scale_x_discrete(labels = c("0", "2", "4", "8", "16", "24")) +
+#   theme(axis.text.x = element_text(size = 20), 
+#         axis.text.y = element_text(size = 15),
+#         axis.title = element_text(size = 20),
+#         title = element_text(size = 20), 
+#         legend.position = "none") 
+# 
+# ggsave("mitchell_dd_beeswarm.pdf", path = here("figures"), height = 5.5, width = 10, units = "in")
+```
+
+IV. hist for dd measures
+```{r histAUC}
+AUCtable <- processed_data_ready %>% 
+  filter(!is.na(dd_auc_trad))
+
+ggplot(AUCtable, aes(dd_auc_trad)) +
+  geom_histogram(color = "gray10", fill = "gray50", bins = 50) +
+  theme_classic() +
+  labs(y = "Number of rats", x = "AUC") +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 25))
+
+ggsave("mitchell_dd_AUC_hist.pdf", path = here("figures"), height = 5.5, width = 8, units = "in")
+```
+
+```{r histexponk}
+exponktable <- processed_data_ready %>% 
+  filter(!is.na(dd_expon_k))
+
+ggplot(exponktable, aes(dd_expon_k)) +
+  geom_histogram(color = "gray10", fill = "gray50", bins = 50) +
+  theme_classic() +
+  labs(y = "Number of rats", x = "Exponential k") +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 25))
+
+ggsave("mitchell_dd_exponk_hist.pdf", path = here("figures"), height = 5.5, width = 8, units = "in")
+```
+
+
+```{r histhyperk}
+hyperktable <- processed_data_ready %>% 
+  filter(!is.na(dd_hyperbolic_k))
+
+ggplot(hyperktable, aes(dd_hyperbolic_k)) +
+  geom_histogram(color = "gray10", fill = "gray50", bins = 50) +
+  theme_classic() +
+  labs(y = "Number of rats", x = "Hyperbolic k") +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 25))
+
+ggsave("mitchell_dd_hyperk_hist.pdf", path = here("figures"), height = 5.5, width = 8, units = "in")
+```
+
+```{r plotbeeswarm}
+ggplot(NULL, aes(x = dd_indiff_point, y = intake)) +
+  geom_line(data = BEHAVIOR_pivot,
+            aes(x = dd_indiff_point, y = intake, 
+                color = dd_auc_trad, 
+                group = dd_auc_trad),
+            alpha = .2) +
+  geom_quasirandom(data = BEHAVIOR_pivot,
+                   aes(x = dd_indiff_point, y = intake,
+                       color = dd_auc_trad,
+                       group = dd_auc_trad),
+                   size = 3, alpha = 0.05, ) +
+  stat_halfeye(data = BEHAVIOR_pivot,
+               aes(group = dd_indiff_point), 
+               # side = "left",
+               slab_fill = "gray50",
+               slab_alpha = 0.5,
+               slab_color = "gray10",
+               slab_linewidth = 1,
+               # adjust = 0.75,
+               .width = 0,
+               point_colour = NA) +
+  geom_errorbar(data = dd_summary, 
+                aes(ymin = intake-se, ymax = intake+se), 
+                color = "gray10", width = 0.15) +
+  geom_line(data = dd_summary, 
+            aes(group = 1), 
+            color = "gray10") +
+  theme_classic() +
+  scale_color_viridis_c(option = "C", 
+                        direction = -1, 
+                        breaks = c(high, low),
+                        labels = c("High \nAUC", "Low \nAUC")) +
+  labs(title = "Delay Discounting Function (n=629)", 
+       y = "Indifference Point (ul)", 
+       x = "Delay (seconds)",
+       color = "Animal") +
+  scale_x_discrete(labels = c("0", "2", "4", "8", "16", "24")) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        title = element_text(size = 20), 
+        legend.position = "right",
+        legend.title = element_text(size = 15), 
+        legend.text = element_text(size = 12)) 
+  # guides(fill = guide_colorbar(ticks = FALSE))
+
+ggsave("mitchell_dd_beeswarm_continuous.pdf", path = here("figures"), height = 5.5, width = 10, units = "in")
+```
+
+
+
+
+
+
+## test with numerical x axis
+## USING THIS ONE FOR FINAL FIGURE
+
+```{r plotxaxis}
+ggplot(NULL, aes(x = x, y = intake)) +
+  geom_line(data = BEHAVIOR_pivot,
+            aes(x = x, y = intake, 
+                color = AUC, 
+                group = AUC),
+            alpha = .15) +
+  # geom_quasirandom(data = BEHAVIOR_pivot,
+  #                  aes(x = x, y = intake,
+  #                      color = AUC,
+  #                      group = AUC),
+  #                  size = 3, alpha = 0.3) +
+  # stat_halfeye(data = BEHAVIOR_pivot,
+  #              aes(group = dd_indiff_point),
+  #              # side = "left",
+  #              slab_fill = "gray50",
+  #              slab_alpha = 0.5,
+  #              slab_color = "gray10",
+  #              slab_linewidth = 1,
+  #              # adjust = 0.75,
+  #              .width = 0,
+  #              point_colour = NA) +
+  # geom_errorbar(data = dd_summary,
+  #               aes(ymin = intake-se, ymax = intake+se),
+  #               color = "gray10", width = 0.15) +
+  # geom_line(data = dd_summary,
+  #           aes(group = 1),
+  #           color = "gray10") +
+  theme_classic() +
+  scale_color_viridis_c(option = "C", 
+                        direction = -1, 
+                        breaks = c(high, low),
+                        labels = c("Low", "High")) +
+  ylim(0, 300) +
+  labs(y = "Indifference Point (µl)",
+       x = "Delay T (s)", 
+       color = "Discounting \nCurve") +
+   scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        legend.position = "right",
+        legend.title = element_text(size = 15), 
+        legend.text = element_text(size = 12))
+
+      # y = expression("Indifference Point (A"[I]*" µl)"), 
+
+ggsave("mitchell_dd_beeswarm_continuous_newXAXIS_wider_2.pdf", path = here("figures"), height = 4, width = 12, units = "in")
+```
+
+
+
+
+
+
+
+```{r plotxaxis}
+ggplot(NULL, aes(x = x, y = intake)) +
+  geom_line(data = BEHAVIOR_pivot,
+            aes(x = x, y = intake, 
+                color = AUC, 
+                group = AUC),
+            alpha = .15) +
+  geom_quasirandom(data = BEHAVIOR_pivot,
+                   aes(x = x, y = intake,
+                       color = AUC,
+                       group = AUC),
+                   size = 3, alpha = 0.15) +
+  stat_halfeye(data = BEHAVIOR_pivot,
+               aes(group = dd_indiff_point),
+               # side = "left",
+               slab_fill = "gray50",
+               slab_alpha = 0.5,
+               slab_color = "gray10",
+               slab_linewidth = 1,
+               # adjust = 0.75,
+               .width = 0,
+               point_colour = NA) +
+  geom_errorbar(data = dd_summary,
+                aes(ymin = intake-se, ymax = intake+se),
+                color = "gray10", width = 0.15) +
+  geom_line(data = dd_summary,
+            aes(group = 1),
+            color = "gray10") +
+  theme_classic() +
+  scale_color_viridis_c(option = "C",
+                        direction = -1, 
+                        breaks = c(high, low),
+                        labels = c("Low \nDiscount", "High \nDiscount")) +
+  ylim(0, 300) +
+  labs(y = "Indifference Point (µl)",
+       x = "Delay T (s)", 
+       color = "Curve") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        legend.position = "right",
+        legend.title = element_text(size = 15), 
+        legend.text = element_text(size = 12))
+
+      # y = expression("Indifference Point (A"[I]*" µl)"), 
+
+ggsave("Figure_1_dd.pdf", path = here("figures"), height = 4, width = 10, units = "in")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r newfig}
+#eg 1 933000320045881 bias 1.1841606
+#eg2 933000320046071 bias 1.1560383
+rfid_an1 <- 933000320046071
+an1_bias <- 1.1560383
+
+an1_dd_values <- dd_indiff_table %>% 
+  filter(rfid == rfid_an1) %>% 
+  select(dd_indiff_0:dd_indiff_24) %>% 
+  as.numeric()
+an1_actualdata <- data.frame(x = c(0, 2, 4, 8, 16, 24), y = an1_dd_values)
+
+#hyperbolic function 
+hyper_k_an1 <- dd_indiff_table %>% 
+  filter(rfid == rfid_an1) %>% 
+  select(hyperbolic_k) %>% as.numeric()
+hyper_fun <- function(x) {(150)/(1+hyper_k_an1*x)}
+an1_hyper <- data.frame(x = 0:24, y = hyper_fun(0:24))
+
+#hyperbolic function w bias
+hyper_k_an1_bias <- dd_indiff_table %>% 
+  filter(rfid == rfid_an1) %>% 
+  select(hyperbolic_bias_k) %>% as.numeric()
+hyper_fun_bias <- function(x) {(an1_bias * 150)/(1+hyper_k_an1_bias*x)}
+an1_hyper_bias <- data.frame(x = 0:24, y = hyper_fun_bias(0:24))
+
+#exponential function
+expon_k_an1 <- dd_indiff_table %>% 
+  filter(rfid == rfid_an1) %>% 
+  select(exponential_k) %>% as.numeric()
+expon_fun <- function(x) {150*exp(-expon_k_an1*x)}
+an1_expon <- data.frame(x = 0:24, y = expon_fun(0:24))
+
+#exponential function
+expon_k_an1_bias <- dd_indiff_table %>% 
+  filter(rfid == rfid_an1) %>% 
+  select(exponential_bias_k) %>% as.numeric()
+expon_fun_bias <- function(x) {an1_bias * 150*exp(-expon_k_an1_bias*x)}
+an1_expon_bias <- data.frame(x = 0:24, y = expon_fun_bias(0:24))
+```
+
+
+```{r newfig}
+ggplot(NULL, aes(x = x, y = y)) +
+  geom_area(data = an1_actualdata, fill = 'lightblue', alpha = .65, linetype = 1, size = .5) +
+  geom_point(data = an1_actualdata, color = 'gray60', size = 5, alpha = .8) +
+  ylim(0, 180) +
+  theme_classic() +
+  labs(title = "Area Under the Curve (AUC)", 
+       y = "Indifference Point (µl)", 
+       x = "Delay T (s)") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_blank(),
+        title = element_text(size = 20))
+
+ggsave("dd_eg_auc.pdf", path = here("figures"), height = 3, width = 6, units = "in")
+```
+
+
+```{r newfig}
+ggplot(NULL, aes(x = x, y = y)) +
+  geom_point(data = an1_actualdata, color = 'gray60', size = 5, alpha = .8) +
+  stat_function(data = an1_hyper, fun = hyper_fun, color = 'lightblue2', size = 2, alpha = 1, linetype = 'solid') +
+  ylim(0, 180) +
+  theme_classic() +
+  labs(title = "Hyperbolic", 
+       y = "Indifference Point (µl)", 
+       x = "Delay T (s)") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_blank(),
+        title = element_text(size = 20))
+
+ggsave("dd_eg_hyper.pdf", path = here("figures"), height = 3, width = 6, units = "in")
+```
+
+
+```{r newfig}
+ggplot(NULL, aes(x = x, y = y)) +
+  geom_point(data = an1_actualdata, color = 'gray60', size = 5, alpha = .8) +
+  stat_function(data = an1_hyper_bias, fun = hyper_fun_bias, color = 'lightblue3', size = 2, alpha = 1, linetype = 'longdash') +
+  ylim(0, 180) +
+  theme_classic() +
+  labs(title = "Hyperbolic with Bias", 
+       y = "Indifference Point (µl)", 
+       x = "Delay T (s)") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_blank(),
+        title = element_text(size = 20))
+
+ggsave("dd_eg_hyperbias.pdf", path = here("figures"), height = 3, width = 6, units = "in")
+```
+
+```{r newfig}
+ggplot(NULL, aes(x = x, y = y)) +
+  geom_point(data = an1_actualdata, color = 'gray60', size = 5, alpha = .8) +
+  stat_function(data = an1_expon, fun = expon_fun, color = 'cadetblue3', size = 2, alpha = 1, linetype = 'solid') +
+  ylim(0, 180) +
+  theme_classic() +
+  labs(title = "Exponential", 
+       y = "Indifference Point (µl)", 
+       x = "Delay T (s)") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_blank(),
+        title = element_text(size = 20))
+
+ggsave("dd_eg_expon.pdf", path = here("figures"), height = 3, width = 6, units = "in")
+```
+
+```{r newfig}
+ggplot(NULL, aes(x = x, y = y)) +
+  geom_point(data = an1_actualdata, color = 'gray60', size = 5, alpha = .8) +
+  stat_function(data = an1_expon_bias, fun = expon_fun_bias, color = 'cyan4', size = 2, alpha = 1, linetype = 'longdash') +
+  ylim(0, 180) +
+  theme_classic() +
+  labs(title = "Exponential with Bias", 
+       y = "Indifference Point (µl)", 
+       x = "Delay T (s)") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_blank(),
+        title = element_text(size = 20)) 
+
+ggsave("dd_eg_exponbias.pdf", path = here("figures"), height = 3, width = 6, units = "in")
+```
+
+
+
+
+
+
+
+
+## plotting function fits
+
+```{r animal1}
+#BIG AUC, LESS DISCOUNTING
+#animal rfid: 933000320046276
+
+rfid_an1 <- 933000320124739
+
+an1_dd_values <- dd_indiff_table %>% 
+  filter(rfid == rfid_an1) %>% 
+  select(dd_indiff_0:dd_indiff_24) %>% 
+  as.numeric()
+an1_actualdata <- data.frame(x = c(0, 2, 4, 8, 16, 24), y = an1_dd_values)
+
+#hyperbolic function 
+hyper_k_an1 <- dd_indiff_table %>% 
+  filter(rfid == rfid_an1) %>% 
+  select(dd_hyperbolic_k) %>% as.numeric()
+hyper_fun <- function(x) {(150)/(1+hyper_k_an1*x)}
+an1_hyper <- data.frame(x = 0:24, y = hyper_fun(0:24))
+
+#exponential function
+expon_k_an1 <- dd_indiff_table %>% 
+  filter(rfid == rfid_an1) %>% 
+  select(exponential_bias_k) %>% as.numeric()
+expon_fun <- function(x) {150*exp(-expon_k_an1*x)}
+an1_expon <- data.frame(x = 0:24, y = expon_fun(0:24))
+
+ggplot(NULL, aes(x = x, y = y)) +
+  geom_area(data = an1_actualdata, fill = '#c5407e', alpha = .65, linetype = 1, size = .5, colour = '#9511a1') +
+  stat_function(data = an1_hyper, fun = hyper_fun, color = 'gray70', size = 2, alpha = 1, linetype = 'dashed') +
+  stat_function(data = an1_expon, fun = expon_fun, color = '#6e00a8', size = 2, linetype = 'dashed') +
+  geom_point(data = an1_actualdata, color = '#6e00a8', size = 5, alpha = .8) +
+  geom_point(data = an1_actualdata, color = '#d14e72', size = 3, alpha = .5) +
+  ylim(0, 300) +
+  theme_classic() +
+  labs(title = "Low Discounting", 
+       y = "Indifference Point (µl)", 
+       x = "Delay T (s)") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        title = element_text(size = 20)) 
+
+ggplot(NULL, aes(x = x, y = y)) +
+  geom_area(data = an1_actualdata, fill = '#d14e72', alpha = .65, linetype = 1, size = .5, colour = '#9511a1') +
+  stat_function(data = an1_hyper, fun = hyper_fun, color = 'gray70', size = 2, alpha = 1, linetype = 'solid') +
+  stat_function(data = an1_expon, fun = expon_fun, color = '#6e00a8', size = 2, linetype = 'solid') +
+  geom_point(data = an1_actualdata, color = '#9511a1', size = 5, alpha = .8) +
+  ylim(0, 300) +
+  theme_classic() +
+  labs(title = "Low Discounting", 
+       y = "Indifference Point (µl)", 
+       x = "Delay T (s)") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        title = element_text(size = 20)) 
+
+ggsave("mitchell_dd_eglowdiscounting.pdf", path = here("figures"), height = 3, width = 6, units = "in")
+```
+
+
+```{r animal2}
+#SMALL AUC, MORE DISCOUNTING
+#animal rfid: 933000320046986
+rfid_an2 <- 933000320045891
+
+
+an2_dd_values <- dd_indiff_table %>% 
+  filter(rfid == rfid_an2) %>% 
+  select(dd_indiff_0:dd_indiff_24) %>% 
+  as.numeric()
+an2_actualdata <- data.frame(x = c(0, 2, 4, 8, 16, 24), y = an2_dd_values)
+
+#hyperbolic function 
+hyper_k_an2 <- dd_indiff_table %>% 
+  filter(rfid == rfid_an2) %>% 
+  select(dd_hyperbolic_k) %>% as.numeric()
+hyper_fun_an2 <- function(x) {(150)/(1+hyper_k_an2*x)}
+an2_hyper <- data.frame(x = 0:24, y = hyper_fun_an2(0:24))
+
+#exponential function
+expon_k_an2 <- dd_indiff_table %>% 
+  filter(rfid == rfid_an2) %>% 
+  select(exponential_bias_k) %>% as.numeric()
+expon_fun_an2 <- function(x) {150*exp(-expon_k_an2*x)}
+an2_expon <- data.frame(x = 0:24, y = expon_fun_an2(0:24))
+
+ggplot(NULL, aes(x = x, y = y)) +
+  geom_area(data = an2_actualdata, fill = '#fccd25', alpha = .8, linetype = 1, size = .5, colour = '#fca338') +
+  stat_function(data = an2_hyper, fun = hyper_fun_an2, color = 'gray70', size = 2, linetype = 'dashed') +
+  stat_function(data = an2_expon, fun = expon_fun_an2, color = '#dd5e66', size = 2, linetype = 'dashed') +
+  geom_point(data = an2_actualdata, color = '#e76e5b', size = 5, alpha = 0.9) +
+  geom_point(data = an2_actualdata, color = '#feb72d', size = 3, alpha = 0.85) +
+  ylim(0, 300) +
+  theme_classic() +
+  labs(title = "High Discounting", 
+       y = "Indifference Point (µl)", 
+       x = "Delay T (s)") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        title = element_text(size = 20)) 
+
+ggsave("mitchell_dd_eghighdiscounting.pdf", path = here("figures"), height = 3, width = 6, units = "in")
+```
+
+
+
+
+
+## animation
+```{r}
+
+
+animationdata <- BEHAVIOR_pivot %>% 
+  filter(rfid == rfid_an1 | rfid == rfid_an2) %>% 
+  select(rfid, intake, x) %>% 
+  arrange(desc(rfid))
+newanimdata <- transform(animationdata, ind = 1:nrow(animationdata))
+
+animdata_an1 <- an1_expon %>% 
+  mutate(rfid = as.character(rfid_an1))
+animdata_an2 <- an2_expon %>% 
+  mutate(rfid = as.character(rfid_an2))
+animdata_both = full_join(animdata_an1, animdata_an2) %>% 
+  arrange(desc(rfid))
+newanimdata <- transform(animdata_both, ind = 1:nrow(animdata_both))
+
+ggplot(newanimdata, aes(x = x, y = y, color = rfid)) +
+  #geom_point(aes(group = rfid), size = 6) +
+  geom_line(aes(group = rfid), size = 4) +
+  scale_color_manual(values =  c("#fca338", "#cc4778")) +
+  theme_classic() +
+  labs(y = "Indifference Point", 
+       x = "Delay T") +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 40), 
+        axis.text.x = element_blank(), 
+        legend.position = "none")
+
+
+anim <- statplot +
+  transition_reveal(ind)
+
+animate(anim, renderer = gifski_renderer(), height = 800, width = 1200)
+```
+
+```{r}
+ggplot(newanimdata, aes(x = x, y = y, color = rfid)) +
+  geom_line(aes(group = rfid), size = 4) +
+  scale_color_manual(values =  c("#feb72d", "#6e00a8")) +
+  theme_classic() +
+  labs(y = "Indifference Point ($)", 
+       x = "Delay T") +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 40), 
+        axis.text.x = element_blank(), 
+        legend.position = "none")
+```
+
+
+
+
+
+
+
+```{r}
+ggplot(dd_indiff_table, aes(x = log(dd_hyperbolic_k), y = log(dd_auc_trad))) +
+  geom_point() +
+  stat_cor(method = "pearson")
+ggplot(dd_indiff_table, aes(x = log(dd_expon_k), y = log(dd_auc_trad))) +
+  geom_point() +
+  stat_cor(method = "pearson")
+ggplot(dd_indiff_table, aes(x = log(dd_hyperbolic_k), y = log(dd_expon_k))) +
+  geom_point() +
+  stat_cor(method = "pearson")
+```
+
+```{r}
+partial_match <- function(x, y) {
+  any(sapply(y, function(y_elem) grepl(y_elem, x)))
+}
+
+new_data$comparisonrfid <- ifelse(
+  any(sapply(new_data$rfid, function(x) grepl(x, processed_data_ready$rfid))), 
+  "Match", 
+  "No Match"
+)
+```
+
+```{r}
+new_data$full_rfid <- new_data$rfid
+for (i in 1:nrow(new_data)) {
+  partial <- new_data$rfid[i]
+  matching_row <- sapply(processed_data_ready$rfid, function(full_rfid) grepl(partial, full_rfid))
+  if (any(matching_row)) {
+    new_data$full_rfid[i] <- processed_data_ready$rfid[matching_row]
+  }
+}
+new_data$rfid <- new_data$full_rfid
+```
+
+```{r}
+merged_df <- merge(processed_data_ready, new_data, by = "rfid", suffixes = c("_df1", "_df2"), all = TRUE)
+
+merged_df$comparisonAUC <- ifelse(
+  merged_df$`ObjectiveAUC-normD` == merged_df$dd_auc_trad, "Match", "No Match")
+merged_df$comparisonexponk <- ifelse(
+  merged_df$`Exponential-k-FittedBias` == merged_df$dd_expon_k, "Match", "No Match")
+merged_df$comparisonhyperk <- ifelse(
+  merged_df$`Hyperbolic-k-FittedBias` == merged_df$dd_hyperbolic_k, "Match", "No Match")
+```
+
+```{r}
+ggplot(merged_df, aes(x = `ObjectiveAUC-normD`, y = AUC)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+ggplot(merged_df, aes(x = `Exponential-k-FittedBias`, y = exponential_bias_k)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+ggplot(merged_df, aes(x = `Hyperbolic-k-FittedBias`, y = hyperbolic_bias_k)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+
+
+
+
+ggplot(merged_df, aes(x = exponential_bias_k, y = AUC)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+ggplot(merged_df, aes(x = hyperbolic_bias_k, y = AUC)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+ggplot(merged_df, aes(x = hyperbolic_bias_k, y = exponential_bias_k)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+ggplot(merged_df, aes(x = exponential_k, y = hyperbolic_k)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+ggplot(merged_df, aes(x = exponential_k, y = AUC)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+ggplot(merged_df, aes(x = hyperbolic_k, y = AUC)) +
+  geom_point() +
+  stat_cor(method = "pearson")
+```
+
+
+
+
+
+
+```{r}
+processed_data_ready$dd_expon_k_ln <- log(processed_data_ready$dd_expon_k)
+
+new_data$comparisonAUC <- ifelse(partial_match(new_data$rfid, processed_data_ready$rfid), 
+  ifelse(new_data$`ObjectiveAUC-normD` %in% processed_data_ready$dd_auc_trad | partial_match(new_data$`ObjectiveAUC-normD`, processed_data_ready$dd_auc_trad), "Match", "No Match"), 
+  "No Match"
+)
+
+
+new_data$comparison <- ifelse(
+  new_data$rfid %in% processed_data_ready$rfid | partial_match(new_data$rfid, processed_data_ready$rfid), 
+    ifelse(new_data$`ObjectiveAUC-normD` %in% processed_data_ready$dd_auc_trad | partial_match(new_data$`ObjectiveAUC-normD`, processed_data_ready$dd_auc_trad), "Match", "No Match"), 
+  "No Match"
+)
+
+
+new_data$comparison <- ifelse(
+  new_data$rfid %in% processed_data_ready$rfid | partial_match(new_data$rfid, processed_data_ready$rfid), 
+    ifelse(new_data$rfid %in% processed_data_ready$dd_expon_k_ln | partial_match(new_data$`Exponential-k-ln`, processed_data_ready$dd_expon_k_ln), "Match", "No Match"), 
+  "No Match"
+)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+## NEW plots for presentation
+
+
+## plotting function fits
+
+```{r animal1}
+#BIG AUC, LESS DISCOUNTING
+#animal rfid: 933000320046276
+
+
+df_fakefive <- data.frame(animal = c("a", "b", "c", "d", "e", "f"),
+                          dd_indiff_0 = c(150, 150, 150, 150, 150, 150), 
+                          dd_indiff_2 = c(140, 120, 100, 80, 60, 50), 
+                          dd_indiff_4 = c(130, 110, 90, 70, 50, 40), 
+                          dd_indiff_8 = c(120, 100, 80, 60, 40, 30), 
+                          dd_indiff_16 = c(110, 90, 70, 50, 30, 20), 
+                          dd_indiff_24 = c(105, 85, 65, 45, 35, 25))
+fakefive_pivot <- df_fakefive %>% 
+  pivot_longer(cols = dd_indiff_0:dd_indiff_24, 
+               names_to = "dd_indiff_point", 
+               values_to = "intake") %>% 
+   mutate(dd_indiff_point = factor(dd_indiff_point, 
+                                  levels = c("dd_indiff_0", "dd_indiff_2", "dd_indiff_4", "dd_indiff_8", "dd_indiff_16", "dd_indiff_24"))) %>% 
+  mutate(x = case_when(dd_indiff_point == "dd_indiff_0" ~ 0, 
+                       dd_indiff_point == "dd_indiff_2" ~ 2, 
+                       dd_indiff_point == "dd_indiff_4" ~ 4,
+                       dd_indiff_point == "dd_indiff_8" ~ 8,
+                       dd_indiff_point == "dd_indiff_16" ~ 16,
+                       dd_indiff_point == "dd_indiff_24" ~ 24))
+
+
+rfid_an1 <- 933000320045877
+rfid_an2 <- 933000320046276
+rfid_an3 <- 933000320125063
+rfid_an4 <- 933000320124988
+rfid_an5 <- 933000320045891
+
+fiveanimals <- BEHAVIOR_pivot %>% 
+  filter(rfid %in% c(rfid_an1, rfid_an2, rfid_an3, rfid_an4, rfid_an5)) 
+
+
+
+ggplot(fakefive_pivot, aes(x = x, y = intake)) +
+  geom_line(aes(x = x, y = intake, 
+                color = animal, 
+                group = animal), 
+            size = 4) +
+  geom_point(aes(color = animal, group = animal)) +
+  theme_classic() +
+  scale_color_viridis_d(option = "C", 
+                        labels = c("High \nAUC", "Low \nAUC")) +
+  labs(title = "Delay Discounting (n=629)", 
+      # y = expression("Indifference Point (A"[I]*" µl)"), 
+       y = "Indifference Point (µl)",
+       x = "Delay T (s)", 
+       color = "Animal") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 40), 
+        axis.text.x = element_blank(), 
+        legend.position = "none",
+        title = element_blank())
+
+
+
+ggplot(newanimdata, aes(x = x, y = y, color = rfid)) +
+  geom_line(aes(group = rfid), size = 4) +
+  scale_color_manual(values =  c("#feb72d", "#6e00a8")) +
+  theme_classic() +
+  labs(y = "Indifference Point ($)", 
+       x = "Delay T") +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 40), 
+        axis.text.x = element_blank(), 
+        legend.position = "none")
+
+
+ggsave("mitchell_dd_eglowdiscounting.pdf", path = here("figures"), height = 3, width = 6, units = "in")
+```
+
+
+```{r animal2}
+#SMALL AUC, MORE DISCOUNTING
+#animal rfid: 933000320046986
+rfid_an2 <- 933000320045891
+
+
+an2_dd_values <- dd_indiff_table %>% 
+  filter(rfid == rfid_an2) %>% 
+  select(dd_indiff_0:dd_indiff_24) %>% 
+  as.numeric()
+an2_actualdata <- data.frame(x = c(0, 2, 4, 8, 16, 24), y = an2_dd_values)
+
+#hyperbolic function 
+hyper_k_an2 <- dd_indiff_table %>% 
+  filter(rfid == rfid_an2) %>% 
+  select(dd_hyperbolic_k) %>% as.numeric()
+hyper_fun_an2 <- function(x) {(150)/(1+hyper_k_an2*x)}
+an2_hyper <- data.frame(x = 0:24, y = hyper_fun_an2(0:24))
+
+#exponential function
+expon_k_an2 <- dd_indiff_table %>% 
+  filter(rfid == rfid_an2) %>% 
+  select(dd_expon_k) %>% as.numeric()
+expon_fun_an2 <- function(x) {150*exp(-expon_k_an2*x)}
+an2_expon <- data.frame(x = 0:24, y = expon_fun_an2(0:24))
+
+ggplot(NULL, aes(x = x, y = y)) +
+  geom_area(data = an2_actualdata, fill = '#fccd25', alpha = .8, linetype = 1, size = .5, colour = '#fca338') +
+  stat_function(data = an2_hyper, fun = hyper_fun_an2, color = 'gray70', size = 2, linetype = 'dashed') +
+  stat_function(data = an2_expon, fun = expon_fun_an2, color = '#dd5e66', size = 2, linetype = 'dashed') +
+  geom_point(data = an2_actualdata, color = '#e76e5b', size = 5, alpha = 0.9) +
+  geom_point(data = an2_actualdata, color = '#feb72d', size = 3, alpha = 0.85) +
+  ylim(0, 300) +
+  theme_classic() +
+  labs(title = "High Discounting", 
+       y = "Indifference Point (µl)", 
+       x = "Delay T (s)") +
+  scale_x_continuous(breaks = c(0, 2, 4, 8, 16, 24)) +
+  theme(axis.text = element_text(size = 20),
+        axis.title = element_text(size = 20),
+        title = element_text(size = 20)) 
+
+ggsave("mitchell_dd_eghighdiscounting.pdf", path = here("figures"), height = 3, width = 6, units = "in")
+```
+
+
