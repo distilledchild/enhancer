@@ -1,9 +1,9 @@
 # Kuhn2025 Heroin/Nociception GWAS Reproduction And MAGMA Analysis
 
-This folder stores lightweight documentation for the Kuhn et al. 2025 heroin
-vulnerability/nociception GWAS reproduction and downstream cMAGMA/H-MAGMA
-analysis. Large summary-stat, MAGMA, and result files are kept on the external
-SSD and ignored by git.
+This folder stores lightweight documentation and pipeline code for the Kuhn et
+al. 2025 heroin vulnerability/nociception GWAS reproduction and downstream
+cMAGMA/H-MAGMA analysis. Large genotype, summary-stat, MAGMA, and result files
+are kept on the external SSD and ignored by git.
 
 ## Source
 
@@ -19,6 +19,29 @@ SSD and ignored by git.
 ```text
 /Volumes/external_1000GB_all/playground/enhancer/r_files/h3_GWAS/Kuhn2025
 ```
+
+The primary GWAS reproduction work root used by the shell pipeline is:
+
+```text
+/Volumes/external_1000GB_all/playground/enhancer/data/Khun_2025/gwas_inputs/u01_peter_kalivas
+```
+
+## Tracked Pipeline Code
+
+- `scripts/run_kuhn_repro.sh`: local wrapper used for filtering, GRM
+  construction, and per-chromosome GCTA MLMA reproduction.
+- `kuhn_gwas_reproducibility_notes.md`: notes from the local reproduction
+  audit.
+- `reference_pipeline/GWAS_pipeline/`: lightweight source snapshot from the
+  older reference GWAS pipeline.
+- `reference_pipeline/sanchestm_GWAS-pipeline/`: lightweight source snapshot
+  from the Python GWAS pipeline.
+- `reference_pipeline/sanchestm_GWAS-pipeline_v0.2.0-11-g990844d/`: lightweight
+  source snapshot matching the archived reference copy used during
+  investigation.
+
+Bundled `.git` directories, `snpEff` databases, genotype inputs, intermediate
+GWAS outputs, and MAGMA result files are intentionally not tracked here.
 
 ## What Was Reproduced / Validated
 

@@ -8,7 +8,7 @@ the external SSD and ignored by git.
 
 | Folder | Role |
 |---|---|
-| `BMI/` | Wright BMI proof-of-principle summary-stat cMAGMA/H-MAGMA workflow. |
+| `BMI/` | Wright BMI proof-of-principle GEMMA summary-stat and cMAGMA/H-MAGMA workflow. |
 | `Cocaine2026/` | Public cocaine self-administration `.mlma` summary-stat conversion and cMAGMA/H-MAGMA analysis. |
 | `Gunturkun2022/` | Practical local GCTA MLMA/MLMA-LOCO pipeline for GeneNetwork HS rat behavioral traits. |
 | `King2025/` | Cue-reactivity/sign-tracking summary-stat validation and cMAGMA/H-MAGMA discovery analysis. |
@@ -24,6 +24,7 @@ Track:
 - `.md` documentation
 - `.R`, `.py`, `.sh` scripts
 - lightweight reproducibility notes
+- reference pipeline source snapshots needed to understand reproduction commands
 
 Ignore:
 

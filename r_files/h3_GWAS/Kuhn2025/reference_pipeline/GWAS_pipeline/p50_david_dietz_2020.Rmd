@@ -1,0 +1,842 @@
+---
+author: ''
+subtitle: <h1>Palmer Lab - UCSD</h1>
+affiliation: Palmer Lab- UCSD
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    toc: yes
+    toc_float: yes
+    number_sections: yes
+
+---
+
+```{r,echo=F,eval=T,message=F}
+title_var <- basename(getwd())
+```
+
+---
+title: `r title_var`
+---
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cool functions ive used, echo=FALSE,eval=TRUE,message=FALSE,include=F}
+
+specify_decimal <- function(x, k) trimws(format(round(x, k), nsmall=k))
+
+```
+
+```{r libraries, echo=FALSE,eval=TRUE,message=FALSE,include=F}
+
+
+library(DT)
+library(htmltools)
+library(readxl)
+library(httr)
+library(RJSONIO)
+library(openxlsx)
+library(purrr)
+library(plyr)
+library(kableExtra)
+library(data.table)
+#library(RPostgreSQL)
+
+```
+
+
+```{r traits and covariates, echo=FALSE,eval=TRUE,message=FALSE,include=F}
+
+
+load("data/raw_data/traits.RData")
+
+
+```
+
+******
+# **Phenotype information**
+
+<strong><em>PI</strong></em>: `r PI`
+<strong><em>Domain</strong></em>: `r domain`
+<strong><em>Sub-domain</strong></em>: `r sub_domain`
+
+
+
+******
+# **Trait descriptions**
+Data dictionary absent
+
+
+```{r trait descriptions, echo=FALSE,eval=F,message=FALSE,include=T}
+
+desc=read.csv("data/raw_data/dictionary.csv",header = T,stringsAsFactors = F)
+
+
+
+
+datatable(desc[,c("trait","description")],rownames = FALSE,extensions = 'Buttons', options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    columnDefs = list(list(className = 'dt-center', targets="_all"))
+  ))
+
+
+
+
+
+```
+
+
+
+
+
+
+
+******
+# **Raw trait distribution**
+
+```{r raw trait distribution,echo=FALSE,eval=F,message=FALSE,include=T,warning=F,results='asis'}
+
+plots <- list.files(path = "pheno_processing_summary/plots/traits", pattern = ".png", recursive = F,full.names=T)
+
+plots<-unique (grep(paste(paste0(traits,".png"),collapse="|"), plots, value=TRUE))
+
+
+plot_names<-basename(plots)
+
+plot_names<-gsub(".png","",plot_names)
+
+
+traits_plots<-gsub("\\."," with ",plot_names)
+
+traits_plots<-gsub("_"," ",plot_names)
+
+
+
+
+   for(i in 1:length(plots)){
+
+    #cat(paste0("# ",traits_plots[i],"{#",anchors[i],"}   \n"))
+    cat("  \n")
+    cat("  \n##",  traits_plots[i], "  \n")
+    cat(paste0("![",traits_plots[i],"](", plots[i],")\  "))
+    cat("  \n")
+    cat('\\pagebreak  ')
+    #cat(paste0(traits_plots[i]))
+    }
+
+
+
+
+
+```
+
+
+
+
+
+******
+# **Phenotype processing details **
+Quantile normalize separately for males and females then regress out the effect of age / bodyweight / cohort / box number if significant and explains more than 2% of variance**
+<br>
+
++ Following table lists the percent variance explained by age
+<br>
+<br>
+
+```{r age, echo=FALSE,eval=TRUE,message=FALSE,include=T,comment=NA}
+if (file.exists("pheno_processing_summary/covs/age_regressed.RData")){
+  load("pheno_processing_summary/covs/age_regressed.RData")
+ # need_to_regress=combined_box_cohort_regressed
+  summary_lm_age_to_regress$r.squared<-format(round(summary_lm_age_to_regress$r.squared,2),nsmall=2)
+  summary_lm_age_to_regress$p.value<-format(summary_lm_age_to_regress$p.value,scientific = T)
+
+
+
+
+
+if(length(summary_lm_age_to_regress)>0){
+
+summary_lm_age_to_regress$trait<-gsub("qnormed_","",summary_lm_age_to_regress$trait)
+datatable(summary_lm_age_to_regress[,c("trait","age_cov","r.squared","p.value","center")],colnames = c("trait","covariate","percent variance explained","p.value","project_name"),rownames=F,extensions = 'Buttons', options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    columnDefs = list(list(className = 'dt-center', targets="_all"))
+  ))
+}else{
+cat("No covariates were significant and explain more than 2% of variance")
+
+}
+}else{
+cat("No Covariates were tested")
+}
+
+
+```
+
+
+
++ Following table lists the percent variance explained by experiment box
+<br>
+<br>
+
+```{r experiment specific covariates, echo=FALSE,eval=TRUE,message=FALSE,include=T,comment=NA}
+if (file.exists("pheno_processing_summary/covs/experiment_specific_covariates_regressed.csv")){
+ experiment_specific<-read.csv("pheno_processing_summary/covs/experiment_specific_covariates_regressed.csv")
+ experiment_specific$pve<-format(round(experiment_specific$pve,2),nsmall=2)
+  experiment_specific$p_val<-format(experiment_specific$p_val,scientific = T)
+
+
+
+
+
+if(length(experiment_specific)>0){
+
+experiment_specific$trait<-gsub("qnormed_","",experiment_specific$trait)
+datatable(experiment_specific[,c("trait","cov","cnames","pve","p_val","project_name")],colnames = c("trait","covariate","name","percent variance explained","p.value","project_name"),rownames=F,extensions = 'Buttons', options = list(
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print'),
+    columnDefs = list(list(className = 'dt-center', targets="_all"))
+  ))
+}else{
+cat("No covariates were significant and explain more than 2% of variance")
+
+}
+}else{
+cat("No Covariates were tested")
+}
+
+
+```
+
+
+
+
+
+
+
+******
+# **SNP Heritability Estimates _h^2^_**
+
+```{r SNP heritability estimates, echo=FALSE,eval=TRUE,message=FALSE,include=T}
+heritability_summary=read.csv(paste0("results/snp_h2_with_N.csv"),header=T,stringsAsFactors = F)
+heritability_summary$snp_heritability<-format(round(heritability_summary$snp_heritability,3),nsmall=3)
+heritability_summary$SE<-format(round(heritability_summary$SE,3),nsmall=3)
+#heritability_summary$Pval<-format(round(heritability_summary$Pval,3),nsmall=3)
+
+heritability_summary<-heritability_summary[,c("trait","N","snp_heritability","SE")]
+heritability_summary<-heritability_summary[which(heritability_summary$trait %in% traits),]
+
+heritability_summary %>%
+  datatable(
+    rownames = FALSE,
+    filter = list(position = 'top', clear = FALSE),
+    extensions = c("SearchPanes", "Select", "Buttons"),
+    options = list(
+      dom = "Btip",
+      buttons = list('copy',"searchPanes",list(
+        extend = 'collection',
+        buttons = c('csv', 'excel', 'pdf'),
+        text = 'Download'
+      )),
+          language = list(searchPanes = list(collapse = "Filter Rows")),
+      columnDefs = list(
+        list(searchPanes = list(show = FALSE), targets = 0),
+        list(searchPanes = list(controls = FALSE), targets = 0:1),
+        list(className = "dt-center", targets = 0:1)
+      )
+    )
+  )
+
+
+
+```
+
+
+```{r read in QTL table,message=F,warning=F,eval=T,include=T,echo=F}
+#new=read.csv("results/snp_h2_all_final_traits_with_N_fullName.csv",header = T,stringsAsFactors = F)
+qtls<-read.csv(paste0("results/qtls/table3_final.csv"),header=T,stringsAsFactors = F)
+
+
+
+qtls$trait_ref_name<-paste0(gsub("_"," ",qtls$trait)," ",qtls$topsnp)
+
+qtls$trait_id<-seq(1:nrow(qtls))
+qtls$trait_rmd<-gsub("_"," ",qtls$trait)
+num_of_qtls<-count(qtls,vars="trait_rmd")
+qtls$LD_interval_size_mb<-qtls$LD_interval_size_bp/1000000
+qtls$LD_interval_size_mb_formatted<-paste0(prettyNum(qtls$LD_interval_size_mb,digits=2)," Mb")
+
+qtls$lz<-paste0(qtls$trait_N,"_",qtls$chr,"_",qtls$pos)
+
+
+qtls$genes<-paste0('https://rest.rgd.mcw.edu/rgdws/genes/',gsub("chr","",qtls$chr),'/',qtls$LD_interval_start,'/',qtls$LD_interval_stop,"/360")
+#Fetch RGD ID and create HTTP links
+for(i in 1:nrow(qtls)){
+
+
+qtls_genes<-fromJSON(qtls$genes[i])
+temp<-map_dbl(qtls_genes,"rgdId")
+gene_names<-map_chr(qtls_genes,"symbol")
+urls<-vector(mode="character", length=length(temp))
+gene_urls<-vector(mode="character",length=length(temp))
+for(j in 1:length(temp)){
+
+  urls[j]<-paste0("https://rgd.mcw.edu/rgdweb/report/gene/main.html?id=",temp[j])
+  gene_urls[j] <- paste0("[", gene_names[j], "](", urls[j], ")")
+}
+
+qtls$gene_urls[i]<-paste(gene_urls,collapse = " ")
+
+
+}
+
+#remove extra digits from QTL table, only keep 3
+#af se and beta
+qtls$af<-specify_decimal(qtls$af, 3)
+qtls$se<-specify_decimal(qtls$se, 3)
+qtls$beta<-specify_decimal(qtls$beta, 3)
+qtls$topsnp_log10P<-specify_decimal(qtls$topsnp_log10P, 3)
+
+
+
+
+```
+
+```{r variant annotation table, message=F,warning=F,eval=T,include=T,echo=F}
+f <- paste0("results/QTLs/",expname,"_snp_annotations_final.csv")
+if (file.exists(f)){
+ann<-read.csv(paste0("results/QTLs/",expname,"_snp_annotations_final.csv"),header=T,stringsAsFactors=F)
+#ann<-ann[unique(grep(paste(nicsa_traits,collapse="|"),ann$trait)),]
+ann$trait<-sapply(strsplit(ann$trait_snp,split="_chr"),`[`,1)
+snps<-sapply(strsplit(ann$trait_snp,split="_chr"),`[`,2)
+ann$trait_pos<-sapply(strsplit(snps,split="_"),`[`,2)
+
+
+
+ann$trait_ref_name<-paste0(gsub("_"," ",ann$trait)," ",ann$chr,":",ann$trait_pos)
+
+
+
+ann$gene_urls<-NA
+
+#mtcars$mpg <- paste0('<a href="',urls,'">',mtcars$mpg ,"</a>")
+
+ann$gene_urls <- paste0('<a href="',ann$RGD_link,'">',ann$snp_gene,"</a>")
+
+}else{
+
+   ann=data.frame(dummy=character(0))
+
+
+}
+
+```
+
+
+```{r prep phewas tables,message=F,warning=F,eval=T,include=T,echo=F}
+
+
+load("results/phewas/annotated_phewas_tables.RData")
+
+
+
+
+```
+
+
+```{r read in eQTL table,message=F,warning=F,eval=T,include=T,echo=F,cache=TRUE}
+eqtl<-read.csv(paste0("results/eqtl/eqtl_results_annotated.csv"),header=T,stringsAsFactors = F)
+eqtl=unique(eqtl)
+
+
+eqtl$trait_ref_name<-paste0(gsub("_"," ",eqtl$trait)," ",eqtl$trait_topsnp)
+eqtl$trait_topsnp<-paste0(eqtl$trait,"_",eqtl$trait_topsnp)
+
+#replace regions with full names
+
+
+
+
+
+#colnames(eqtl)[which(colnames(eqtl) %in% "proportion_snps_above_threshold")]<-"eqtl_snps_above_threshold"
+
+#gene URLs
+#need to skip if No RGD entry
+eqtl$gene_urls<-NA
+
+
+
+for(i in 1:nrow(eqtl)){
+
+eqtl$gene_urls[i]<- paste0("[", eqtl$gene_name[i], "](", eqtl$RGD_link[i], ")")
+
+
+}
+
+eqtl$RGD_link[which(is.na(eqtl$RGD_link))]<-"No RGD entry"
+
+eqtl$pubmed_link<-NA
+
+
+#colnames(eqtl)[grep("\\bvariant_id\\b",colnames(eqtl))]<-"eqtl_topsnp"
+
+#colnames(eqtl)[grep("\\bpval_nominal\\b",colnames(eqtl))]<-"eqtl_topsnp_pval"
+eqtl$eqtl_topsnp_log10P <- -log10(eqtl$eqtl_topsnp_pval)
+eqtl$eqtl_topsnp_log10P <- format(round(eqtl$eqtl_topsnp_log10P,3),nsmall=3)
+
+
+colnames(eqtl)[grep("\\brsquare\\b",colnames(eqtl))]<-"r2"
+eqtl$r2 <- format(round(eqtl$r2,3),nsmall=3)
+#eqtl$dprime <- format(round(eqtl$dprime,3),nsmall=3)
+
+
+
+
+
+for(i in 1:nrow(eqtl)){
+if(!is.na(eqtl$pubmed_url[i])){
+
+
+eqtl$pubmed_link[i]<- paste0("[", eqtl$gene_name[i], "](", eqtl$pubmed_url[i], ")")
+}
+
+}
+
+
+
+
+
+#gwas catalog link
+#https://www.ebi.ac.uk/gwas/genes/CSMD1
+
+eqtl$gwas_C_link<-NA
+
+
+for(i in 1:nrow(eqtl)){
+
+if(!is.na(eqtl$gwas_catalog_url[i])){
+eqtl$gwas_C_link[i]<- paste0("[", eqtl$gene_name[i], "](", eqtl$gwas_catalog_url[i], ")")
+}
+
+}
+
+
+
+
+
+
+eqtl$gene_long_name_formatted<-paste0("_",eqtl$gene_long_name,"_")
+
+
+eqtl$alliance_link<-NA
+#https://www.alliancegenome.org/search?mode=table&q=csmd1
+
+for(i in 1:nrow(eqtl)){
+
+if(!is.na(eqtl$human_entrez_id[i])){
+  url<-paste0("https://www.alliancegenome.org/search?mode=table&q=",tolower(eqtl$gene_name[i]))
+eqtl$alliance_link[i]<- paste0("[", eqtl$gene_name[i], "](", url, ")")
+}
+
+
+
+}
+
+
+
+
+```
+
+******
+# **Summary of QTLs**
+
+\hfill\break
+
+```{r summary of QTLs, include=T,message=F,echo=F,warning=F}
+qtls_summary_table<-qtls
+
+rownames(qtls_summary_table)<-NULL
+datatable(qtls_summary_table[,c("trait","topsnp","topsnp_log10P","LD_interval_size_mb_formatted","num_of_genes")],colnames = c("trait","topSNP","topSNP -log10P","size of interval","Number of genes in interval"),rownames = FALSE,
+    filter = list(position = 'top', clear = FALSE),
+    extensions = c("SearchPanes", "Select", "Buttons"),
+    options = list(
+      dom = "Btip",
+      buttons = list('copy',"searchPanes",list(
+        extend = 'collection',
+        buttons = c('csv', 'excel', 'pdf'),
+        text = 'Download'
+      )),
+          language = list(searchPanes = list(collapse = "Filter Rows")),
+      columnDefs = list(
+        list(searchPanes = list(show = FALSE), targets = 0),
+        list(searchPanes = list(controls = FALSE), targets = 0:1),
+        list(className = "dt-center", targets = 0:1)
+      )
+    )
+  )
+
+
+
+
+```
+
+******
+# **Manhattan plots**
+
+
+```{r test plotting GWAS,message=F,warning=F,eval=T,include=T,results = 'asis',echo=F}
+
+
+plots <- list.files(path = "results/manhattan_plots/option1", pattern = ".jpg", recursive = F,full.names=T)
+
+plots<-unique (grep(paste(paste0(qtls$trait,".png"),collapse="|"), plots, value=TRUE))
+
+plot_names<-basename(plots)
+
+
+
+plot_names<-gsub(".jpg","",plot_names)
+
+
+traits_plots<-gsub("\\."," with ",plot_names)
+
+traits_plots<-gsub("_"," ",plot_names)
+
+
+
+
+
+
+   for(i in 1:length(plots)){
+
+    #cat(paste0("# ",traits_plots[i],"{#",anchors[i],"}   \n"))
+    cat("  \n")
+    cat("  \n##",  traits_plots[i], "  \n")
+    #cat("  \n Number of QTLs: ",  num_of_qtls$freq[which(num_of_qtls$trait_rmd %in% traits_plots)], "  \n  ")
+    cat("  \n    ")
+
+    count_chrs<-count(qtls[which(qtls$trait_rmd %in% traits_plots[i]),],vars="chr")
+
+    colnames(count_chrs)[2]<-"number of qtls"
+    cat("  \n")
+    cat(paste0("![",traits_plots[i],"](", plots[i],")\  "))
+    cat("  \n")
+    if(nrow(count_chrs)>0){
+    qtl_info_manhattan<-qtls[which(qtls$trait_rmd %in% traits_plots[i]),c("chr","topsnp","LD_interval_size_mb_formatted","topsnp_log10P")]
+    count_chrs<-merge(count_chrs,qtl_info_manhattan,by="chr")
+
+    colnames(count_chrs)[3]<-"topSNP"
+    colnames(count_chrs)[4]<-"size of interval"
+    colnames(count_chrs)[5]<-"topSNP -log10P"
+    print(kable(count_chrs) %>% kable_styling(latex_options =c("striped")))
+    }
+    cat('\\pagebreak  ')
+    #cat(paste0(traits_plots[i]))
+    }
+
+
+
+```
+
+
+******
+# **Regional Association plots**
+
+
+
+```{r dynamic chunks,message=F,warning=F,eval=T,include=T,results = 'asis',echo=F,cache=T}
+
+
+plots <- list.files(path = "results/locuszoom_plots/", pattern = ".png", recursive = F,full.names=T)
+
+
+
+
+qtls$lz_png_name<-NA
+
+
+
+for(i in 1:nrow(qtls)){
+qtls$lz_png_name[i]<-plots[which(plots %like% qtls$lz[i])]
+
+
+}
+
+plots<-plots[which(plots %in% qtls$lz_png_name)]
+plots<-plots[match(qtls$lz_png_name,plots)]
+
+
+for(i in 1:nrow(qtls)){
+cat("<br>")
+cat("  \n")
+#prints the QTL name aka heading
+cat("  \n##",  qtls$trait_ref_name[i], "  \n")
+#prints size of interval and no of genes in interval
+cat("  \n Size of interval : ",  prettyNum(qtls$LD_interval_size_bp[i],big.mark = ","), "bp  \n  ")
+cat("  \n Number of genes in interval: ",  qtls$num_of_genes[i], "  \n  ")
+
+
+
+cat("<br>")
+cat("  \n")
+
+#prints locuszoom plots
+cat(paste0("![",qtls$trait_id[i],"](", plots[i],")\  "))
+
+cat("  \n")
+
+#prints RGD links for genes in QTL below the locuszoom plot
+cat("  \n  RGD link for genes in interval: ",  qtls$gene_urls[i], "  \n  ")
+
+#prints af, se, beta and SDP of founders
+print(htmltools::tagList(datatable(qtls[i,c("topsnp","af","se","beta","allele1","allele2",'ACI','BN','BUF','F344','M520','MR','WN','WKY')],rownames = F,options = list(lengthChange = FALSE))))
+
+#cat("<br>")
+cat("  \n")
+cat("  \n")
+cat("  \n### Putatively causal coding variants:   ",  qtls$trait_ref_name[i], "  \n")
+
+if(nrow(ann)>0){
+
+
+ann_test<-ann[which(ann$trait_ref_name %in% qtls$trait_ref_name[i]),]
+
+
+if(nrow(ann_test)==0){
+cat("  \n HIGH or MODERATE impact variants absent \n  ")
+cat("<br>")
+cat("  \n")
+}else{
+print(htmltools::tagList(datatable(ann_test[,c('chr','pos','ref','alt','snp_effect','snp_impact','snp_gene',"gene_urls",'snp_feature','snp_biotype','snp_cdna_pos','snp_hgvs_c','snp_hgvs_p',"r2_with_trait_topsnp","dprime_with_trait_topsnp")],colnames=c("chr","pos","ref","alt","effect","impact","gene","RGD link","feature","biotype","cDNA position","SNP change","Amino acid change","r2 with trait topsnp","dprime"),rownames=F,escape = F,options = list(dom = 'Bfrtip',buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+))))
+cat("<br>")
+cat("  \n")
+
+}
+
+
+
+}
+
+
+
+
+else{
+cat("  \n HIGH or MODERATE impact variants absent \n  ")
+cat("<br>")
+cat("  \n")
+}
+
+#eQTL info
+cat("  \n")
+cat("  \n### eQTL info: ",  qtls$trait_ref_name[i], "  \n")
+eqtl_test<-eqtl[which(eqtl$trait_ref_name %in% qtls$trait_ref_name[i]),]
+
+
+if(is.na(eqtl_test$ensembl_gene[1])){
+cat("  \n No cis EQTLs detected \n  ")
+cat('\\pagebreak  ')
+}else{
+
+#print trait topsnp and log10P
+cat("  \n Trait topSNP : ", qtls$topsnp[i], "  \n  ")
+cat("  \n Trait topSNP -log10P : ",qtls$topsnp_log10P[i], "  \n  ")
+
+
+#split eqtl test by gene name
+eqtl_list<-split(eqtl_test,eqtl_test$gene_name)
+
+
+for(j in 1:length(eqtl_list)){
+
+cat("  \n#### ",  names(eqtl_list)[j] , "  \n")
+#pubmed_link
+#gwas_C_link
+
+temp_gene<-eqtl_list[[j]]
+cat("  \n Ensembl gene name : ", temp_gene$ensembl_gene[1], "  \n  ")
+if(temp_gene$RGD_link[1]=="No RGD entry") {
+cat("  \n  _RGD link:_ _No RGD entry_  \n  ")
+}else{
+cat("  \n<strong>",temp_gene$gene_long_name_formatted[1],"</strong>  \n  ")
+cat("  \n  _RGD link:_ ",  temp_gene$gene_urls[1], "  \n  ")
+if(!is.na(temp_gene$gwas_C_link[1])){
+cat("  \n  _Human GWAS Catalog link:_ ",  temp_gene$gwas_C_link[1], "  \n  ")
+}else{
+cat("  \n  _Human GWAS Catalog link:_ _No Human GWAS Catalog entry_  \n  ")
+}
+if(!is.na(temp_gene$pubmed_link[1])){
+cat("  \n  _Pubmed link:_ ",  temp_gene$pubmed_link[1], "  \n  ")
+}else{
+cat("  \n  _Pubmed link:_ _NA_  \n  ")
+}
+if(!is.na(temp_gene$alliance_link[1])){
+cat("  \n  _Alliance of Genome Resources link:_ ",  temp_gene$alliance_link[1], "  \n  ")
+}else{
+cat("  \n  _Alliance of Genome Resources link:_ _NA_  \n  ")
+}
+print(htmltools::tagList(datatable(temp_gene[,c("tissue","eqtl_topsnp","eqtl_topsnp_log10P","r2")],colnames = c("tissue","eqtl topSNP","eqtl topSNP -log10P","r2 with trait topSNP"),rownames = F,options = list(dom = 'Bfrtip',buttons = c('copy', 'csv', 'excel', 'pdf', 'print')))))
+#cat("<br>")
+cat("  \n")
+}
+
+}
+
+
+}
+
+#PheWAS links
+cat("  \n")
+cat("  \n### PheWAS: P-values for other phenotypes at trait topSNP : \n ",  qtls$trait_ref_name[i], "  \n")
+
+
+
+if(nrow(table1_unfiltered)>0){
+
+    phewas_unfilt<-table1_unfiltered[which(table1_unfiltered$trait_ref_name %in% qtls$trait_ref_name[i]),]
+    if(nrow(phewas_unfilt)>0){
+    rownames(phewas_unfilt)<-NULL
+    phewas_unfilt$trait<-gsub("_"," ",phewas_unfilt$trait)
+
+    print(htmltools::tagList(datatable(phewas_unfilt[,c("trait","p_score","log10P","trait_description")],colnames=c("Trait","P-value","-log10P","Trait description"),rownames=F)))
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+    }else{
+    cat("  \n No information for other phenotypes at this SNP \n  ")
+    cat('\\pagebreak  ')
+
+    }
+    }else{
+
+    cat("  \n No pheWAS information \n  ")
+    cat('\\pagebreak  ')
+    }
+
+cat("  \n")
+cat("  \n### PheWAS: Lowest P-values for other phenotypes in a 3Mb window \n ",  qtls$trait_ref_name[i], "  \n")
+if(nrow(table2)>0){
+
+phewas_table2<-table2[which(table2$trait_ref_name %in% qtls$trait_ref_name[i]),]
+if(nrow(phewas_table2)>0){
+rownames(phewas_table2)<-NULL
+phewas_table2$trait2_name<-gsub("_"," ",phewas_table2$trait2_name)
+print(htmltools::tagList(datatable(phewas_table2[,c("dataset","trait2_name","trait2_topsnp","log10P","r2","dprime","trait_description")],colnames=c("Dataset","Trait","Trait topSNP","-log10P","r2","dprime","Trait description"),rownames=F,escape=T,options = list(pageLength = 10,
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+  ))))
+
+cat("<br>")
+cat("  \n")
+
+
+if(nrow(phewas_table2)>4){
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+cat("<br>")
+cat("  \n")
+}
+
+
+
+    }else{
+
+cat("  \n No information for other phenotypes in 3Mb window of trait topSNP \n  ")
+cat("<br>")
+cat("  \n")
+
+    }
+
+    }else{
+
+      cat("  \n No pheWAS information \n  ")
+    cat('\\pagebreak  ')
+    }
+
+
+
+}
+
+
+
+
+
+
+
+
+
+```
