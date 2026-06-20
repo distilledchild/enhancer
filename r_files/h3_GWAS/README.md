@@ -17,6 +17,12 @@ the external SSD and ignored by git.
 | `nicotine/` | Historical nicotine SA MAGMA/H-MAGMA scripts and strict annotation files used by the project. |
 | `docs/` | General GCTA GWAS pipeline and result interpretation guides. |
 
+## Storage Policy
+
+Project code, scripts, analysis helpers, and lightweight documentation live in
+this local directory. Heavy input/output files stay on the external SSD. See
+`EXTERNAL_STORAGE_POLICY.md` for the six-project layout and move rules.
+
 ## Git Policy
 
 Track:
