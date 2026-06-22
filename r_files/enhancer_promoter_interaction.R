@@ -33,7 +33,7 @@ source("./utils_functions.R") # Load all utility functions
 # x0, y3, new_distance, new.loop.id
 ########################
 # loading all DISTINCT loops
-cache_file_distinct_loop <- "../data/df.DISTINCT.loop.deep.sample.all.rds"
+cache_file_distinct_loop <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.DISTINCT.loop.deep.sample.all.rds"
 df.DISTINCT.loop.deep.sample.all <- readRDS(cache_file_distinct_loop) # 31,773
 df.DISTINCT.loop.deep.sample.all.lt.2mb <- df.DISTINCT.loop.deep.sample.all %>% # 31,019: less than 2mb
   filter(distance < 2000000) # 31,019/31,773, only use less than 2mb
@@ -68,7 +68,7 @@ OVERALL.df.DISTINCT.loop.deep.sample.all.1.distance.wo.capping.lt.2mb %>% dim() 
 # 2. CTCF
 #########################
 
-cache_file_overlapping_CTCF_BOTH <- "../data/df.overlapping.CTCF.w.BOTH.result.rds"
+cache_file_overlapping_CTCF_BOTH <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.overlapping.CTCF.w.BOTH.result.rds"
 df.overlapping.CTCF.w.BOTH.result <- readRDS(cache_file_overlapping_CTCF_BOTH)
 
 # for Q1: quartile among loops with CTCF, so min = 1
@@ -136,20 +136,20 @@ ctcf.stats.by.resolution
 ####################################################
 # retrieving TSS data from Ensembl GTF             : df.ensembl.gtf.for.tss.DISTINCT.geneid
 ####################################################
-df.ensembl.gtf.for.tss.DISTINCT.geneid <- readRDS("../data/df_ensembl_gtf_for_tss_DISTINCT_geneid.rds")
+df.ensembl.gtf.for.tss.DISTINCT.geneid <- readRDS("~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_ensembl_gtf_for_tss_DISTINCT_geneid.rds")
 df.ensembl.gtf.for.tss.DISTINCT.geneid %>% head(2) # chr, start, end, strand, gene_id, gene_name, tss.id: chr1:157231467:157231469:+:ENSRNOG00000070168:Or51f23c
 df.ensembl.gtf.for.tss.DISTINCT.geneid %>% dim() # 21,725
 ####################################################
 # retrieving EXON data 1 from RefSeq GTF           : df.refgene.gtf.for.exon
 ####################################################
-df.refgene.gtf.for.exon <- readRDS("../data/df_refgene_gtf_for_exon.rds")
+df.refgene.gtf.for.exon <- readRDS("~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_refgene_gtf_for_exon.rds")
 df.refgene.gtf.for.exon %>% head(2) # chr, start, end, strand, exon_id, exon_number, gene_id, gene_name, transcript_id refseq_exon_id: chr7:92494376:92494506:-:A1bg:A1bg:8
 df.refgene.gtf.for.exon %>% dim() # 17,488
 ####################################################
 # retrieving EXON data 2 from Ensembl GTF           : df.tss.ensembl
 ####################################################
-df.ensembl.gtf.for.exon.attribute <- readRDS("../data/df_ensembl_gtf_for_exon_attribute.rds")
-df.tss.ensembl <- readRDS("../data/df.tss.ensembl.rds")
+df.ensembl.gtf.for.exon.attribute <- readRDS("~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_ensembl_gtf_for_exon_attribute.rds")
+df.tss.ensembl <- readRDS("~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.tss.ensembl.rds")
 df.tss.ensembl %>% head(2)
 # chr, start, end, strand, gene_id, gene_name
 # tss.id: chr1:157231467:157231469:+:ENSRNOG00000070168:Or51f23c
@@ -160,7 +160,7 @@ df.tss.ensembl %>% dim() # 21,725
 ########################
 # 4. promoter from EPD
 ########################
-df.promoter.rn7.epd <- readRDS("../data/df.promoter.rn7.epd.rds")
+df.promoter.rn7.epd <- readRDS("~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.promoter.rn7.epd.rds")
 df.promoter.rn7.epd %>% head(2) # seqnames, start, end, width, strand, promoter_id, score, gene_id, gene_name, ensembl_exon_id, refseq_exon_id, promoter.id
 df.promoter.rn7.epd.GR <- GRanges(
   seqnames = df.promoter.rn7.epd$seqnames,
@@ -257,7 +257,7 @@ df.DISTINCT.loop.deep.sample.all.lt.2mb.DOWN.point.GR <- creating_granges(df.DIS
 # directional filtering for distanceToNearest
 #############
 # CACHING: df.final.up.down.directional processing
-cache_file_directional <- "../data/df_final_up_down_mid_mid_directional.rds"
+cache_file_directional <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_final_up_down_mid_mid_directional.rds"
 
 if (file.exists(cache_file_directional)) {
   message("Loading cached directional filtering results from: ", cache_file_directional)
@@ -888,7 +888,7 @@ df.final.up.down.directional.point.decision %>% count(classification) #| final
 # 3 One_OK         23871|||||||||||            3 One_OK         23874  3 One_OK         23872| 3 One_OK         25415
 
 # CACHING: df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3
-cache_file_combined_ok_filtered <- "../data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"
+cache_file_combined_ok_filtered <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"
 
 if (!file.exists(cache_file_combined_ok_filtered)) {
   message("Saving df.final.up.down.directional.point.decision.COMBINED.OK.filtered.lt.Q3_final to cache: ", cache_file_combined_ok_filtered)
@@ -1121,7 +1121,7 @@ df.final.loop %>% distinct(loop.id) # 15085
 ########################
 # Loading df.chromosome.data (originally in enhancer_promoter_interaction_figures.R)
 ########################
-cache_file_chromosome_data <- "../data/df.chromosome.data.rds"
+cache_file_chromosome_data <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.chromosome.data.rds"
 cache_file_chromosome_data
 
 if (file.exists(cache_file_chromosome_data)) {
@@ -1143,7 +1143,7 @@ df.chromosome.data
 ########################
 # Loading df.DISTINCT.fimo.2nd.trial.ctcf (originally in enhancer_promoter_interaction_figures.R)
 ########################
-cache_file_distinct_fimo_2nd_ctcf <- "../data/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
+cache_file_distinct_fimo_2nd_ctcf <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
 
 if (file.exists(cache_file_distinct_fimo_2nd_ctcf)) {
   message("Loading cached DISTINCT fimo 2nd trial ctcf data from: ", cache_file_distinct_fimo_2nd_ctcf)

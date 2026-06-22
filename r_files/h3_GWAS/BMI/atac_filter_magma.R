@@ -60,7 +60,7 @@ print(str_glue("Proceeding ATAC validation with H-MAGMA FDR < 0.05 genes: {nrow(
 ####################################################
 # 2. Loading Hi-C loops
 ####################################################
-path.rds.loop <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer/data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"
+path.rds.loop <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer/r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"
 df.loop <- readRDS(path.rds.loop)
 
 df.loop <- df.loop %>%

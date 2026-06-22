@@ -13,7 +13,7 @@ hmagma_annot <- "/Users/pete/Desktop/playground/enhancer/r_files/h3_GWAS/nicotin
 cmagma_annot <- "/Users/pete/Desktop/playground/enhancer/r_files/h3_GWAS/nicotine/hs.exonpro.ONLY.annot"
 snp_count_file <- "/Users/pete/Desktop/playground/enhancer/r_files/h3_GWAS/nicotine/cmagma_vs_hmagma_duttke_telese_non_tss_promoter_snp_counts.csv"
 atac_file <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer/data/Duttke2022_snATAC_peaks_rn7.narrowPeak"
-where_rds <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer/data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"
+where_rds <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer/r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"
 key_gene_file <- file.path(report_dir, "selected_1_3_traits_hmagma_only_key_genes.tsv")
 
 traits <- data.table(

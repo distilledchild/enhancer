@@ -22,9 +22,9 @@ if (!exists("parse_loop_id") || !exists("str_split_n")) {
 
 if (!exists("df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3")) {
   ag.cache.candidates <- c(
-    file.path(ag.project.root, "data", "df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"),
-    path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"),
-    path.expand("~/Dropbox/Gateway_to_Hao/enhancer/data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
+    path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"),
+    path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds"),
+    path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
   )
   ag.cache.rds <- ag.cache.candidates[file.exists(ag.cache.candidates)][1]
   if (!is.na(ag.cache.rds)) {

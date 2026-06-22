@@ -27,7 +27,7 @@ tad_bedpe_path <- path.expand("~/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2023A/
 tad_bedpe_path_50kb <- path.expand("~/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2023A/hic_analysis/juicer/DA68A/intact/DA68A_intact_arrowhead/DA68A_intact_arrowhead_50000/50000_blocks.bedpe")
 gtf_path <- path.expand("~/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_refGene.gtf")
 chrom_sizes_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/tracks/rn7.chrom.sizes")
-gene_loop_map_rds_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
+gene_loop_map_rds_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
 
 out_dir <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/figures/hic_panels")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)

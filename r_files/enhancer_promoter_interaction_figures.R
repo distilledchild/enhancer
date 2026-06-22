@@ -313,7 +313,7 @@ saving_plot_dual( # utils_functions.R
 ##############################################################################################
 
 # CACHING for df.loop.deep.sample.all
-cache_file_loop_deep_sample_all <- "../data/df.loop.deep.sample.all.rds"
+cache_file_loop_deep_sample_all <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.loop.deep.sample.all.rds"
 
 if (file.exists(cache_file_loop_deep_sample_all)) {
     message("Loading cached loop data from: ", cache_file_loop_deep_sample_all)
@@ -808,7 +808,7 @@ saving_plot_dual( # utils_functions.R
 ########################
 
 # CACHING for df.chromosome.data
-cache_file_chromosome_data <- "../data/df.chromosome.data.rds"
+cache_file_chromosome_data <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.chromosome.data.rds"
 
 if (file.exists(cache_file_chromosome_data)) {
     message("Loading cached chromosome data from: ", cache_file_chromosome_data)
@@ -829,7 +829,7 @@ df.loop.deep.sample.all %>% dim() # 58992   12
 df.loop.deep.sample.all %>% head(3)
 
 # CACHING for df.DISTINCT.loop.deep.sample.all
-cache_file_distinct_loop <- "../data/df.DISTINCT.loop.deep.sample.all.rds"
+cache_file_distinct_loop <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.DISTINCT.loop.deep.sample.all.rds"
 
 if (file.exists(cache_file_distinct_loop)) {
     message("Loading cached distinct loop data from: ", cache_file_distinct_loop)
@@ -924,7 +924,7 @@ df.init.ctcf %>%
 # 2-2. CTCF data preprocessing: id and dedup GRange Obj. (df.DISTINCT.fimo.2nd.trial.ctcf/ df.DISTINCT.ctcf.2nd.fimo.GR)
 ########################
 # CACHING for df.DISTINCT.fimo.2nd.trial.ctcf
-cache_file_distinct_fimo_2nd_ctcf <- "../data/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
+cache_file_distinct_fimo_2nd_ctcf <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
 
 if (file.exists(cache_file_distinct_fimo_2nd_ctcf)) {
     message("Loading cached DISTINCT fimo 2nd trial ctcf data from: ", cache_file_distinct_fimo_2nd_ctcf)
@@ -1019,7 +1019,7 @@ saving_combined_plot(
 # 2-4. Distribution of CTCF at ends in a loop: for the number of CTCF used in filtering valid loops: figures
 # so, the object should be used one without padding: df.DISTINCT.loop.deep.sample.all
 # CACHING for df.overlapping.CTCF.w.BOTH.result
-cache_file_overlapping_CTCF_BOTH <- "../data/df.overlapping.CTCF.w.BOTH.result.rds"
+cache_file_overlapping_CTCF_BOTH <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.overlapping.CTCF.w.BOTH.result.rds"
 
 if (file.exists(cache_file_overlapping_CTCF_BOTH)) {
     message("Loading cached overlapping CTCF BOTH result from: ", cache_file_overlapping_CTCF_BOTH)
@@ -1198,7 +1198,7 @@ df.refgene.gtf %>%
 # retrieving exon data 1 from RefSeq GTF
 ####################################################
 # CACHING: df.refgene.gtf.for.exon processing
-cache_file_refseq <- "../data/df_refgene_gtf_for_exon.rds"
+cache_file_refseq <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_refgene_gtf_for_exon.rds"
 
 if (file.exists(cache_file_refseq)) {
     message("Loading cached RefSeq exon data from: ", cache_file_refseq)
@@ -1244,7 +1244,7 @@ df.refgene.gtf.for.exon %>%
 # tss resource 3
 ############################
 # TSS load
-cache_file_ensembl_tss <- "../data/df_ensembl_gtf_for_tss_DISTINCT_geneid.rds"
+cache_file_ensembl_tss <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_ensembl_gtf_for_tss_DISTINCT_geneid.rds"
 
 if (file.exists(cache_file_ensembl_tss)) {
     message("Loading cached Ensembl TSS data from: ", cache_file_ensembl_tss)
@@ -1387,7 +1387,7 @@ exon.attribute.keys
 
 # adding columns from attribute
 # CACHING: This step is slow, so saving/loading the result
-cache_file <- "../data/df_ensembl_gtf_for_exon_attribute.rds"
+cache_file <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_ensembl_gtf_for_exon_attribute.rds"
 
 if (file.exists(cache_file)) {
     message("Loading cached exon attribute data from: ", cache_file)
@@ -1404,7 +1404,7 @@ if (file.exists(cache_file)) {
 # 526,204
 
 # CACHING for df.tss.ensembl
-cache_file_tss_ensembl <- "../data/df.tss.ensembl.rds"
+cache_file_tss_ensembl <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.tss.ensembl.rds"
 
 if (file.exists(cache_file_tss_ensembl)) {
     message("Loading cached df.tss.ensembl from: ", cache_file_tss_ensembl)
@@ -1549,7 +1549,7 @@ epd.rat.promoter.rn6.bed <- import("~/dropbox/Gateway_to_Hao/enhancer/data/epdne
 epd.rat.promoter.rn6.bed # 12022
 
 # CACHING for df.promoter.rn7.epd
-cache_file_promoter_epd <- "../data/df.promoter.rn7.epd.rds"
+cache_file_promoter_epd <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.promoter.rn7.epd.rds"
 
 if (file.exists(cache_file_promoter_epd)) {
     message("Loading cached df.promoter.rn7.epd from: ", cache_file_promoter_epd)
@@ -1562,7 +1562,7 @@ if (file.exists(cache_file_promoter_epd)) {
     ############################
     # Download: https://epd.expasy.org/ftp/epdnew/R_norvegicus/
     # CACHING: df.Rn_EPDnew_001_rn7 processing
-    cache_file_epd_rn7 <- "../data/df_Rn_EPDnew_001_rn7.rds"
+    cache_file_epd_rn7 <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_Rn_EPDnew_001_rn7.rds"
 
     if (file.exists(cache_file_epd_rn7)) {
         message("Loading cached EPD rn7 data from: ", cache_file_epd_rn7)
@@ -1756,14 +1756,14 @@ combining_and_save_plots(plot.ctcf.dens, plot.tss.dens, plot.promoter.dens, "den
 # - Requires UCSC kent tool: bedGraphToBigWig (recommended install: `brew install kent-tools`)
 ################################################################################
 
-cache_file_ctcf <- "../data/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
+cache_file_ctcf <- "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
 
 # Fallback to the absolute path provided in chat if the repo-local cache isn't present.
 ctcf_rds_candidates <- c(
     cache_file_ctcf,
-    "/Users/pete/Desktop/playground/enhancer/r_files/data/df.DISTINCT.fimo.2nd.trial.ctcf.rds",
-    "~/dropbox/Gateway_to_Hao/enhancer/r_files/data/df.DISTINCT.fimo.2nd.trial.ctcf.rds",
-    "~/dropbox/Gateway_to_Hao/enhancer/data/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
+    "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.DISTINCT.fimo.2nd.trial.ctcf.rds",
+    "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.DISTINCT.fimo.2nd.trial.ctcf.rds",
+    "~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df.DISTINCT.fimo.2nd.trial.ctcf.rds"
 )
 
 ctcf_rds_path <- ctcf_rds_candidates[file.exists(path.expand(ctcf_rds_candidates))][1]
