@@ -11,13 +11,13 @@ options(scipen = 999) # prevent scientific notation in base R
 options(pillar.sigfig = 10) # display up to 10 significant digits in tibbles
 
 dropbox <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer"
-setwd(file.path(dropbox, "r_files"))
-getwd()
+setwd("/Users/pete/Desktop/playground/enhancer/r_files/atac_validation")
+getwd() # /Users/pete/Desktop/playground/enhancer/r_files/atac_validation
 
 path.csv.final.loop <- file.path(dropbox, "data/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.csv")
-path.rds.final.loop <- file.path(dropbox, "data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
+path.rds.final.loop <- file.path(dropbox, "r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
 path.narrowpeak.atac <- file.path(dropbox, "data/Duttke2022_snATAC_peaks_rn7.narrowPeak") # Duttke 2022 snATAC (rn6→rn7 liftOver)
-path.dir.out <- file.path(dropbox, "r_files/figures/submission/lt2mb")
+path.dir.out <- "/Users/pete/Desktop/playground/enhancer/r_files/atac_validation"
 
 ####################################################
 # 1. Loop load and anchor parsing
@@ -322,7 +322,7 @@ write_csv(df.detail, file.path(path.dir.out, "atac_loop_anchor_overlap_detail.cs
 ####################################################
 # 10. Load TSS information used in enhancer_promoter_interaction.R
 cat("\nRunning additional1: TSS Exclusion Analysis\n")
-path.rds.tss <- file.path(dropbox, "data/df.tss.ensembl.rds")
+path.rds.tss <- file.path(dropbox, "r_files/rds/df.tss.ensembl.rds")
 
 if(file.exists(path.rds.tss)) {
   df.tss <- readRDS(path.rds.tss)

@@ -37,7 +37,7 @@ options(pillar.sigfig = 10)
 dropbox <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer"
 # Ensure the paths point to the correct data files
 path.csv.final.loop <- file.path(dropbox, "data/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.csv")
-path.rds.final.loop <- file.path(dropbox, "data/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
+path.rds.final.loop <- file.path(dropbox, "r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
 path.narrowpeak.atac <- file.path(dropbox, "data/Duttke2022_snATAC_peaks_rn7.narrowPeak")
 ```
 
@@ -234,7 +234,7 @@ cat("Empirical p-value: ", pp, "\n")
 Since Enhancer anchors span large regions (median 10kb), it is theoretically possible they incidentally overlap with TSSs of other genes, falsely inflating the ATAC-seq overlap. We address this by completely carving out known TSS regions (±1kb) from enhancer anchors.
 
 ```{r tss-exclusion}
-path.rds.tss <- file.path(dropbox, "data/df.tss.ensembl.rds")
+path.rds.tss <- file.path(dropbox, "r_files/rds/df.tss.ensembl.rds")
 
 if(file.exists(path.rds.tss)) {
   df.tss <- readRDS(path.rds.tss)
