@@ -3,6 +3,9 @@ submission.md
 research_notes.md
 results/
 
+# local translated notes
+*-kr.*
+
 # local secrets (do not commit)
 r_files/.env.alphagenome.local
 
