@@ -1,0 +1,14 @@
+feature,importance
+numeric__distance,0.6227946452445303
+numeric__loop_span,0.32808283802386157
+numeric__resolution,0.0064552026922995885
+numeric__anchor1_width,0.006421090317169564
+numeric__anchor2_width,0.005910981782231884
+numeric__has_tss_component,0.005829789382401886
+numeric__has_promoter_component,0.005404261404904187
+categorical__WHERE_UP,0.005229690357662247
+categorical__WHERE_DOWN,0.0051672084936124
+categorical__classification_One_OK,0.004410698971639358
+categorical__classification_Both_OK,0.004293593329687164
+numeric__n_assigned_genes,0.0
+numeric__n_components,0.0
