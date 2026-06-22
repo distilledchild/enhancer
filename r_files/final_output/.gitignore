@@ -1,0 +1,4 @@
+# Keep generated output payloads out of GitHub.
+# The full preserved folder can live in Dropbox/local storage.
+/local/
+/external_desktop_outputs/
