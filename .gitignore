@@ -3,6 +3,9 @@ submission.md
 research_notes.md
 results/
 
+# external/local raw data symlink
+/data
+
 # local translated notes
 *-kr.*
 
