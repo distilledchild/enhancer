@@ -1,3 +1,4 @@
+# lintr: disable
 library("tidyverse")
 library("GenomicRanges")
 library("ggplot2")
@@ -914,15 +915,18 @@ df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 <- readRD
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% dim() # 14210// final: 16,113// 150kb: 17,417// 200kb: 17,648
 df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% head(2)
 
-approach_2nd_analyze_loops_by_threshold(
-  df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
-    dplyr::rename(gene_id_id = gene_id) %>%
-    mutate(gene_id = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1)),
-  # threshold_distance = stats_decision$Q3,
-  threshold_distance = 200000,
-  top_n_genes = 30,
-  print_top_n = 80
-) # utils_functions.R// final gprofiler top 30: https://biit.cs.ut.ee/gplink/l/aHWE_iUdCTy
+##########################################################
+# pre-CTCF result
+##########################################################
+# approach_2nd_analyze_loops_by_threshold(
+#   df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
+#     dplyr::rename(gene_id_id = gene_id) %>%
+#     mutate(gene_id = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1)),
+#   # threshold_distance = stats_decision$Q3,
+#   threshold_distance = 200000,
+#   top_n_genes = 30,
+#   print_top_n = 80
+# ) # utils_functions.R// final gprofiler top 30: https://biit.cs.ut.ee/gplink/l/aHWE_iUdCTy
 
 ################################################################################################
 ################################################################################################
@@ -931,7 +935,7 @@ approach_2nd_analyze_loops_by_threshold(
 ################################################################################################
 # source("./alphagenome_export.R") # Not needed per user request
 
-df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
+df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>% # 5729 + 11919 = 17648
   count(component) #  |     # 200kb
 # 1 pro        4776  1 pro        4569|||||||| 1 pro        4569||||| 1 pro        5429| 1 pro        5729
 # 2 tss       10891  2 tss        9641|||||||| 2 tss        9641||||| 2 tss       10684| 2 tss       11919
@@ -1112,6 +1116,28 @@ df.final.DISTINCT.loop.joined %>% dim()
 df.final.DISTINCT.loop.joined %>% head(2)
 
 df.final.loop %>% distinct(loop.id) # 15085
+
+##########################################################
+# final
+##########################################################
+df_final_ctcf_supported_15085_for_gene_count <-
+  df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3 %>%
+  semi_join(df.final.loop %>% distinct(loop.id), by = "loop.id") %>%
+  dplyr::rename(gene_id_id = gene_id) %>%
+  mutate(gene_id = str_split_n(str_split_n(component_id, ":", 6), "\\|", 1))
+
+df_final_ctcf_supported_15085_for_gene_count %>% head(2)
+df_final_ctcf_supported_15085_for_gene_count %>%
+  distinct(loop.id) %>%
+  nrow() # should be 15085
+
+# listup
+approach_2nd_analyze_loops_by_threshold(
+  df_final_ctcf_supported_15085_for_gene_count,
+  threshold_distance = 200000,
+  top_n_genes = 30,
+  print_top_n = 80
+)
 
 ##########################################################
 # Chromosome-level gene/CTCF density correlations

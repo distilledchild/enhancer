@@ -28,9 +28,12 @@ tad_bedpe_path_50kb <- path.expand("~/UTHSC GGI Dropbox/K P/Gateway_to_Hao/hic/2
 gtf_path <- path.expand("~/dropbox/Gateway_to_Hao/workshop/2023_NIH_meeting/loop_N_tss/ucsc_refGene.gtf")
 chrom_sizes_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/data/tracks/rn7.chrom.sizes")
 gene_loop_map_rds_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
+final_loop_rda_path <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files/figures/submission/lt2mb/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.rda")
 
 out_dir <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/figures/hic_panels")
+final_triangle_out_dir <- file.path(out_dir, "final_15085_triangle_png")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+dir.create(final_triangle_out_dir, showWarnings = FALSE, recursive = TRUE)
 
 stopifnot(file.exists(hic_path))
 stopifnot(file.exists(ctcf_bedgraph_path))
@@ -39,6 +42,7 @@ stopifnot(file.exists(tad_bedpe_path))
 stopifnot(file.exists(tad_bedpe_path_50kb))
 stopifnot(file.exists(gtf_path))
 stopifnot(file.exists(gene_loop_map_rds_path))
+stopifnot(file.exists(final_loop_rda_path))
 
 if (!file.exists(chrom_sizes_path)) {
   stop("chrom.sizes not found at: ", chrom_sizes_path, "\nCreate it from df.chromosome.data or rn7 TSV first.")
@@ -96,10 +100,26 @@ tads_all_50kb <- read_tads(tad_bedpe_path_50kb)
 ctcf_all <- read_tsv(ctcf_bedgraph_path, col_names = c("chr","start","end","score"), show_col_types = FALSE) %>%
   mutate(chr = as.character(chr), start = as.integer(start), end = as.integer(end), score = as.numeric(score))
 
-# Gene-loop mapping from enhancer_promoter_interaction pipeline (strict filtered result).
+# Final CTCF-supported loop IDs from enhancer_promoter_interaction pipeline.
+final_loop_env <- new.env(parent = emptyenv())
+load(final_loop_rda_path, envir = final_loop_env)
+if (!exists("df.final.loop", envir = final_loop_env)) {
+  stop("Expected object `df.final.loop` was not found in: ", final_loop_rda_path)
+}
+final_loop_ids <- get("df.final.loop", envir = final_loop_env) %>%
+  as_tibble() %>%
+  distinct(loop.id) %>%
+  pull(loop.id)
+if (length(final_loop_ids) != 15085L) {
+  stop("Expected 15,085 final loops, but found: ", length(final_loop_ids))
+}
+
+# Gene-loop mapping from enhancer_promoter_interaction pipeline, restricted to
+# the final 15,085 CTCF-supported promoter/TSS-assigned loop IDs.
 gene_loop_map_raw <- readRDS(gene_loop_map_rds_path) %>%
   as_tibble() %>%
   filter(!is.na(gene_name), !is.na(loop.id)) %>%
+  semi_join(tibble(loop.id = final_loop_ids), by = "loop.id") %>%
   mutate(
     gene_key = tolower(gene_name),
     chr1 = as.character(chr1),
@@ -114,6 +134,7 @@ gene_loop_map_raw <- readRDS(gene_loop_map_rds_path) %>%
     loop_right = pmax(centroid1, centroid2)
   ) %>%
   distinct(gene_key, loop.id, .keep_all = TRUE)
+message("Gene-loop map restricted to final loop IDs: ", n_distinct(gene_loop_map_raw$loop.id), " loops")
 
 gene_to_loop_ids <- gene_loop_map_raw %>%
   group_by(gene_key) %>%
@@ -701,6 +722,10 @@ for (i in seq_len(nrow(genes_of_interest))) {
       out_png_aux <- file.path(out_dir, sprintf("aux_DA68A_%s_%s_%d_%d.png", g$gene, g$chr, reg_aux$start, reg_aux$end))
       ggsave(out_png_aux, panel_aux, width = 9.5, height = 7.2, units = "in", dpi = 300, bg = "white")
       message("Wrote: ", out_png_aux)
+
+      out_png_final_triangle <- file.path(final_triangle_out_dir, sprintf("%s_triangle.png", g$gene))
+      ggsave(out_png_final_triangle, panel_aux, width = 9.5, height = 7.2, units = "in", dpi = 300, bg = "white")
+      message("Wrote: ", out_png_final_triangle)
     }
   }
 
