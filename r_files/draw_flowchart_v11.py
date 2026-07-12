@@ -137,7 +137,7 @@ def draw_diamond(
     }
 
 # Helper function to create a rounded box for showing removed loops
-def draw_box(ax, center, width, height, text, fill_color='white', edgecolor='black', fontweight='bold'):
+def draw_box(ax, center, width, height, text, fill_color='white', edgecolor='black', fontweight='bold', fit_text=True):
     x, y = center
     corner = (x - width/2, y - height/2)
     box = patches.FancyBboxPatch(corner, width, height, boxstyle="round,pad=0.02,rounding_size=0.1", 
@@ -150,8 +150,8 @@ def draw_box(ax, center, width, height, text, fill_color='white', edgecolor='bla
         text,
         fontsize=BASE_FONTSIZE,
         fontweight=fontweight,
-        max_width=width * 0.90,
-        max_height=height * 0.84
+        max_width=width * 0.90 if fit_text else None,
+        max_height=height * 0.84 if fit_text else None
     )
     return {
         'n': (x, y + height/2),
@@ -257,7 +257,7 @@ x_right = 125
 x_rem_r1 = 125
 x_rem_inner = 75
 x_rem_outer = 165
-x_rem_comb = 125
+x_rem_comb = 130
 
 # Create the nodes of the flowchart
 
@@ -309,7 +309,7 @@ n_dec_ctcf = draw_diamond(
     (x_left, y_ctcf),
     42,
     12,
-    "Both anchors have\nCTCF sites (score > 6)",
+    "Both anchors have\nat least 6 CTCF motifs",
     fontsize=26,
     fit_width_ratio=0.76,
     fit_height_ratio=0.72,
@@ -329,7 +329,7 @@ n_dec_tss1 = draw_diamond(
     fit_height_ratio=0.72,
     linespacing=1.0
 )
-n_rem_tss1 = draw_box(ax, (x_rem_outer, y_tss1), 20, 9, "13,042\nloops\nremoved", fill_color='#FFE6E6', fontweight='normal')
+n_rem_tss1 = draw_box(ax, (x_rem_outer, y_tss1), 20, 9, "13,043\nloops\nremoved", fill_color='#FFE6E6', fontweight='normal')
 
 n_dec_tss2 = draw_diamond(
     ax,
@@ -351,9 +351,12 @@ n_rem_final_combined = draw_box(
     (x_rem_comb, y_final),
     48,
     14,
-    "10,183 loops (failed CTCF)\n2,563 loops (failed TSS/Promoter:\n1,794/769) removed",
+    "10,183 TSS/Promoter− of 25,268 CTCF+\n"
+    "2,563 CTCF− of 17,648 TSS/Promoter+\n"
+    "(TSS: 1,794; Promoter: 769)",
     fill_color='#FFE6E6',
-    fontweight='normal'
+    fontweight='normal',
+    fit_text=False
 )
 
 # Final result
