@@ -1,392 +1,971 @@
-####################################################
-# ATAC-seq Validation of P-E Loop Anchors
-# Duttke et al. 2022 snATAC-seq (rn6 → rn7 liftOver) x Hi-C loop anchors
-# Source: GSM5820551 (rat PFC, filtered peak set)
-# Q: Is enhancer anchor in open chromatin region?
-####################################################
-library(tidyverse)
-library(GenomicRanges) # for genomic interval overlap and ranges operation
+# lintr: disable
+library("tidyverse")
+library("GenomicRanges")
+library("GenomeInfoDb")
 
-options(scipen = 999) # prevent scientific notation in base R
-options(pillar.sigfig = 10) # display up to 10 significant digits in tibbles
+options(tibble.width = Inf)
+options(tibble.print_max = Inf)
+options(tibble.max_extra_cols = Inf)
+options(scipen = 999)
 
-dropbox <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer"
-setwd("/Users/pete/Desktop/playground/enhancer/r_files/atac_validation")
-getwd() # /Users/pete/Desktop/playground/enhancer/r_files/atac_validation
+################################################################################
+# Resubmission ATAC-seq matched-null validation
+#
+# This analysis replaces the legacy 15,085-loop/WHERE workflow. It uses the
+# coordinate-normalized pooled loop resource, strand-aware true TSS positions,
+# direct promoter/TSS assignments, and Duttke et al. 2022 rat PFC snATAC peaks
+# prepared by promoter_enhancer_interaction_resubmit.R.
+#
+# Primary population
+# - Every pooled loop with direct promoter/TSS support at exactly one anchor.
+# - The opposite anchor is evaluated as the unique candidate distal anchor.
+# - Eligibility is defined before ATAC status, avoiding selection on outcome.
+#
+# Null models
+# 1. rigid_loop_pair_relocation: relocate the complete loop geometry within the
+#    same chromosome, preserving resolution, both anchor widths, and distance.
+# 2. matched_HiC_anchor: sample promoter-free anchors from pooled Hi-C loops,
+#    matching chromosome, resolution, anchor side, and loop-distance bin.
+#
+# ATAC supports open chromatin only. It does not establish enhancer activity or
+# validate a functional promoter-enhancer interaction.
+################################################################################
 
-path.csv.final.loop <- file.path(dropbox, "data/df_final_loop_sub.4.any.lt2mb.ENSEMBL.mid.mid.final.filter.200kb.csv")
-path.rds.final.loop <- file.path(dropbox, "r_files/rds/df_final_up_down_directional_point_decision_COMBINED_OK_filtered_lt_Q3_final_200kb.rds")
-path.narrowpeak.atac <- file.path(dropbox, "data/Duttke2022_snATAC_peaks_rn7.narrowPeak") # Duttke 2022 snATAC (rn6→rn7 liftOver)
-path.dir.out <- "/Users/pete/Desktop/playground/enhancer/r_files/atac_validation"
+########################
+# 0. Directories, inputs, and reproducibility settings
+########################
 
-####################################################
-# 1. Loop load and anchor parsing
-####################################################
-df.loops.raw <- read_csv(path.csv.final.loop, show_col_types = FALSE) %>%
-  dplyr::rename(loop_id = loop.id)
-print(str_c("loops: ", nrow(df.loops.raw))) # 15085
+r.files.dir <- path.expand("~/Desktop/playground/enhancer/r_files")
+if (!dir.exists(r.files.dir)) {
+  r.files.dir <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files")
+}
+if (!dir.exists(r.files.dir)) {
+  stop("Cannot locate the enhancer/r_files directory.", call. = FALSE)
+}
 
-# Split loop_id into coordinates and preserve the HiCCUPS resolution.
-df.loops <- df.loops.raw %>%
-  mutate(loop_id_orig = loop_id) %>%
-  separate_wider_delim(
-    cols = loop_id_orig,
-    delim = "_",
-    names = c("chr1", "start1", "end1", "chr2", "start2", "end2", "resolution"),
-    too_many = "drop"
+revision.dir <- file.path(r.files.dir, "revision")
+cache.dir <- file.path(revision.dir, "cache_data")
+output.dir <- Sys.getenv(
+  "RESUBMIT_OUTPUT_DIR",
+  unset = file.path(revision.dir, "resubmit_outputs")
+)
+dir.create(output.dir, recursive = TRUE, showWarnings = FALSE)
+
+source(file.path(r.files.dir, "funcs.R"))
+
+loop.resource.file <- file.path(
+  output.dir,
+  "revised_pooled_loop_annotation_resource.tsv"
+)
+direct.assignment.file <- file.path(
+  output.dir,
+  "revised_direct_loop_gene_assignments.tsv"
+)
+ensembl.transcript.file <- file.path(
+  cache.dir,
+  "df.ensembl.transcript.coordinate.normalized.rds"
+)
+epd.promoter.file <- file.path(
+  cache.dir,
+  "df.promoter.annotation.coordinate.normalized.rds"
+)
+atac.cache.file <- file.path(cache.dir, "gr.atac.rds")
+chrom.sizes.file <- path.expand(
+  "~/dropbox/Gateway_to_Hao/enhancer/data/tracks/rn7.chrom.sizes"
+)
+if (!file.exists(chrom.sizes.file)) {
+  chrom.sizes.file <- path.expand(
+    paste0(
+      "~/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/",
+      "enhancer/data/tracks/rn7.chrom.sizes"
+    )
+  )
+}
+
+required.files <- c(
+  loop.resource.file,
+  direct.assignment.file,
+  ensembl.transcript.file,
+  epd.promoter.file,
+  atac.cache.file,
+  chrom.sizes.file
+)
+missing.files <- required.files[!file.exists(required.files)]
+if (length(missing.files) > 0L) {
+  stop(
+    "Missing required ATAC matched-null input file(s):\n",
+    paste(missing.files, collapse = "\n"),
+    call. = FALSE
+  )
+}
+
+n.permutations <- as.integer(
+  Sys.getenv("ATAC_NULL_PERMUTATIONS", unset = "1000")
+)
+random.seed <- as.integer(Sys.getenv("ATAC_NULL_SEED", unset = "20260727"))
+n.cores <- as.integer(
+  Sys.getenv(
+    "ATAC_NULL_CORES",
+    unset = as.character(max(1L, min(4L, parallel::detectCores() - 1L)))
+  )
+)
+if (is.na(n.permutations) || n.permutations < 1L) {
+  stop("ATAC_NULL_PERMUTATIONS must be a positive integer.", call. = FALSE)
+}
+if (is.na(n.cores) || n.cores < 1L) {
+  stop("ATAC_NULL_CORES must be a positive integer.", call. = FALSE)
+}
+
+atac.minimum.overlap.bp <- 50L
+tss.exclusion.flank.bp <- 1000L
+atac.fraction.thresholds <- c(0.005, 0.01)
+distance.breaks <- c(-Inf, 50000, 100000, 250000, 500000, 1000000, Inf)
+distance.labels <- c(
+  "le50kb", "gt50_le100kb", "gt100_le250kb",
+  "gt250_le500kb", "gt500_le1000kb", "gt1000kb"
+)
+
+########################
+# 0-1. Local helpers
+########################
+
+# Sum covered bases for each query interval against one reduced feature union.
+interval_overlap_bp <- function(gr.query, gr.feature) {
+  n.query <- length(gr.query)
+  overlap.bp <- integer(n.query)
+  if (n.query == 0L || length(gr.feature) == 0L) {
+    return(overlap.bp)
+  }
+
+  hits <- findOverlaps(gr.query, gr.feature, ignore.strand = TRUE)
+  if (length(hits) == 0L) {
+    return(overlap.bp)
+  }
+
+  intersections <- pintersect(
+    gr.query[queryHits(hits)],
+    gr.feature[subjectHits(hits)],
+    ignore.strand = TRUE
+  )
+  overlap.sum <- rowsum(
+    width(intersections),
+    group = queryHits(hits),
+    reorder = FALSE
+  )
+  overlap.bp[as.integer(rownames(overlap.sum))] <-
+    as.integer(overlap.sum[, 1])
+  overlap.bp
+}
+
+# Retain the largest single-interval overlap for the primary >=50-bp criterion.
+interval_max_overlap_bp <- function(gr.query, gr.feature) {
+  n.query <- length(gr.query)
+  max.overlap.bp <- integer(n.query)
+  if (n.query == 0L || length(gr.feature) == 0L) {
+    return(max.overlap.bp)
+  }
+
+  hits <- findOverlaps(gr.query, gr.feature, ignore.strand = TRUE)
+  if (length(hits) == 0L) {
+    return(max.overlap.bp)
+  }
+
+  intersections <- pintersect(
+    gr.query[queryHits(hits)],
+    gr.feature[subjectHits(hits)],
+    ignore.strand = TRUE
+  )
+  overlap.by.hit <- tibble(
+    query_index = queryHits(hits),
+    overlap_bp = width(intersections)
+  ) %>%
+    group_by(query_index) %>%
+    summarise(max_overlap_bp = max(overlap_bp), .groups = "drop")
+  max.overlap.bp[overlap.by.hit$query_index] <- overlap.by.hit$max_overlap_bp
+  max.overlap.bp
+}
+
+# Measure TSS-excluded ATAC overlap and width-adjusted support per anchor.
+measure_non_tss_atac <- function(df.anchor) {
+  required.columns <- c(
+    "loop_id", "resolution", "anchor_side",
+    "anchor_chr", "anchor_start", "anchor_end"
+  )
+  missing.columns <- setdiff(required.columns, names(df.anchor))
+  if (length(missing.columns) > 0L) {
+    stop(
+      "ATAC anchor table is missing: ",
+      paste(missing.columns, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  gr.anchor <- GRanges(
+    seqnames = df.anchor$anchor_chr,
+    ranges = IRanges(df.anchor$anchor_start, df.anchor$anchor_end)
+  )
+  exclusion.bp <- interval_overlap_bp(gr.anchor, gr.known.tss.exclusion)
+  atac.overlap.bp <- interval_overlap_bp(gr.anchor, gr.atac.non.tss)
+  atac.max.overlap.bp <- interval_max_overlap_bp(
+    gr.anchor,
+    gr.atac.non.tss
+  )
+  anchor.width.bp <- width(gr.anchor)
+  non.tss.anchor.bp <- pmax(0L, anchor.width.bp - exclusion.bp)
+  atac.fraction <- if_else(
+    non.tss.anchor.bp > 0L,
+    atac.overlap.bp / non.tss.anchor.bp,
+    NA_real_
+  )
+
+  bind_cols(
+    df.anchor,
+    tibble(
+      anchor_width_bp = anchor.width.bp,
+      known_tss_exclusion_overlap_bp = exclusion.bp,
+      non_tss_anchor_bp = non.tss.anchor.bp,
+      non_tss_atac_overlap_bp = atac.overlap.bp,
+      non_tss_atac_max_single_overlap_bp = atac.max.overlap.bp,
+      atac_overlap_any = atac.overlap.bp >= 1L,
+      atac_overlap_ge50 =
+        atac.max.overlap.bp >= atac.minimum.overlap.bp,
+      non_tss_atac_fraction = atac.fraction,
+      atac_fraction_ge_0_005 = coalesce(atac.fraction >= 0.005, FALSE),
+      atac_fraction_ge_0_01 = coalesce(atac.fraction >= 0.01, FALSE)
+    )
+  )
+}
+
+# Assign fixed loop-distance bins for matched Hi-C anchor sampling.
+add_distance_match_bin <- function(df) {
+  df %>%
+    mutate(
+      distance_match_bin = cut(
+        loop_distance,
+        breaks = distance.breaks,
+        labels = distance.labels,
+        right = TRUE,
+        ordered_result = TRUE
+      ),
+      exact_match_key = str_c(
+        anchor_chr,
+        resolution,
+        anchor_side,
+        distance_match_bin,
+        sep = "|"
+      ),
+      fallback_match_key = str_c(
+        anchor_chr,
+        resolution,
+        distance_match_bin,
+        sep = "|"
+      ),
+      relaxed_match_key = str_c(
+        anchor_chr,
+        resolution,
+        sep = "|"
+      )
+    )
+}
+
+# Select one matched promoter-free Hi-C anchor for each observed candidate.
+sample_matched_hic_controls <- function(
+  df.observed,
+  df.control.pool,
+  exact.pool.index,
+  fallback.pool.index,
+  relaxed.pool.index
+) {
+  selected.index <- integer(nrow(df.observed))
+  match.level <- rep(NA_character_, nrow(df.observed))
+
+  observed.exact.groups <- split(
+    seq_len(nrow(df.observed)),
+    df.observed$exact_match_key
+  )
+  for (key.i in names(observed.exact.groups)) {
+    observed.index <- observed.exact.groups[[key.i]]
+    pool.index <- exact.pool.index[[key.i]]
+    if (!is.null(pool.index) && length(pool.index) > 0L) {
+      selected.index[observed.index] <- sample(
+        pool.index,
+        length(observed.index),
+        replace = TRUE
+      )
+      match.level[observed.index] <- "exact_chr_resolution_side_distance_bin"
+    }
+  }
+
+  fallback.observed.index <- which(selected.index == 0L)
+  if (length(fallback.observed.index) > 0L) {
+    fallback.groups <- split(
+      fallback.observed.index,
+      df.observed$fallback_match_key[fallback.observed.index]
+    )
+    for (key.i in names(fallback.groups)) {
+      observed.index <- fallback.groups[[key.i]]
+      pool.index <- fallback.pool.index[[key.i]]
+      if (is.null(pool.index) || length(pool.index) == 0L) {
+        next
+      }
+      selected.index[observed.index] <- sample(
+        pool.index,
+        length(observed.index),
+        replace = TRUE
+      )
+      match.level[observed.index] <- "side_relaxed_same_distance_bin"
+    }
+  }
+
+  relaxed.observed.index <- which(selected.index == 0L)
+  if (length(relaxed.observed.index) > 0L) {
+    for (observed.index in relaxed.observed.index) {
+      key.i <- df.observed$relaxed_match_key[[observed.index]]
+      pool.index <- relaxed.pool.index[[key.i]]
+      if (is.null(pool.index) || length(pool.index) == 0L) {
+        stop(
+          "No chromosome/resolution-matched Hi-C control for stratum: ",
+          key.i,
+          call. = FALSE
+        )
+      }
+      distance.difference <- abs(
+        log1p(df.control.pool$loop_distance[pool.index]) -
+          log1p(df.observed$loop_distance[[observed.index]])
+      )
+      nearest.pool.index <- pool.index[
+        distance.difference == min(distance.difference)
+      ]
+      selected.index[[observed.index]] <- sample(nearest.pool.index, 1L)
+      match.level[[observed.index]] <-
+        "distance_bin_relaxed_nearest_same_chr_resolution"
+    }
+  }
+
+  df.control.pool[selected.index, ] %>%
+    mutate(
+      observed_loop_id = df.observed$loop_id,
+      match_level = match.level,
+      exact_chr_resolution_side_distance_bin_match =
+        match.level == "exact_chr_resolution_side_distance_bin"
+    )
+}
+
+# Relocate each complete loop geometry to a valid position on the same chromosome.
+relocate_loop_pairs <- function(df.observed) {
+  max.new.span.start <- df.observed$chromosome_size -
+    df.observed$loop_span_width_bp + 1L
+  if (any(max.new.span.start < 1L)) {
+    stop("A loop span exceeds its chromosome boundary.", call. = FALSE)
+  }
+
+  new.span.start <- floor(
+    stats::runif(
+      nrow(df.observed),
+      min = 1,
+      max = max.new.span.start + 1
+    )
+  )
+  relocation.offset <- new.span.start - df.observed$loop_span_start
+
+  df.observed %>%
+    transmute(
+      loop_id,
+      resolution,
+      anchor_side,
+      anchor_chr,
+      anchor_start = anchor_start + relocation.offset,
+      anchor_end = anchor_end + relocation.offset,
+      loop_distance,
+      relocation_offset_bp = relocation.offset
+    )
+}
+
+# Summarise one observed-vs-control permutation using paired binary metrics.
+summarise_one_permutation <- function(
+  df.observed,
+  df.control,
+  permutation,
+  null.method
+) {
+  metric.columns <- c(
+    "atac_overlap_any",
+    "atac_overlap_ge50",
+    "atac_fraction_ge_0_005",
+    "atac_fraction_ge_0_01"
+  )
+  resolution.labels <- c(sort(unique(df.observed$resolution)), "ALL")
+
+  map_dfr(resolution.labels, function(resolution.i) {
+    row.index <- if (resolution.i == "ALL") {
+      seq_len(nrow(df.observed))
+    } else {
+      which(df.observed$resolution == resolution.i)
+    }
+
+    map_dfr(metric.columns, function(metric.i) {
+      observed.positive <- df.observed[[metric.i]][row.index]
+      control.positive <- df.control[[metric.i]][row.index]
+      discordant.observed.only <- sum(observed.positive & !control.positive)
+      discordant.control.only <- sum(!observed.positive & control.positive)
+
+      tibble(
+        permutation,
+        null_method = null.method,
+        resolution = resolution.i,
+        metric = metric.i,
+        n_pairs = length(row.index),
+        observed_rate = mean(observed.positive),
+        null_rate = mean(control.positive),
+        paired_odds_ratio = (
+          discordant.observed.only + 0.5
+        ) / (
+          discordant.control.only + 0.5
+        ),
+        n_observed_only = discordant.observed.only,
+        n_control_only = discordant.control.only
+      )
+    })
+  })
+}
+
+################################################################################
+# 1. Load the revised pooled loop universe and direct assignments
+################################################################################
+
+df.loop.resource <- read_tsv(loop.resource.file, show_col_types = FALSE)
+df.direct.assignment <- read_tsv(
+  direct.assignment.file,
+  show_col_types = FALSE
+)
+df.chrom.sizes <- read_tsv(
+  chrom.sizes.file,
+  col_names = c("chr", "chromosome_size"),
+  show_col_types = FALSE
+) %>%
+  distinct(chr, .keep_all = TRUE)
+
+# Recover one direct and one opposite candidate side for every single-promoter loop.
+df.single.direct.orientation <- df.direct.assignment %>%
+  distinct(loop_id, resolution, anchor_side, opposite_anchor_side) %>%
+  inner_join(
+    df.loop.resource %>%
+      filter(n_direct_anchor_sides == 1L) %>%
+      dplyr::select(
+        loop_id,
+        resolution,
+        chr1, start1, end1,
+        chr2, start2, end2,
+        loop_distance
+      ),
+    by = c("loop_id", "resolution")
   ) %>%
   mutate(
-    across(c(start1, end1, start2, end2, resolution), parse_integer),
-    start1 = start1 + 1L,
-    start2 = start2 + 1L
-  )
+    anchor_side = opposite_anchor_side,
+    anchor_chr = if_else(anchor_side == "anchor1", chr1, chr2),
+    anchor_start = if_else(anchor_side == "anchor1", start1, start2),
+    anchor_end = if_else(anchor_side == "anchor1", end1, end2),
+    loop_span_start = pmin(start1, start2),
+    loop_span_end = pmax(end1, end2),
+    loop_span_width_bp = loop_span_end - loop_span_start + 1L
+  ) %>%
+  left_join(df.chrom.sizes, by = c("anchor_chr" = "chr")) %>%
+  arrange(loop_id)
 
-df.loops %>% head(3)
-
-####################################################
-# 2. Load WHERE (promoter/enhancer anchor direction)
-####################################################
-rds.final.loop <- read_rds(path.expand(path.rds.final.loop))
-df.where.loop <- rds.final.loop %>%
-  dplyr::select(loop_id = loop.id, WHERE) %>%
-  dplyr::distinct(loop_id, .keep_all = TRUE)
-print(str_c("WHERE matched loops: ", nrow(df.where.loop))) # 17648
-
-# Merge WHERE with loops
-df.loops <- left_join(df.loops, df.where.loop, by = "loop_id")
-print(str_c("WHERE NA: ", sum(is.na(df.loops$WHERE)))) # 0
-t_dist <- table(df.loops$WHERE, useNA = "always")
-print(str_c("WHERE distribution: ", str_c(str_c(coalesce(names(t_dist), "NA"), t_dist, sep = ": "), collapse = ", "))) # DOWN: 7510, UP: 7575, <NA>: 0
-
-####################################################
-# 3. Create Promoter/Enhancer anchor GRanges
-####################################################
-#    WHERE == "UP"   -> anchor1 is promoter, anchor2 is enhancer
-#    WHERE == "DOWN" -> anchor2 is promoter, anchor1 is enhancer
-
-# Use loops with WHERE information
-df.loops.w <- df.loops %>% filter(!is.na(WHERE))
-print(str_c("Loops with WHERE: ", nrow(df.loops.w))) # 15085
-
-# promoter anchor GRanges
-df.promoter <- bind_rows(
-  df.loops.w %>%
-    dplyr::filter(WHERE == "UP") %>%
-    dplyr::select(chr = chr1, start = start1, end = end1, loop_id, category, resolution),
-  df.loops.w %>%
-    dplyr::filter(WHERE == "DOWN") %>%
-    dplyr::select(chr = chr2, start = start2, end = end2, loop_id, category, resolution)
+assert_analysis_condition(
+  nrow(df.single.direct.orientation) ==
+    sum(df.loop.resource$n_direct_anchor_sides == 1L) &&
+    !anyDuplicated(df.single.direct.orientation$loop_id),
+  "Single-promoter loop orientations are incomplete or duplicated."
 )
-gr.promoter <- GRanges(
-  seqnames = df.promoter$chr,
-  ranges = IRanges(df.promoter$start, df.promoter$end),
-  loop_id = df.promoter$loop_id,
-  category = df.promoter$category,
-  resolution = df.promoter$resolution,
-  anchor_type = "promoter"
+assert_analysis_condition(
+  all(df.single.direct.orientation$chr1 == df.single.direct.orientation$chr2) &&
+    !any(is.na(df.single.direct.orientation$chromosome_size)),
+  "Rigid relocation requires valid cis loops and chromosome sizes."
 )
 
-# enhancer anchor GRanges
-df.enhancer <- bind_rows(
-  df.loops.w %>%
-    dplyr::filter(WHERE == "UP") %>%
-    dplyr::select(chr = chr2, start = start2, end = end2, loop_id, category, resolution),
-  df.loops.w %>%
-    dplyr::filter(WHERE == "DOWN") %>%
-    dplyr::select(chr = chr1, start = start1, end = end1, loop_id, category, resolution)
-)
-gr.enhancer <- GRanges(
-  seqnames = df.enhancer$chr,
-  ranges = IRanges(df.enhancer$start, df.enhancer$end),
-  loop_id = df.enhancer$loop_id,
-  category = df.enhancer$category,
-  resolution = df.enhancer$resolution,
-  anchor_type = "enhancer"
-)
+################################################################################
+# 2. Rebuild true-TSS-excluded ATAC from the normalized resubmission cache
+################################################################################
 
-print(str_c("Promoter anchors: ", length(gr.promoter))) # 15085
-print(str_c("Enhancer anchors: ", length(gr.enhancer))) # 15085
+df.ensembl.transcript <- readRDS(ensembl.transcript.file)
+df.epd.promoter <- readRDS(epd.promoter.file)
+gr.atac <- readRDS(atac.cache.file)
 
-# Anchor size distribution (for Methods reporting)
-cat("\n--- Anchor Size Distribution ---\n")
-cat("Promoter anchor width (bp):\n")
-print(summary(width(gr.promoter)))
-cat("Enhancer anchor width (bp):\n")
-print(summary(width(gr.enhancer)))
-
-# All anchors (reference)
-gr.all <- c(gr.promoter, gr.enhancer)
-
-####################################################
-# 4. Load Duttke 2022 snATAC-seq peaks (rn7 liftOver)
-####################################################
-# func1: Load ATAC peaks and convert to GRanges
-load_atac <- function(path, label) {
-  df <- read_tsv(path,
-    col_names = c(
-      "chr", "start", "end", "name", "score", "strand",
-      "fc", "neglog10p", "neglog10q", "summit"
+# Build one-base strand-aware Ensembl TSS and lifted EPD TSS positions.
+df.known.tss <- bind_rows(
+  df.ensembl.transcript %>%
+    transmute(
+      chr,
+      tss = if_else(strand == "+", transcript_start, transcript_end)
     ),
-    show_col_types = FALSE
-  )
-  print(str_c("peaks: ", nrow(df)))
-  GRanges(df$chr, IRanges(df$start + 1L, df$end),
-    score = df$score, fc = df$fc, neglog10q = df$neglog10q, sample = label
-  )
-}
-
-gr.atac <- load_atac(path.narrowpeak.atac, "Duttke2022_snATAC_PFC")
-
-# ATAC peak quality (q-value) distribution
-cat("\n--- ATAC Peak Quality ---\n")
-cat("Peak width (bp):\n")
-print(summary(width(gr.atac)))
-cat("-log10(q-value) distribution:\n")
-print(summary(gr.atac$neglog10q))
-print(str_c("Peaks with q <= 0.05 (-log10q >= 1.3): ", sum(gr.atac$neglog10q >= 1.3), " / ", length(gr.atac)))
-print(str_c("Peaks with q <= 0.01 (-log10q >= 2.0): ", sum(gr.atac$neglog10q >= 2.0), " / ", length(gr.atac)))
-
-# Merge overlapping peaks
-gr.atac.union <- GenomicRanges::reduce(gr.atac)
-print(str_c("Duttke2022 snATAC peaks (rn7): ", length(gr.atac)))
-print(str_c("After reduce (merged): ", length(gr.atac.union)))
-
-####################################################
-# 5. Overlap analysis: promoter vs enhancer anchor x ATAC peaks
-####################################################
-# Calculate ATAC overlap
-# Note: minoverlap = 50 is used to conservatively prevent 1-bp edge artifacts.
-# However, standard practice for Hi-C anchor vs 1D peak intersection widely accepts 1-bp overlap.
-# Relevant literature for the 1-bp minimum overlap standard:
-# - DOI: 10.1093/nar/gkab1162 (cLoops2 benchmarking)
-# - DOI: 10.1038/s41467-020-18158-5 (Maize chromatin loops)
-# - DOI: 10.3389/fcell.2021.722513 (EPI loops in MCF7)
-promoter.hits <- countOverlaps(gr.promoter, gr.atac.union, minoverlap = 50) > 0
-enhancer.hits <- countOverlaps(gr.enhancer, gr.atac.union, minoverlap = 50) > 0
-
-n.promoter <- length(gr.promoter) # 15085
-n.enhancer <- length(gr.enhancer) # 15085
-n.promoter.atac <- sum(promoter.hits)
-n.enhancer.atac <- sum(enhancer.hits)
-pct.promoter <- round(100 * n.promoter.atac / n.promoter, 1)
-pct.enhancer <- round(100 * n.enhancer.atac / n.enhancer, 1)
-
-### ATAC overlap results
-print(str_c("Promoter anchors with ATAC peak: ", n.promoter.atac, " / ", n.promoter, " ", sprintf("(%.1f%%)", pct.promoter)))
-print(str_c("Enhancer anchors with ATAC peak: ", n.enhancer.atac, " / ", n.enhancer, " ", sprintf("(%.1f%%)", pct.enhancer)))
-
-# Resolution-stratified summary prevents 25 kb anchors from inflating the overall estimate.
-df.resolution.summary <- tibble(
-  anchor_type = c(rep("promoter", length(gr.promoter)), rep("enhancer", length(gr.enhancer))),
-  resolution = c(gr.promoter$resolution, gr.enhancer$resolution),
-  atac_overlap = c(promoter.hits, enhancer.hits)
+  df.epd.promoter %>%
+    transmute(chr, tss = epd_tss_start)
 ) %>%
-  group_by(anchor_type, resolution) %>%
+  filter(!is.na(chr), !is.na(tss)) %>%
+  distinct(chr, tss)
+
+gr.known.tss.exclusion <- GRanges(
+  seqnames = df.known.tss$chr,
+  ranges = IRanges(
+    start = pmax(1L, df.known.tss$tss - tss.exclusion.flank.bp),
+    end = df.known.tss$tss + tss.exclusion.flank.bp
+  )
+) %>%
+  reduce(ignore.strand = TRUE)
+
+gr.atac.union <- reduce(gr.atac, ignore.strand = TRUE)
+common.seqlevels <- Reduce(
+  intersect,
+  list(
+    seqlevels(gr.atac.union),
+    seqlevels(gr.known.tss.exclusion),
+    df.chrom.sizes$chr
+  )
+)
+gr.atac.union <- keepSeqlevels(
+  gr.atac.union,
+  common.seqlevels,
+  pruning.mode = "coarse"
+)
+gr.known.tss.exclusion <- keepSeqlevels(
+  gr.known.tss.exclusion,
+  common.seqlevels,
+  pruning.mode = "coarse"
+)
+gr.atac.non.tss <- setdiff(
+  gr.atac.union,
+  gr.known.tss.exclusion,
+  ignore.strand = TRUE
+)
+
+################################################################################
+# 3. Measure observed candidate-anchor ATAC support and threshold sensitivity
+################################################################################
+
+df.observed.candidate <- df.single.direct.orientation %>%
+  transmute(
+    loop_id,
+    resolution,
+    anchor_side,
+    anchor_chr,
+    anchor_start,
+    anchor_end,
+    loop_distance,
+    chr1, start1, end1,
+    chr2, start2, end2,
+    loop_span_start,
+    loop_span_end,
+    loop_span_width_bp,
+    chromosome_size
+  ) %>%
+  add_distance_match_bin()
+
+df.observed.metric <- measure_non_tss_atac(df.observed.candidate)
+
+# Report absolute and anchor-width-adjusted criteria within every resolution.
+df.atac.threshold.sensitivity.by.resolution <- bind_rows(
+  df.observed.metric,
+  df.observed.metric %>% mutate(resolution = "ALL")
+) %>%
+  group_by(resolution) %>%
   summarise(
-    n_anchors = n(),
-    n_atac_overlap = sum(atac_overlap),
-    pct_atac_overlap = round(100 * mean(atac_overlap), 1),
+    n_candidate_anchors = n(),
+    n_atac_any = sum(atac_overlap_any),
+    pct_atac_any = round(100 * mean(atac_overlap_any), 2),
+    n_atac_ge50 = sum(atac_overlap_ge50),
+    pct_atac_ge50 = round(100 * mean(atac_overlap_ge50), 2),
+    median_non_tss_atac_overlap_bp = median(non_tss_atac_overlap_bp),
+    median_non_tss_atac_fraction = median(
+      non_tss_atac_fraction,
+      na.rm = TRUE
+    ),
+    n_atac_fraction_ge_0_005 = sum(atac_fraction_ge_0_005),
+    pct_atac_fraction_ge_0_005 = round(
+      100 * mean(atac_fraction_ge_0_005),
+      2
+    ),
+    n_atac_fraction_ge_0_01 = sum(atac_fraction_ge_0_01),
+    pct_atac_fraction_ge_0_01 = round(
+      100 * mean(atac_fraction_ge_0_01),
+      2
+    ),
     .groups = "drop"
   ) %>%
-  arrange(anchor_type, resolution)
-print(df.resolution.summary)
+  arrange(factor(resolution, levels = c("5K", "10K", "25K", "ALL")))
 
-# Promoter and enhancer anchors are paired within each loop, so use McNemar's test.
-paired.mat <- table(
-  promoter_ATAC = promoter.hits,
-  enhancer_ATAC = enhancer.hits
+################################################################################
+# 4. Build chromosome/resolution/distance-matched Hi-C anchor controls
+################################################################################
+
+# Both anchors from loops lacking direct promoter/TSS evidence form the control pool.
+df.promoter.free.control.pool <- bind_rows(
+  df.loop.resource %>%
+    filter(n_direct_anchor_sides == 0L) %>%
+    transmute(
+      control_loop_id = loop_id,
+      resolution,
+      anchor_side = "anchor1",
+      anchor_chr = chr1,
+      anchor_start = start1,
+      anchor_end = end1,
+      loop_distance
+    ),
+  df.loop.resource %>%
+    filter(n_direct_anchor_sides == 0L) %>%
+    transmute(
+      control_loop_id = loop_id,
+      resolution,
+      anchor_side = "anchor2",
+      anchor_chr = chr2,
+      anchor_start = start2,
+      anchor_end = end2,
+      loop_distance
+    )
+) %>%
+  mutate(loop_id = control_loop_id) %>%
+  add_distance_match_bin() %>%
+  measure_non_tss_atac() %>%
+  arrange(control_loop_id, anchor_side)
+
+exact.pool.index <- split(
+  seq_len(nrow(df.promoter.free.control.pool)),
+  df.promoter.free.control.pool$exact_match_key
 )
-print(paired.mat)
-mt <- mcnemar.test(paired.mat)
-print(str_c("McNemar p-value: ", mt$p.value))
-print(str_c("Both anchors ATAC+: ", sum(promoter.hits & enhancer.hits)))
-print(str_c("Promoter-only ATAC+: ", sum(promoter.hits & !enhancer.hits)))
-print(str_c("Enhancer-only ATAC+: ", sum(!promoter.hits & enhancer.hits)))
-print(str_c("Neither anchor ATAC+: ", sum(!promoter.hits & !enhancer.hits)))
+fallback.pool.index <- split(
+  seq_len(nrow(df.promoter.free.control.pool)),
+  df.promoter.free.control.pool$fallback_match_key
+)
+relaxed.pool.index <- split(
+  seq_len(nrow(df.promoter.free.control.pool)),
+  df.promoter.free.control.pool$relaxed_match_key
+)
 
-####################################################
-# 6. Permutation test: random genomic region vs ATAC overlap
-####################################################
-# Load chromosome sizes to prevent out-of-bounds shifting
-path.chrom.sizes <- file.path(dropbox, "data/tracks/rn7.chrom.sizes")
-if (file.exists(path.chrom.sizes)) {
-  chrom.sizes <- read_tsv(path.chrom.sizes, col_names = c("chr", "size"), show_col_types = FALSE)
-  # Set seqlengths for gr.enhancer based on matching chromosomes
-  n.before.seqfilter <- length(gr.enhancer)
-  seqlevels(gr.enhancer) <- intersect(seqlevels(gr.enhancer), chrom.sizes$chr)
-  seqlengths(gr.enhancer) <- chrom.sizes$size[match(names(seqlengths(gr.enhancer)), chrom.sizes$chr)]
-  n.after.seqfilter <- length(gr.enhancer)
-  print(str_c("Anchors before/after seqlengths filter: ", n.before.seqfilter, " / ", n.after.seqfilter))
+df.match.availability <- df.observed.metric %>%
+  count(
+    exact_match_key,
+    fallback_match_key,
+    relaxed_match_key,
+    anchor_chr,
+    resolution,
+    anchor_side,
+    distance_match_bin,
+    name = "n_observed_anchors"
+  ) %>%
+  mutate(
+    n_exact_control_candidates = map_int(
+      exact_match_key,
+      ~ length(exact.pool.index[[.x]])
+    ),
+    n_fallback_control_candidates = map_int(
+      fallback_match_key,
+      ~ length(fallback.pool.index[[.x]])
+    ),
+    n_relaxed_control_candidates = map_int(
+      relaxed_match_key,
+      ~ length(relaxed.pool.index[[.x]])
+    ),
+    exact_match_available = n_exact_control_candidates > 0L,
+    fallback_match_available = n_fallback_control_candidates > 0L,
+    relaxed_match_available = n_relaxed_control_candidates > 0L
+  ) %>%
+  arrange(anchor_chr, resolution, anchor_side, distance_match_bin)
+
+assert_analysis_condition(
+  all(df.match.availability$relaxed_match_available),
+  paste0(
+    "At least one observed stratum lacks a chromosome/resolution-matched ",
+    "promoter-free Hi-C control."
+  )
+)
+
+################################################################################
+# 5. Run paired matched-null permutations
+################################################################################
+
+# Each permutation uses an independent deterministic seed. On macOS/Linux,
+# mclapply parallelizes permutations without changing their returned order.
+run_one_atac_null_permutation <- function(permutation.i) {
+  set.seed(random.seed + permutation.i)
+
+  df.matched.control <- sample_matched_hic_controls(
+    df.observed = df.observed.metric,
+    df.control.pool = df.promoter.free.control.pool,
+    exact.pool.index = exact.pool.index,
+    fallback.pool.index = fallback.pool.index,
+    relaxed.pool.index = relaxed.pool.index
+  )
+  df.relocated.control <- relocate_loop_pairs(df.observed.metric) %>%
+    measure_non_tss_atac()
+
+  bind_rows(
+    summarise_one_permutation(
+      df.observed = df.observed.metric,
+      df.control = df.matched.control,
+      permutation = permutation.i,
+      null.method = "matched_HiC_anchor"
+    ),
+    summarise_one_permutation(
+      df.observed = df.observed.metric,
+      df.control = df.relocated.control,
+      permutation = permutation.i,
+      null.method = "rigid_loop_pair_relocation"
+    )
+  )
 }
 
-# Recalculate observed rate AFTER seqlevels filtering (to match permutation base population)
-set.seed(42)
-obs.enh.hits.filtered <- countOverlaps(gr.enhancer, gr.atac.union, minoverlap = 50) > 0
-obs.enh.pct <- sum(obs.enh.hits.filtered) / length(gr.enhancer)
-print(str_c("Observed enhancer ATAC overlap (post-filter): ", sum(obs.enh.hits.filtered), " / ", length(gr.enhancer), " (", round(obs.enh.pct * 100, 1), "%)" ))
+message(
+  "Running ", n.permutations,
+  " ATAC matched-null permutations on ", n.cores, " core(s)."
+)
+permutation.results <- parallel::mclapply(
+  seq_len(n.permutations),
+  run_one_atac_null_permutation,
+  mc.cores = n.cores,
+  mc.preschedule = FALSE
+)
+df.atac.null.permutation <- bind_rows(permutation.results)
 
-# Random shift within chromosome boundaries
-perm.pct <- map_dbl(1:1000, function(i) {
-  g <- GenomicRanges::shift(
-    gr.enhancer,
-    sample(-5e6:5e6, length(gr.enhancer), replace = TRUE)
+assert_analysis_condition(
+  nrow(df.atac.null.permutation) ==
+    n.permutations * 2L * 4L * 4L,
+  "ATAC matched-null permutation output has an unexpected row count."
+)
+
+################################################################################
+# 6. Summarise enrichment, matched odds ratios, and empirical P-values
+################################################################################
+
+df.atac.matched.null.summary <- df.atac.null.permutation %>%
+  group_by(null_method, resolution, metric) %>%
+  summarise(
+    n_permutations = n(),
+    n_pairs = dplyr::first(n_pairs),
+    observed_rate = dplyr::first(observed_rate),
+    mean_null_rate = mean(null_rate),
+    sd_null_rate = sd(null_rate),
+    null_rate_q025 = quantile(null_rate, 0.025),
+    null_rate_q975 = quantile(null_rate, 0.975),
+    absolute_rate_difference = observed_rate - mean_null_rate,
+    enrichment_ratio = observed_rate / mean_null_rate,
+    median_paired_odds_ratio = median(paired_odds_ratio),
+    paired_odds_ratio_q025 = quantile(paired_odds_ratio, 0.025),
+    paired_odds_ratio_q975 = quantile(paired_odds_ratio, 0.975),
+    empirical_p_greater_equal = (
+      1 + sum(null_rate >= observed_rate)
+    ) / (
+      n() + 1
+    ),
+    .groups = "drop"
+  ) %>%
+  arrange(
+    null_method,
+    factor(resolution, levels = c("5K", "10K", "25K", "ALL")),
+    metric
   )
-  g <- trim(g) # Trim regions that go beyond chromosome boundaries
-  g <- g[width(g) >= 50] # Remove regions too small to pass minoverlap threshold
-  sum(countOverlaps(g, gr.atac.union, minoverlap = 50) > 0) / length(g)
+
+# Record exact matching coverage independently from random control selection.
+df.atac.matched.hic.control.quality <- df.match.availability %>%
+  summarise(
+    n_observed_with_exact_match = sum(
+      n_observed_anchors[exact_match_available]
+    ),
+    n_observed_requiring_side_relaxed_fallback =
+      sum(n_observed_anchors[!exact_match_available & fallback_match_available]),
+    n_observed_requiring_distance_bin_relaxation = sum(
+      n_observed_anchors[!fallback_match_available]
+    ),
+    n_match_strata = n(),
+    n_exact_match_strata = sum(exact_match_available),
+    n_fallback_match_strata = sum(!exact_match_available),
+    n_observed_anchors = sum(n_observed_anchors)
+  ) %>%
+  mutate(
+    pct_observed_with_exact_match = round(
+      100 * n_observed_with_exact_match / n_observed_anchors,
+      3
+    )
+  )
+
+################################################################################
+# 7. Save auditable tables and the resolution-stratified comparison figure
+################################################################################
+
+df.atac.matched.null.method <- tribble(
+  ~analysis_item, ~definition,
+  "analysis_population",
+  paste0(
+    "All pooled loops with direct promoter/TSS support at exactly one anchor; ",
+    "the opposite anchor is evaluated regardless of its ATAC status."
+  ),
+  "ATAC_source",
+  "Duttke et al. 2022 rat prefrontal-cortex snATAC peaks lifted to rn7.",
+  "TSS_exclusion",
+  paste0(
+    "Union of strand-aware Ensembl transcript TSS and EPD TSS positions, ",
+    "expanded by +/-1 kb and removed from the reduced ATAC union."
+  ),
+  "primary_absolute_overlap",
+  ">=50 bp TSS-excluded ATAC overlap at the candidate anchor.",
+  "threshold_sensitivity",
+  paste0(
+    ">=1 bp, >=50 bp, >=0.5%, and >=1% of available non-TSS anchor bases."
+  ),
+  "rigid_loop_pair_relocation",
+  paste0(
+    "The complete loop geometry is relocated uniformly within the same ",
+    "chromosome, preserving resolution, anchor widths, and loop distance."
+  ),
+  "matched_HiC_anchor",
+  paste0(
+    "Promoter-free pooled Hi-C anchors matched on chromosome, resolution, ",
+    "anchor side, and loop-distance bin; side is relaxed only if necessary."
+  ),
+  "empirical_p_value",
+  "(1 + permutations with null rate >= observed rate) / (B + 1).",
+  "interpretation",
+  paste0(
+    "ATAC enrichment supports non-TSS open chromatin but does not validate ",
+    "enhancer function or a promoter-enhancer interaction."
+  )
+)
+
+plot.atac.null <- df.atac.matched.null.summary %>%
+  filter(metric == "atac_overlap_ge50") %>%
+  mutate(
+    resolution = factor(resolution, levels = c("5K", "10K", "25K", "ALL")),
+    null_method = recode(
+      null_method,
+      matched_HiC_anchor = "Matched promoter-free Hi-C anchors",
+      rigid_loop_pair_relocation = "Rigid within-chromosome loop relocation"
+    )
+  ) %>%
+  ggplot(aes(x = resolution)) +
+  geom_linerange(
+    aes(ymin = null_rate_q025, ymax = null_rate_q975),
+    color = "grey45",
+    linewidth = 0.8
+  ) +
+  geom_point(
+    aes(y = mean_null_rate, shape = "Null mean"),
+    color = "grey25",
+    size = 2.5
+  ) +
+  geom_point(
+    aes(y = observed_rate, shape = "Observed"),
+    color = "#B2182B",
+    size = 2.8
+  ) +
+  facet_wrap(vars(null_method)) +
+  scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
+  scale_shape_manual(values = c("Null mean" = 1, "Observed" = 16)) +
+  labs(
+    x = "HiCCUPS resolution",
+    y = "Candidate anchors with >=50 bp non-TSS ATAC overlap",
+    shape = NULL
+  ) +
+  theme_bw(base_size = 10) +
+  theme(
+    panel.grid.minor = element_blank(),
+    legend.position = "bottom"
+  )
+
+output.tables <- list(
+  revised_atac_threshold_sensitivity_by_resolution =
+    df.atac.threshold.sensitivity.by.resolution,
+  revised_atac_matched_null_summary = df.atac.matched.null.summary,
+  revised_atac_matched_null_permutation = df.atac.null.permutation,
+  revised_atac_matched_null_method = df.atac.matched.null.method,
+  revised_atac_matched_control_quality = df.atac.matched.hic.control.quality,
+  revised_atac_matched_control_strata = df.match.availability,
+  revised_atac_matched_null_run_metadata = tibble(
+    analysis_release = "resubmission-2026-07-28",
+    n_permutations = n.permutations,
+    random_seed = random.seed,
+    n_cores = n.cores,
+    primary_overlap_threshold_bp = atac.minimum.overlap.bp,
+    tss_exclusion_flank_bp = tss.exclusion.flank.bp,
+    input_loop_resource = loop.resource.file,
+    input_direct_assignment = direct.assignment.file,
+    input_atac_cache = atac.cache.file,
+    completed_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
+  )
+)
+
+walk2(names(output.tables), output.tables, function(file.stem, table) {
+  write_tsv(table, file.path(output.dir, paste0(file.stem, ".tsv")))
 })
 
-pm <- mean(perm.pct)
-ps <- sd(perm.pct)
-zs <- (obs.enh.pct - pm) / ps
-pp <- mean(perm.pct >= obs.enh.pct)
-
-print(str_c("Enhancer anchor ATAC overlap rate (obs): ", round(obs.enh.pct * 100, 1), " %"))
-print(str_c("Permutation mean: ", round(pm * 100, 1), " %"))
-print(str_c("Z-score: ", round(zs, 3)))
-print(str_c("Empirical p: ", pp))
-
-####################################################
-# 7. ATAC overlap by category (CP vs CT)
-####################################################
-### Promoter anchor category
-for (cat_val in c("CP", "CT")) {
-  idx <- gr.promoter$category == cat_val
-  n <- sum(idx)
-  h <- sum(promoter.hits[idx])
-  print(str_c(cat_val, " : ", h, " / ", n, " (", sprintf("%.1f%%", 100 * h / n), ")"))
-}
-
-### Enhancer anchor category
-for (cat_val in c("CP", "CT")) {
-  idx <- gr.enhancer$category == cat_val
-  n <- sum(idx)
-  h <- sum(enhancer.hits[idx])
-  print(str_c(cat_val, " : ", h, " / ", n, " (", sprintf("%.1f%%", 100 * h / n), ")"))
-}
-
-####################################################
-# 8. Duttke2022 snATAC single-sample summary
-####################################################
-# (Single sample — no per-sample breakdown needed)
-print("Duttke2022_snATAC_PFC (single sample = union)")
-print(str_c("  Promoter: ", n.promoter.atac, " / ", n.promoter, " (", sprintf("%.1f%%", pct.promoter), ")"))
-print(str_c("  Enhancer: ", n.enhancer.atac, " / ", n.enhancer, " (", sprintf("%.1f%%", pct.enhancer), ")"))
-
-####################################################
-# 9. Save results
-####################################################
-df.result.summary <- tibble(
-  anchor_type      = c("promoter", "enhancer"),
-  n_anchors        = c(n.promoter, n.enhancer),
-  n_atac_overlap   = c(n.promoter.atac, n.enhancer.atac),
-  pct_atac_overlap = c(pct.promoter, pct.enhancer),
-  mcnemar_p        = c(NA, mt$p.value),
-  both_atac        = c(NA, sum(promoter.hits & enhancer.hits)),
-  promoter_only    = c(NA, sum(promoter.hits & !enhancer.hits)),
-  enhancer_only    = c(NA, sum(!promoter.hits & enhancer.hits)),
-  neither_atac     = c(NA, sum(!promoter.hits & !enhancer.hits)),
-  perm_z           = c(NA, round(zs, 3)),
-  perm_p           = c(NA, pp)
+ggsave(
+  file.path(output.dir, "revised_atac_observed_vs_matched_null.pdf"),
+  plot.atac.null,
+  width = 8,
+  height = 4.2,
+  device = "pdf"
 )
-write_csv(df.result.summary, file.path(path.dir.out, "atac_loop_anchor_overlap_summary.csv"))
-write_csv(df.resolution.summary, file.path(path.dir.out, "atac_loop_anchor_overlap_by_resolution.csv"))
-
-# Detailed ATAC overlap by anchor
-df.detail <- tibble(
-  loop_id = c(gr.promoter$loop_id, gr.enhancer$loop_id),
-  anchor_type = c(
-    rep("promoter", length(gr.promoter)),
-    rep("enhancer", length(gr.enhancer))
-  ),
-  category = c(gr.promoter$category, gr.enhancer$category),
-  resolution = c(gr.promoter$resolution, gr.enhancer$resolution),
-  atac_overlap = c(promoter.hits, enhancer.hits)
+ggsave(
+  file.path(output.dir, "revised_atac_observed_vs_matched_null.png"),
+  plot.atac.null,
+  width = 8,
+  height = 4.2,
+  dpi = 300,
+  bg = "white"
 )
-write_csv(df.detail, file.path(path.dir.out, "atac_loop_anchor_overlap_detail.csv"))
 
-# Category (C=CTCF structural, P=Promoter functional, T=TSS functional)
-#                           Promoter Anchor       Enhancer Anchor
-# CP (CTCF + Promoter)     4,482/4,960 (90.4%)   4,445/4,960 (89.6%)
-# CT (CTCF + TSS)          8,968/10,125 (88.6%)  8,970/10,125 (88.6%)
+writeLines(
+  capture.output(sessionInfo()),
+  file.path(output.dir, "revised_atac_matched_null_session_info.txt")
+)
 
-####################################################
-# additional1: TSS Exclusion from Enhancer Anchors
-#
-# [Rationale & Conclusion]
-# - Rationale: Since Enhancer Anchors are large regions, they may incidentally contain TSSs of nearby genes.
-#   Reviewers might argue that the high ATAC-seq signals observed are merely artifacts (contamination/false positives) from these neighboring TSSs.
-# - Conclusion: After excluding known TSS regions (±1kb), most enhancer anchors still retain
-#   ATAC-seq support, arguing that the overlap is not driven only by nearby TSS contamination.
-# - Impact: This is a sensitivity analysis, not direct experimental validation of P-E activity.
-####################################################
-# 10. Load TSS information used in enhancer_promoter_interaction.R
-cat("\nRunning additional1: TSS Exclusion Analysis\n")
-path.rds.tss <- file.path(dropbox, "r_files/rds/df.tss.ensembl.rds")
-
-if(file.exists(path.rds.tss)) {
-  df.tss <- readRDS(path.rds.tss)
-  
-  # Convert to GRanges
-  gr.tss <- GRanges(
-    seqnames = df.tss$chr,
-    ranges = IRanges(df.tss$start, df.tss$end),
-    strand = df.tss$strand
+# Refresh the release manifest after adding the separately generated null-model
+# files so every official output has a size and SHA-256 checksum.
+sha256_file <- function(path) {
+  checksum.output <- system2(
+    "shasum",
+    args = c("-a", "256", shQuote(path)),
+    stdout = TRUE,
+    stderr = TRUE
   )
-  
-  # Define TSS exclusion region (± 1kb from TSS)
-  # using promoters() which correctly accounts for strand
-  tss_regions <- promoters(gr.tss, upstream = 1000, downstream = 1000)
-  tss_regions <- GenomicRanges::reduce(tss_regions, ignore.strand = TRUE)
-  
-  # Exclude TSS-supported ATAC signal first, then test original enhancer anchors.
-  # This preserves the original anchor identity and avoids remapping fragments by overlap.
-  gr.atac.non_tss <- GenomicRanges::setdiff(gr.atac.union, tss_regions, ignore.strand = TRUE)
-  gr.enhancer.pure <- GenomicRanges::setdiff(gr.enhancer, tss_regions, ignore.strand = TRUE)
-  
-  # --- Fragment-level analysis ---
-  enhancer.pure.hits <- countOverlaps(gr.enhancer.pure, gr.atac.non_tss, minoverlap = 50) > 0
-  n.enhancer.pure <- length(gr.enhancer.pure)
-  n.enhancer.pure.atac <- sum(enhancer.pure.hits)
-  pct.enhancer.pure <- round(100 * n.enhancer.pure.atac / n.enhancer.pure, 1)
-  
-  print(str_c("Original Enhancer ATAC overlap: ", sprintf("%.1f%%", pct.enhancer)))
-  print(str_c("[Fragment-level] Pure Enhancer ATAC overlap: ", n.enhancer.pure.atac, " / ", n.enhancer.pure, " (", sprintf("%.1f%%", pct.enhancer.pure), ")"))
-  
-  # --- Per-anchor analysis ---
-  # For each original enhancer anchor, check if any ATAC peak remains outside known TSS regions.
-  hits.tss <- findOverlaps(gr.enhancer, tss_regions, ignore.strand = TRUE)
-  tss.bp.by.anchor <- numeric(length(gr.enhancer))
-  if (length(hits.tss) > 0) {
-    tss.overlaps <- pintersect(
-      gr.enhancer[queryHits(hits.tss)],
-      tss_regions[subjectHits(hits.tss)],
-      ignore.strand = TRUE
-    )
-    tss.bp.sum <- rowsum(width(tss.overlaps), group = queryHits(hits.tss), reorder = FALSE)
-    tss.bp.by.anchor[as.integer(rownames(tss.bp.sum))] <- tss.bp.sum[, 1]
+  checksum <- str_extract(checksum.output[[1]], "^[0-9a-fA-F]{64}")
+  if (is.na(checksum)) {
+    stop("Unable to compute SHA-256 for: ", path, call. = FALSE)
   }
-  anchor.has.pure.frag <- tss.bp.by.anchor < width(gr.enhancer)
-  anchor.has.pure.atac <- anchor.has.pure.frag &
-    (countOverlaps(gr.enhancer, gr.atac.non_tss, minoverlap = 50) > 0)
-  n.anchor.with.pure <- sum(anchor.has.pure.frag)
-  n.anchor.pure.atac <- sum(anchor.has.pure.atac)
-  pct.anchor.pure.atac <- round(100 * n.anchor.pure.atac / n.anchor.with.pure, 1)
-  
-  print(str_c("[Per-anchor] Anchors with pure fragments: ", n.anchor.with.pure, " / ", length(gr.enhancer)))
-  print(str_c("[Per-anchor] Anchors with pure ATAC overlap: ", n.anchor.pure.atac, " / ", n.anchor.with.pure, " (", sprintf("%.1f%%", pct.anchor.pure.atac), ")"))
-  
-  df.tss.exclusion.summary <- tibble(
-    analysis = c("fragment_level", "per_anchor"),
-    denominator = c(n.enhancer.pure, n.anchor.with.pure),
-    n_atac_overlap = c(n.enhancer.pure.atac, n.anchor.pure.atac),
-    pct_atac_overlap = c(pct.enhancer.pure, pct.anchor.pure.atac)
-  )
-  write_csv(df.tss.exclusion.summary, file.path(path.dir.out, "atac_tss_exclusion_summary.csv"))
-} else {
-  print("TSS RDS file not found. Skipping TSS exclusion analysis.")
+  str_to_lower(checksum)
 }
 
-# [Caveat Notes for Methodology]
-# 1. 1bp overlap (minoverlap=1) can be overly permissive, easily resulting in false positives for large Hi-C anchors. We applied minoverlap=50 to ensure robust overlaps.
-# 2. High ATAC overlap in Enhancer anchors might be inflated by the presence of cryptic promoters or TSSs of other genes within the large enhancer anchor regions. The TSS Exclusion analysis (#additional1) addresses this by removing known TSS regions from enhancer anchors before calculating overlap.
+release.output.files <- setdiff(
+  list.files(output.dir, all.files = FALSE, no.. = TRUE),
+  "resubmit_output_manifest.tsv"
+)
+release.output.paths <- file.path(output.dir, release.output.files)
+df.output.manifest <- tibble(
+  output_file = release.output.files,
+  output_path = release.output.paths,
+  file_exists = file.exists(release.output.paths),
+  file_size_bytes = as.numeric(file.info(release.output.paths)$size),
+  sha256 = map_chr(release.output.paths, sha256_file),
+  generated_by = if_else(
+    str_starts(output_file, "revised_atac_matched") |
+      str_starts(output_file, "revised_atac_threshold") |
+      output_file %in% c(
+        "revised_atac_observed_vs_matched_null.pdf",
+        "revised_atac_observed_vs_matched_null.png"
+      ),
+    "atac_validation.R",
+    "promoter_enhancer_interaction_resubmit.R"
+  ),
+  analysis_release = "resubmission-2026-07-28",
+  generated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
+)
+write_tsv(
+  df.output.manifest,
+  file.path(output.dir, "resubmit_output_manifest.tsv")
+)
+
+message("ATAC overlap threshold sensitivity by resolution:")
+print(df.atac.threshold.sensitivity.by.resolution)
+message("ATAC matched-null enrichment summary:")
+print(df.atac.matched.null.summary)
+message("Matched Hi-C control availability:")
+print(df.atac.matched.hic.control.quality)
+message("Resubmission ATAC matched-null analysis completed.")

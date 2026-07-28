@@ -9,6 +9,44 @@ results/
 # local translated notes
 *-kr.*
 
+# Rebuildable coordinate-preparation cache for the resubmission analysis
+r_files/revision/cache_data/
+
+# Rebuildable resubmission outputs; retain only compact release summaries and
+# provenance records in Git. Large resources and permutation-level tables are
+# reproducible from the tracked scripts and are identified by the manifest.
+r_files/revision/resubmit_outputs/*
+!r_files/revision/resubmit_outputs/resubmit_output_manifest.tsv
+!r_files/revision/resubmit_outputs/source_data_versions.tsv
+!r_files/revision/resubmit_outputs/coordinate_system_audit.tsv
+!r_files/revision/resubmit_outputs/direct_promoter_tss_summary.tsv
+!r_files/revision/resubmit_outputs/dual_promoter_atac_directional_category_definitions.tsv
+!r_files/revision/resubmit_outputs/dual_promoter_atac_directional_summary.tsv
+!r_files/revision/resubmit_outputs/revised_loop_category_definitions.tsv
+!r_files/revision/resubmit_outputs/revised_loop_category_summary.tsv
+!r_files/revision/resubmit_outputs/revised_loop_category_by_resolution.tsv
+!r_files/revision/resubmit_outputs/revised_atac_matched_null_summary.tsv
+!r_files/revision/resubmit_outputs/revised_atac_matched_null_method.tsv
+!r_files/revision/resubmit_outputs/revised_atac_matched_control_quality.tsv
+!r_files/revision/resubmit_outputs/revised_atac_matched_null_run_metadata.tsv
+!r_files/revision/resubmit_outputs/revised_atac_threshold_sensitivity_by_resolution.tsv
+!r_files/revision/resubmit_outputs/revised_assignment_pipeline_status.tsv
+!r_files/revision/resubmit_outputs/revised_go_input_summary.tsv
+!r_files/revision/resubmit_outputs/revised_go_significance_summary.tsv
+!r_files/revision/resubmit_outputs/revised_downstream_analysis_definitions.tsv
+!r_files/revision/resubmit_outputs/gene_rank_sensitivity_correlations.tsv
+!r_files/revision/resubmit_outputs/approximate_loop_locus_summary.tsv
+!r_files/revision/resubmit_outputs/depth_qc_summary.tsv
+!r_files/revision/resubmit_outputs/depth_loop_correlation_by_resolution.tsv
+!r_files/revision/resubmit_outputs/depth_analysis_interpretation.tsv
+!r_files/revision/resubmit_outputs/resubmit_session_info.txt
+
+# Local comparison products and rendered ATAC-validation intermediates
+r_files/revision/legacy_reanalysis_outputs/
+r_files/atac_validation/atac_validation_cache/
+r_files/atac_validation/atac_validation.html
+r_files/atac_validation/*.csv
+
 # local secrets (do not commit)
 r_files/.env.alphagenome.local
 
@@ -43,3 +81,27 @@ r_files/h3_GWAS/**/results/
 r_files/h3_GWAS/**/logs/
 r_files/h3_GWAS/**/magma_inputs/
 r_files/h3_GWAS/**/reports/repeated_gene_locus_figures/
+
+# h5_QTL local workflow notes and generated analysis artifacts
+r_files/h5_QTL/workflow.md
+r_files/h5_QTL/**/*.genes.out
+r_files/h5_QTL/**/*.genes.raw
+r_files/h5_QTL/**/*.log
+r_files/h5_QTL/**/*.stdout.log
+r_files/h5_QTL/**/*.mlma
+r_files/h5_QTL/**/*.magma.tsv
+r_files/h5_QTL/**/*.magma_pval.tsv
+r_files/h5_QTL/**/*.csv
+r_files/h5_QTL/**/*.tsv
+r_files/h5_QTL/**/*.bed
+r_files/h5_QTL/**/*.bim
+r_files/h5_QTL/**/*.fam
+r_files/h5_QTL/**/*.zip
+r_files/h5_QTL/**/*.pdf
+r_files/h5_QTL/**/*.annot
+r_files/h5_QTL/**/*.txt
+r_files/h5_QTL/**/data/
+r_files/h5_QTL/**/data
+r_files/h5_QTL/**/results/
+r_files/h5_QTL/**/logs/
+r_files/h5_QTL/**/magma_inputs/
