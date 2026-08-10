@@ -47,6 +47,9 @@ r_files/atac_validation/atac_validation_cache/
 r_files/atac_validation/atac_validation.html
 r_files/atac_validation/*.csv
 
+# Rebuildable matched full-depth/140M/250M sensitivity outputs
+r_files/downsampling_140M_250M_outputs/
+
 # local secrets (do not commit)
 r_files/.env.alphagenome.local
 

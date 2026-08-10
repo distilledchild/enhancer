@@ -1,9 +1,8 @@
 # lintr: disable
 
 # Compare the original full-depth HiCCUPS calls with the MAPQ >=30, 140M-contact
-# downsampled calls. The comparison is always restricted to samples with a
-# complete downsampled 5/10/25-kb HiCCUPS result, so DE8BA is skipped until its
-# three postprocessed files and merged_loops.bedpe are available.
+# downsampled calls. The comparison is restricted to samples with complete
+# downsampling QC, .hic provenance, and 5/10/25-kb HiCCUPS outputs.
 
 current_script_path <- function() {
   file.args <- grep(
@@ -188,6 +187,12 @@ downsample.root <- resolve_downsample_root(c(
   path.expand(
     paste0(
       "~/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/",
+      "My Drive/juicer_downsample_q30_140M_250M/140M"
+    )
+  ),
+  path.expand(
+    paste0(
+      "~/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/",
       "My Drive/juicer_downsample_q30_140M"
     )
   ),
@@ -197,15 +202,35 @@ downsample.root <- resolve_downsample_root(c(
   file.path(dirname(r.files.dir), "data", "juicer_downsample_q30_140M")
 ))
 
-coord.cache.dir <- resolve_existing_directory(
-  c(
-    Sys.getenv("DOWNSAMPLING_COORD_CACHE_DIR", unset = ""),
-    file.path(revision.dir, "cache_data"),
-    path.expand(
-      "~/dropbox/Gateway_to_Hao/enhancer/r_files/revision/cache_data"
-    )
-  ),
-  "coordinate-normalization cache"
+required.cache.files <- c(
+  "df.ensembl.transcript.coordinate.normalized.rds",
+  "df.promoter.annotation.coordinate.normalized.rds",
+  "gr.atac.rds"
+)
+coord.cache.candidates <- unique(path.expand(c(
+  Sys.getenv("DOWNSAMPLING_COORD_CACHE_DIR", unset = ""),
+  file.path(revision.dir, "cache_data"),
+  "~/dropbox/Gateway_to_Hao/enhancer/r_files/revision/cache_data"
+)))
+coord.cache.candidates <- coord.cache.candidates[
+  nzchar(coord.cache.candidates) & dir.exists(coord.cache.candidates)
+]
+coord.cache.complete <- vapply(
+  coord.cache.candidates,
+  function(path) all(file.exists(file.path(path, required.cache.files))),
+  logical(1L)
+)
+if (!any(coord.cache.complete)) {
+  stop(
+    "Cannot locate a complete coordinate-normalization cache. Set ",
+    "DOWNSAMPLING_COORD_CACHE_DIR.",
+    call. = FALSE
+  )
+}
+coord.cache.dir <- normalizePath(
+  coord.cache.candidates[coord.cache.complete][[1]],
+  winslash = "/",
+  mustWork = TRUE
 )
 
 # Write beside the shared r_files directory on other computers, while preferring
@@ -257,6 +282,17 @@ build_sample_file_status <- function(df.metadata, full.root, down.root) {
         downsample_result_dir,
         "merged_loops.bedpe"
       ),
+      downsampling_qc_file = file.path(
+        down.root, sample, "downsampling_qc.tsv"
+      ),
+      hic_creation_qc_file = file.path(
+        down.root, sample, "hic_creation_qc.tsv"
+      ),
+      hic_file = file.path(
+        down.root,
+        sample,
+        str_c(sample, "_inter_30_140M_seed", seed, ".hic")
+      ),
       downsample_postprocessed_5k = file.path(
         downsample_result_dir,
         "postprocessed_pixels_5000.bedpe"
@@ -278,12 +314,21 @@ build_sample_file_status <- function(df.metadata, full.root, down.root) {
         file.info(downsample_postprocessed_10k)$size > 0L,
       downsample_25k_ready = file.exists(downsample_postprocessed_25k) &
         file.info(downsample_postprocessed_25k)$size > 0L,
+      provenance_ready = file.exists(downsampling_qc_file) &
+        file.info(downsampling_qc_file)$size > 0L &
+        file.exists(hic_creation_qc_file) &
+        file.info(hic_creation_qc_file)$size > 0L &
+        file.exists(hic_file) & file.info(hic_file)$size > 0L,
       analysis_ready = full_file_ready & downsample_merged_ready &
         downsample_5k_ready & downsample_10k_ready & downsample_25k_ready,
       status = if_else(
-        analysis_ready,
+        analysis_ready & provenance_ready,
         "included_complete_5k10k25k",
-        "excluded_until_complete_5k10k25k"
+        if_else(
+          analysis_ready,
+          "analysis_ready_but_provenance_incomplete",
+          "excluded_until_complete_5k10k25k"
+        )
       )
     )
 }
@@ -306,6 +351,20 @@ safe_spearman <- function(x, y) {
     return(NA_real_)
   }
   suppressWarnings(cor(x[valid], y[valid], method = "spearman"))
+}
+
+# Return the sample size and asymptotic P value for a descriptive Spearman test.
+safe_spearman_test <- function(x, y) {
+  valid <- is.finite(x) & is.finite(y)
+  n.valid <- sum(valid)
+  if (n.valid < 3L || length(unique(x[valid])) < 2L ||
+      length(unique(y[valid])) < 2L) {
+    return(tibble(n_spearman = n.valid, spearman_p_value = NA_real_))
+  }
+  result <- suppressWarnings(cor.test(
+    x[valid], y[valid], method = "spearman", exact = FALSE
+  ))
+  tibble(n_spearman = n.valid, spearman_p_value = result$p.value)
 }
 
 # Measure position-tolerant recovery without changing the exact-call resource.
@@ -348,12 +407,16 @@ summarise_hiccups_radius_recovery <- function(df.full, df.downsample) {
         ))
       }
 
+      common.seqinfo <- Seqinfo(seqnames = union(
+        unique(df.full.i$chr1), unique(df.down.i$chr1)
+      ))
       gr.full.anchor1 <- GRanges(
         seqnames = df.full.i$chr1,
         ranges = IRanges(
           start = df.full.i$hiccups_centroid1_1based,
           end = df.full.i$hiccups_centroid1_1based
-        )
+        ),
+        seqinfo = common.seqinfo
       )
       gr.down.anchor1.window <- GRanges(
         seqnames = df.down.i$chr1,
@@ -363,7 +426,8 @@ summarise_hiccups_radius_recovery <- function(df.full, df.downsample) {
             df.down.i$hiccups_centroid1_1based - match.radius.bp
           ),
           end = df.down.i$hiccups_centroid1_1based + match.radius.bp
-        )
+        ),
+        seqinfo = common.seqinfo
       )
       hits <- findOverlaps(
         gr.full.anchor1,
@@ -813,8 +877,10 @@ df.sample.status <- build_sample_file_status(
   downsample.root
 )
 
-df.completed.sample <- df.sample.status %>% filter(analysis_ready)
-df.pending.sample <- df.sample.status %>% filter(!analysis_ready)
+df.completed.sample <- df.sample.status %>%
+  filter(analysis_ready, provenance_ready)
+df.pending.sample <- df.sample.status %>%
+  filter(!analysis_ready | !provenance_ready)
 
 if (nrow(df.completed.sample) == 0L) {
   stop("No complete 5/10/25-kb downsampled HiCCUPS result was found.", call. = FALSE)
@@ -831,6 +897,40 @@ if (nrow(df.pending.sample) > 0L) {
     "Pending samples excluded until complete: ",
     str_c(df.pending.sample$sample, collapse = ", ")
   )
+}
+
+# Confirm that every included QC record matches the sample, seed, source depth,
+# and 140M target encoded in the analysis metadata.
+df.downsampling.qc <- map_dfr(seq_len(nrow(df.completed.sample)), function(i) {
+  row <- df.completed.sample[i, ]
+  qc <- readr::read_tsv(
+    row$downsampling_qc_file,
+    col_types = cols(
+      sample = col_character(), seed = col_double(),
+      source_contacts = col_double(), downsampled_contacts = col_double(),
+      output = col_character()
+    ),
+    show_col_types = FALSE
+  )
+  if (nrow(qc) != 1L) {
+    stop("Expected one QC row in ", row$downsampling_qc_file, call. = FALSE)
+  }
+  qc %>%
+    transmute(
+      sample,
+      seed = as.integer(seed),
+      source_contacts,
+      target_contacts = downsampled_contacts,
+      source_output_on_hpc = output,
+      qc_matches_metadata = (
+        sample == row$sample & seed == row$seed &
+          source_contacts == row$source_contacts &
+          downsampled_contacts == target.contacts
+      )
+    )
+})
+if (any(!df.downsampling.qc$qc_matches_metadata)) {
+  stop("A 140M downsampling QC row does not match the metadata.", call. = FALSE)
 }
 
 full.file.metadata <- df.completed.sample %>%
@@ -918,6 +1018,10 @@ df.depth.loop.correlation <- df.sample.loop.count %>%
       source_contacts,
       n_loop_calls
     ),
+    spearman_p_value = safe_spearman_test(
+      source_contacts,
+      n_loop_calls
+    )$spearman_p_value,
     .groups = "drop"
   ) %>%
   arrange(resolution, condition)
@@ -1297,6 +1401,14 @@ df.pool.influence.correlation <- df.sample.pool.influence %>%
       source_contacts,
       n_pooled_calls_unique_to_sample
     ),
+    spearman_supported_p_value = safe_spearman_test(
+      source_contacts,
+      n_pooled_calls_supported
+    )$spearman_p_value,
+    spearman_unique_p_value = safe_spearman_test(
+      source_contacts,
+      n_pooled_calls_unique_to_sample
+    )$spearman_p_value,
     .groups = "drop"
   )
 
@@ -1352,8 +1464,31 @@ df.full.pool.depth.recovery <- df.full.pool.depth.support %>%
 # 7. Save compact tables, figures, and reproducibility metadata
 ################################################################################
 
+df.analysis.caveat <- tribble(
+  ~analysis_issue, ~interpretive_requirement,
+  "one_library_per_strain", paste0(
+    "Equalizing valid contacts does not create biological replication or ",
+    "separate strain effects from specimen- and library-specific effects."
+  ),
+  "single_random_seed", paste0(
+    "One downsampling realization was analyzed, so Monte Carlo variability ",
+    "from contact subsampling was not estimated."
+  ),
+  "valid_contacts_not_all_library_properties", paste0(
+    "The analysis controls the number of duplicate-removed MAPQ >=30 valid ",
+    "contacts, but not contact-distance composition or other library-quality ",
+    "differences."
+  ),
+  "five_kb_ignore_sparsity", paste0(
+    "HiCCUPS used --ignore-sparsity at 5/10/25 kb. The particularly low 5-kb ",
+    "call yield at 140M must be reported by resolution and interpreted as a ",
+    "depth-sensitivity result rather than evidence that 5-kb calls are absent."
+  )
+)
+
 output.tables <- list(
   downsampling_sample_status = df.sample.status,
+  downsampling_qc = df.downsampling.qc,
   downsampling_sample_loop_counts = df.sample.loop.count,
   downsampling_sample_loop_count_paired = df.sample.loop.count.paired,
   downsampling_loop_count_dispersion = df.loop.count.dispersion,
@@ -1376,7 +1511,8 @@ output.tables <- list(
   downsampling_sample_pool_influence = df.sample.pool.influence,
   downsampling_pool_influence_correlations = df.pool.influence.correlation,
   downsampling_pool_support_distribution = df.pool.support.distribution,
-  downsampling_full_pool_depth_recovery = df.full.pool.depth.recovery
+  downsampling_full_pool_depth_recovery = df.full.pool.depth.recovery,
+  downsampling_analysis_caveats = df.analysis.caveat
 )
 write_downsampling_tables(output.tables, output.dir)
 
@@ -1414,6 +1550,11 @@ df.method.definition <- tribble(
   "pooled_depth_influence", paste0(
     "Per-sample pooled-call support, sample-unique calls, support-count ",
     "distribution, and correlations with original contact depth are reported."
+  ),
+  "interpretation_limit", paste0(
+    "The all-ten 140M series is a depth-sensitivity analysis with one seed and ",
+    "one library per strain. Correlations are descriptive and do not establish ",
+    "strain-specific chromatin architecture."
   )
 )
 readr::write_tsv(
@@ -1516,8 +1657,11 @@ print(df.exact.recovery.summary)
 print(df.gene.count.stability.summary)
 
 ################################################################################
-# 8. Professor-requested 210M sensitivity analysis in eight eligible libraries
+# 8. Archived 210M prototype, superseded by the matched 250M analysis
 #
+# This block is retained only as analysis history and is never executed. The
+# production depth series is implemented in downsampling_140M_250M_comparison.R
+# with the same seven libraries at full depth, 140M, and 250M.
 # The 140M analysis above remains the all-library depth-normalization analysis.
 # This second analysis excludes 74AA and A2DB because their full-depth usable-
 # contact counts are below 210M. Full depth and 140M are rebuilt with the same
@@ -1531,6 +1675,8 @@ print(df.gene.count.stability.summary)
 # 5. Exact-call and approximate-locus library-support-count distributions.
 # 6. Recurrent/shared cores reproduced at both 140M and 210M.
 ################################################################################
+
+if (FALSE) {
 
 # Find an optional input root without interrupting the completed 140M analysis.
 resolve_optional_downsample_root <- function(candidates) {
@@ -2188,4 +2334,5 @@ if (is.na(downsample.210m.root)) {
     downsample.210m.root,
     depth.series.output.dir
   )
+}
 }

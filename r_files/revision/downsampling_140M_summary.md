@@ -1,5 +1,10 @@
 # 140M-Contact Downsampling Analysis Summary
 
+> **Scope note:** This document records the standalone all-ten-library 140M
+> analysis. Its CV and depth-correlation estimates must not be compared
+> directly with the seven-library 250M analysis. For the matched full-depth,
+> 140M, and 250M comparison, use `downsampling_depth_sensitivity_summary.md`.
+
 ## Completion Status
 
 - Completed libraries: 10/10 (`592BB`, `607`, `74AA`, `A2DB`, `D765A`, `DA08A`, `DA21A`, `DA68A`, `DBA9A`, and `DE8BA`)
@@ -80,4 +85,3 @@ Therefore:
 - Analysis script: `r_files/downsampling_140M.R`
 - Output directory: `r_files/downsampling_140M_outputs/`
 - Key tables: `downsampling_loop_count_dispersion.tsv`, `downsampling_pooled_exact_recovery.tsv`, `downsampling_category_composition_change.tsv`, `downsampling_gene_count_stability_summary.tsv`, and `downsampling_pool_influence_correlations.tsv`
-

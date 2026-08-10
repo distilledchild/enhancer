@@ -1150,6 +1150,7 @@ build_approximate_loop_loci <- function(
     arrange(chr1, start1, end1, chr2, start2, end2, resolution_bp, loop_id) %>%
     mutate(
       loop_index = row_number(),
+      source_support_count = .data$n_supporting_libraries,
       locus_centroid1 = coalesce(
         hiccups_centroid1_1based_median,
         (start1 + end1) / 2
@@ -1276,7 +1277,7 @@ build_approximate_loop_loci <- function(
     member.order <- df.loop.ordered %>%
       filter(loop_index %in% component.members) %>%
       arrange(
-        dplyr::desc(n_supporting_libraries),
+        dplyr::desc(source_support_count),
         resolution_bp,
         loop_id
       ) %>%
@@ -1408,7 +1409,7 @@ build_approximate_loop_loci <- function(
     ) %>%
     arrange(
       distance_to_locus_median,
-      dplyr::desc(n_supporting_libraries),
+      dplyr::desc(source_support_count),
       resolution_bp,
       loop_id,
       .by_group = TRUE
