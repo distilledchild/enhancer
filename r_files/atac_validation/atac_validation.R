@@ -1,4 +1,99 @@
 # lintr: disable
+
+# Resolve the shared project from this script's location, an explicit
+# environment variable, or common local/Dropbox layouts on macOS and Windows.
+current_script_path <- function() {
+  file.args <- grep(
+    "^--file=",
+    commandArgs(trailingOnly = FALSE),
+    value = TRUE
+  )
+  if (length(file.args) > 0L) {
+    script.arg <- sub("^--file=", "", file.args[[1]])
+    script.arg <- gsub("~+~", " ", script.arg, fixed = TRUE)
+    return(normalizePath(
+      script.arg,
+      winslash = "/",
+      mustWork = FALSE
+    ))
+  }
+
+  frame.files <- vapply(
+    sys.frames(),
+    function(frame) {
+      if (is.null(frame$ofile)) NA_character_ else as.character(frame$ofile)
+    },
+    character(1)
+  )
+  frame.files <- frame.files[!is.na(frame.files) & nzchar(frame.files)]
+  if (length(frame.files) > 0L) {
+    return(normalizePath(
+      tail(frame.files, 1L),
+      winslash = "/",
+      mustWork = FALSE
+    ))
+  }
+  NA_character_
+}
+
+resolve_enhancer_r_files_dir <- function() {
+  script.path <- current_script_path()
+  script.candidate <- NA_character_
+  if (!is.na(script.path)) {
+    script.dir <- dirname(script.path)
+    script.candidate <- if (
+      basename(script.dir) %in% c("revision", "atac_validation")
+    ) {
+      dirname(script.dir)
+    } else {
+      script.dir
+    }
+  }
+
+  candidates <- unique(c(
+    Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
+    path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
+    path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files"),
+    Sys.glob(path.expand(
+      "~/Library/CloudStorage/Dropbox*/K P/Gateway_to_Hao/enhancer/r_files"
+    )),
+    Sys.glob(path.expand(
+      "~/Library/CloudStorage/Dropbox*/Gateway_to_Hao/enhancer/r_files"
+    )),
+    script.candidate,
+    path.expand("~/Desktop/playground/enhancer/r_files")
+  ))
+  candidates <- candidates[
+    !is.na(candidates) & nzchar(candidates) & dir.exists(candidates)
+  ]
+  candidates <- candidates[
+    file.exists(file.path(candidates, "funcs.R"))
+  ]
+  if (length(candidates) == 0L) {
+    stop(
+      paste0(
+        "Cannot locate enhancer/r_files with funcs.R. Run this script from ",
+        "the shared Dropbox project or set ENHANCER_R_FILES_DIR."
+      ),
+      call. = FALSE
+    )
+  }
+  normalizePath(candidates[[1]], winslash = "/", mustWork = TRUE)
+}
+
+r.files.dir <- resolve_enhancer_r_files_dir()
+enhancer.project.dir <- Sys.getenv(
+  "ENHANCER_PROJECT_DIR",
+  unset = dirname(r.files.dir)
+)
+enhancer.project.dir <- normalizePath(
+  path.expand(enhancer.project.dir),
+  winslash = "/",
+  mustWork = TRUE
+)
+
+message("Using shared enhancer project: ", enhancer.project.dir)
+
 library("tidyverse")
 library("GenomicRanges")
 library("GenomeInfoDb")
@@ -35,14 +130,6 @@ options(scipen = 999)
 # 0. Directories, inputs, and reproducibility settings
 ########################
 
-r.files.dir <- path.expand("~/Desktop/playground/enhancer/r_files")
-if (!dir.exists(r.files.dir)) {
-  r.files.dir <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files")
-}
-if (!dir.exists(r.files.dir)) {
-  stop("Cannot locate the enhancer/r_files directory.", call. = FALSE)
-}
-
 revision.dir <- file.path(r.files.dir, "revision")
 cache.dir <- file.path(revision.dir, "cache_data")
 output.dir <- Sys.getenv(
@@ -70,17 +157,16 @@ epd.promoter.file <- file.path(
   "df.promoter.annotation.coordinate.normalized.rds"
 )
 atac.cache.file <- file.path(cache.dir, "gr.atac.rds")
-chrom.sizes.file <- path.expand(
-  "~/dropbox/Gateway_to_Hao/enhancer/data/tracks/rn7.chrom.sizes"
-)
-if (!file.exists(chrom.sizes.file)) {
-  chrom.sizes.file <- path.expand(
-    paste0(
-      "~/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/",
-      "enhancer/data/tracks/rn7.chrom.sizes"
-    )
+chrom.sizes.file <- Sys.getenv(
+  "RN7_CHROM_SIZES_FILE",
+  unset = file.path(
+    enhancer.project.dir,
+    "data",
+    "tracks",
+    "rn7.chrom.sizes"
   )
-}
+)
+chrom.sizes.file <- path.expand(chrom.sizes.file)
 
 required.files <- c(
   loop.resource.file,
@@ -103,17 +189,26 @@ n.permutations <- as.integer(
   Sys.getenv("ATAC_NULL_PERMUTATIONS", unset = "1000")
 )
 random.seed <- as.integer(Sys.getenv("ATAC_NULL_SEED", unset = "20260727"))
-n.cores <- as.integer(
-  Sys.getenv(
-    "ATAC_NULL_CORES",
-    unset = as.character(max(1L, min(4L, parallel::detectCores() - 1L)))
-  )
-)
+detected.cores <- parallel::detectCores(logical = TRUE)
+if (is.na(detected.cores)) detected.cores <- 1L
+default.cores <- if (.Platform$OS.type == "windows") {
+  1L
+} else {
+  max(1L, min(4L, detected.cores - 1L))
+}
+n.cores <- as.integer(Sys.getenv(
+  "ATAC_NULL_CORES",
+  unset = as.character(default.cores)
+))
 if (is.na(n.permutations) || n.permutations < 1L) {
   stop("ATAC_NULL_PERMUTATIONS must be a positive integer.", call. = FALSE)
 }
 if (is.na(n.cores) || n.cores < 1L) {
   stop("ATAC_NULL_CORES must be a positive integer.", call. = FALSE)
+}
+if (.Platform$OS.type == "windows" && n.cores != 1L) {
+  warning("Windows uses sequential ATAC permutations; setting cores to 1.")
+  n.cores <- 1L
 }
 
 atac.minimum.overlap.bp <- 50L
@@ -718,12 +813,16 @@ message(
   "Running ", n.permutations,
   " ATAC matched-null permutations on ", n.cores, " core(s)."
 )
-permutation.results <- parallel::mclapply(
-  seq_len(n.permutations),
-  run_one_atac_null_permutation,
-  mc.cores = n.cores,
-  mc.preschedule = FALSE
-)
+permutation.results <- if (.Platform$OS.type == "windows") {
+  lapply(seq_len(n.permutations), run_one_atac_null_permutation)
+} else {
+  parallel::mclapply(
+    seq_len(n.permutations),
+    run_one_atac_null_permutation,
+    mc.cores = n.cores,
+    mc.preschedule = FALSE
+  )
+}
 df.atac.null.permutation <- bind_rows(permutation.results)
 
 assert_analysis_condition(
@@ -920,17 +1019,14 @@ writeLines(
 # Refresh the release manifest after adding the separately generated null-model
 # files so every official output has a size and SHA-256 checksum.
 sha256_file <- function(path) {
-  checksum.output <- system2(
-    "shasum",
-    args = c("-a", "256", shQuote(path)),
-    stdout = TRUE,
-    stderr = TRUE
-  )
-  checksum <- str_extract(checksum.output[[1]], "^[0-9a-fA-F]{64}")
-  if (is.na(checksum)) {
-    stop("Unable to compute SHA-256 for: ", path, call. = FALSE)
+  if (!file.exists(path)) return(NA_character_)
+  if (!requireNamespace("digest", quietly = TRUE)) {
+    stop(
+      "The cross-platform 'digest' package is required for SHA-256 checksums.",
+      call. = FALSE
+    )
   }
-  str_to_lower(checksum)
+  digest::digest(file = path, algo = "sha256", serialize = FALSE)
 }
 
 release.output.files <- setdiff(
