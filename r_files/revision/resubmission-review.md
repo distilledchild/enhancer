@@ -1,6 +1,6 @@
 # NAR Resubmission Analysis Review
 
-> **Authoritative status as of 2026-07-28**
+> **Authoritative status as of 2026-07-30**
 > This document supersedes earlier interim reviews. It integrates the reviewer
 > comments, the current reanalysis code, the official outputs, and the analytical
 > principles finalized during subsequent discussions.
@@ -80,7 +80,7 @@ directionality.
 | Overinterpretation of ATAC as enhancer validation | Managed through claim restriction | ATAC is used only as orthogonal open-chromatin annotation |
 | Cross-resolution instability in gene ranking | Resolved analytically | Exact-call main analysis plus approximate-locus and canonical-TSS sensitivities |
 | Previous Top-54 and GO overinterpretation | Resolved | Top-54 analysis removed; GO is exploratory and uses complete gene-count inputs |
-| Sequencing-depth dependence | Partially resolved | Claims are limited to a pooled resource and support tiers, but technical downsampling has not been performed |
+| Sequencing-depth dependence | Resolved analytically; remains a study limitation | All ten libraries were downsampled to 140M MAPQ >=30 contacts, `.hic` files were rebuilt, and HiCCUPS was rerun at 5/10/25 kb; results confirm substantial depth sensitivity and preclude strain-specific inference |
 | Strain-level genetic-distance analysis | Excluded from scope | No strain-specific claim is made, and replication plus a validated VCF-based distance matrix are unavailable |
 | Lack of sample-matched functional validation | Residual data limitation | External ATAC cannot validate enhancer activity or target-gene regulation |
 | Gene-biotype scope | Decision required | The resource preserves all biotypes; whether to add a protein-coding-only GO sensitivity remains to be decided |
@@ -199,25 +199,48 @@ anchor-overlap fraction, and resolution strata should be reported together.
 
 ### 5.1 Sequencing Depth and Library Replication
 
-Each strain is represented by one Hi-C library. Biological replication is therefore
-absent, and robust strain-by-strain inference of chromatin architecture is not possible.
-Downsampling cannot create biological replication.
+Technical downsampling is complete for all ten libraries. Each MAPQ >=30 contact set
+was uniformly downsampled to exactly 140 million contacts, a target just below the
+lowest original usable-contact count (141,993,330). `.hic` files were rebuilt and
+HiCCUPS was rerun at 5, 10, and 25 kb before applying the same `<2 Mb` restriction.
 
-Technical downsampling is nevertheless possible, and depth dependence remains the
-largest reviewer-facing analytical risk because it was raised directly during review.
-Single-library-supported calls comprise 18,472 of 31,021 exact calls (59.5%) and
-5,958 of 10,469 putative calls (56.9%).
+The results confirm that sequencing depth was a major technical driver:
 
-One of the following strategies must be selected:
+- The across-library coefficient of variation in total loop calls fell from 0.335 at
+  full depth to 0.163 after downsampling, a 51.5% reduction.
+- The across-library range fell from 6,017 to 1,360 calls, a 77.4% reduction.
+- The Spearman correlation between original contact depth and total loop calls changed
+  from 0.794 at full depth to -0.115 after downsampling.
+- The corresponding correlation with the number of pooled calls supported by each
+  library also changed from 0.794 to -0.115.
 
-1. Preferred: downsample to a common usable-contact depth, rerun HiCCUPS, and report
-   call retention or stability by resolution and support tier.
-2. If infeasible: restrict the study to a pooled union resource, disclose singleton
-   and library-support tiers, and state depth dependence plus the lack of biological
-   replication prominently. Do not make strain-specific, consensus, or conserved-topology claims.
+Downsampling also demonstrates substantial individual-call sensitivity:
 
-Omitting downsampling does not automatically invalidate the pooled resource, but it
-leaves a material NAR reviewer-facing risk.
+- The downsampled pooled union contained 14,414 exact, resolution-specific calls,
+  compared with 31,021 at full depth.
+- Exactly 10,936 full-depth pooled calls were recovered (35.25%; pooled Jaccard 0.317).
+- Pooled exact recovery was 11.91%, 32.29%, and 50.25% at 5, 10, and 25 kb,
+  respectively.
+- Median sample-level exact recovery was 22.01% overall; a HiCCUPS-radius matching
+  sensitivity increased this to 26.25%.
+- Full-depth calls supported only by above-median-depth libraries had 13.65% exact
+  recovery, versus 57.96% for the remaining calls.
+
+Broad annotation composition was more stable than exact call identity. The four main
+category proportions changed by at most 4.66 percentage points, and every exactly
+shared call retained the same category. However, gene-level stability was only
+moderate: 3,757 genes were shared between 6,420 full-depth and 4,203 downsampled genes
+(presence Jaccard 0.547), and the zero-filled loop-count/rank Spearman correlation was
+0.485. Gene ranking and GO therefore remain exploratory.
+
+Each strain is still represented by one Hi-C library. Downsampling controls contact
+depth but cannot create biological replication or distinguish strain effects from
+other library-specific effects. The revised manuscript must therefore remove claims
+of conserved topology, biological divergence, consensus strain architecture, or
+genetic-distance associations. The 31,021 full-depth pooled records may remain the
+primary union resource because they preserve available calls and source provenance,
+but the 14,414-call downsampled union, resolution-stratified recovery, and source-depth
+effects must be reported as a prominent sensitivity analysis and limitation.
 
 ### 5.2 External ATAC and Functional-Evidence Limitations
 
@@ -279,13 +302,18 @@ have been addressed as follows:
   ATAC narrowPeak, Ensembl GTF, EPD rn6 source/coordinate/mapping/chain files, and depth-QC input.
 - The 1,000-permutation ATAC outputs are frozen with seed `20260727`, run metadata,
   matched-control QC, session information, and figures.
+- The ten-library 140M-contact analysis is complete and stored in
+  `r_files/downsampling_140M_outputs/`, including sample status, resolution-stratified
+  recovery, category composition, gene stability, source-depth influence, figures,
+  run metadata, and session information.
 - Progress documents use the current 31,021-call release and revised categories.
 - `resubmit_output_manifest.tsv` records file sizes and SHA-256 hashes for 51 official files.
 - `source_data_versions.tsv` records path, modification time, SHA-256, assembly,
   provenance, and analysis release for 22 required inputs and scripts; no source or hash is missing.
 
 The manuscript and response letter must use only the counts and tables from this
-frozen release and its manifest.
+release. Before submission, the downsampling script and compact outputs must be added
+to the final checksum manifest and code release.
 
 ## 6. Wording Rules for the Manuscript and Response Letter
 
@@ -318,13 +346,16 @@ frozen release and its manifest.
 
 > Matched Hi-C-anchor permutations indicated statistically significant but modest ATAC support, so accessibility was interpreted as orthogonal annotation rather than functional validation.
 
+> Equalizing all ten libraries to 140 million MAPQ-filtered contacts reduced the across-library coefficient of variation in loop-call counts from 0.335 to 0.163 and removed the positive association between original sequencing depth and loop yield (Spearman rho 0.794 at full depth versus -0.115 after downsampling). Exact pooled-call recovery was 35.25%, demonstrating that individual loop calls remain depth-sensitive even though broad annotation-category proportions were comparatively stable.
+
 ## 7. Remaining Priorities Before Resubmission
 
-1. Decide whether to perform technical downsampling and HiCCUPS re-calling or use explicit pooled-resource and depth-limitation framing.
-2. Decide whether to add a protein-coding-only GO sensitivity analysis while retaining all biotypes in the resource.
-3. Complete Methods metadata for samples, sex, strains, dissection, HRDP references, and ATAC provenance.
-4. Rewrite the manuscript, response letter, figures, and supplements using the current release counts and framing.
-5. Perform a final consistency audit for prohibited terminology and superseded counts.
+1. Integrate the completed downsampling methods, resolution-stratified results, and figures into the manuscript and supplement.
+2. Add the downsampling script and compact outputs to the final Git release, checksum manifest, and source-provenance table.
+3. Decide whether to add a protein-coding-only GO sensitivity analysis while retaining all biotypes in the resource.
+4. Complete Methods metadata for samples, sex, strains, dissection, HRDP references, and ATAC provenance.
+5. Rewrite the manuscript, response letter, figures, and supplements using the current release counts and framing.
+6. Perform a final consistency audit for prohibited terminology and superseded counts.
 
 ## 8. Objective Final Assessment
 
@@ -334,13 +365,16 @@ removal of gene-body containment filtering, explicit exact-call estimands, prese
 of HiCCUPS provenance, the ATAC matched-null analysis, and approximate-locus plus
 canonical-TSS sensitivity analyses are scientifically defensible.
 
-The analysis strategy and production outputs are synchronized and ready for manuscript
-rewriting. The principal remaining decisions concern sequencing-depth analysis,
-gene-biotype sensitivity, Methods metadata, and claim-constrained writing. Completing
-those items would yield a technically defensible NAR resubmission package.
+The completed downsampling directly addresses the reviewer's normalization request and
+shows why the revised claim restrictions are necessary. It strengthens the technical
+defensibility of the pooled resource, but it does not rescue strain-specific biological
+inference or establish that every full-depth call is robust. The remaining work is to
+integrate these results, complete metadata and optional biotype sensitivity, freeze the
+release, and rewrite the manuscript under the constrained resource framing.
 
-Acceptance remains uncertain because sequencing depth, the lack of sample-matched
-functional validation, and editorial assessment of novelty remain material risks.
+Acceptance remains uncertain because individual loop and gene results are depth-sensitive,
+biological replication and sample-matched functional validation are absent, and editorial
+assessment of novelty remains a material risk.
 
 ## 9. Reference Files
 
@@ -348,5 +382,7 @@ functional validation, and editorial assessment of novelty remain material risks
 - Coordinate preparation: `r_files/revision/promoter_enhancer_interaction_resubmit_01_coord_prep.R`
 - Shared functions: `r_files/funcs.R`
 - ATAC matched-null analysis: `r_files/atac_validation/atac_validation.R`
+- Depth-normalization analysis: `r_files/downsampling_140M.R`
+- Depth-normalization outputs: `r_files/downsampling_140M_outputs/`
 - Official outputs: `r_files/revision/resubmit_outputs/`
 - Reviewer comments: `Obsidian Vault/research/enhancer/revision/00_reviewer-comment.md`
