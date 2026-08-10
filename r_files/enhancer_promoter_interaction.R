@@ -1029,24 +1029,23 @@ final.loops.from.ctcf.step <- df.loops.above.ctcf.threshold %>%
 
 # %>%
 #   mutate(loop.id = str_remove(loop.id, "_[^_]+$"))
-final.loops.from.ctcf.step %>% dim() # 18,327 + 10 | sub.4 any, threshold > 6 : 25,620| lt2mb: 25,268
+final.loops.from.ctcf.step %>% dim() # lt2mb: 25,268
 final.loops.from.ctcf.step %>% head(2)
 final.loops.from.ctcf.step %>% count(resolution)
-# sub.4
-# any:
-# new threshold
-# lt2mb              # resolution     n
-# 1 10K         9375 # 1 10K         9420
-# 2 25K        11750 # 2 25K        12049
-# 3 5K          4143 # 3 5K          4151
+# lt2mb:
+# resolution     n
+# 1 10K         9375
+# 2 25K        11750
+# 3 5K          4143
 
 ####################################
 ####################################
 # Venn Diagram
 ####################################
 ####################################
-final.loops.from.promoter.step$loop.id # 4569// final: 5,429// 200kb: 5,729
-final.loops.from.tss.step$loop.id # 9641// final: 10,684// 200kb: 11,919
+final.loops.from.promoter.step$loop.id # 200kb: 5,729
+final.loops.from.tss.step$loop.id # 200kb: 11,919
+# 11919 + 5729 = 17648
 
 venn_plot_submission <- create_venn_plot(final.loops.from.ctcf.step, final.loops.from.promoter.step, final.loops.from.tss.step, "CTCF") # utils_functions.R
 venn_plot_submission
