@@ -1,4 +1,100 @@
 # lintr: disable
+
+# Resolve the shared project from this script's location, an explicit
+# environment variable, or common local/Dropbox layouts on macOS and Windows.
+current_script_path <- function() {
+  file.args <- grep(
+    "^--file=",
+    commandArgs(trailingOnly = FALSE),
+    value = TRUE
+  )
+  if (length(file.args) > 0L) {
+    script.arg <- sub("^--file=", "", file.args[[1]])
+    script.arg <- gsub("~+~", " ", script.arg, fixed = TRUE)
+    return(normalizePath(
+      script.arg,
+      winslash = "/",
+      mustWork = FALSE
+    ))
+  }
+
+  frame.files <- vapply(
+    sys.frames(),
+    function(frame) {
+      if (is.null(frame$ofile)) NA_character_ else as.character(frame$ofile)
+    },
+    character(1)
+  )
+  frame.files <- frame.files[!is.na(frame.files) & nzchar(frame.files)]
+  if (length(frame.files) > 0L) {
+    return(normalizePath(
+      tail(frame.files, 1L),
+      winslash = "/",
+      mustWork = FALSE
+    ))
+  }
+  NA_character_
+}
+
+resolve_enhancer_r_files_dir <- function() {
+  script.path <- current_script_path()
+  script.candidate <- NA_character_
+  if (!is.na(script.path)) {
+    script.dir <- dirname(script.path)
+    script.candidate <- if (
+      basename(script.dir) %in% c("revision", "atac_validation")
+    ) {
+      dirname(script.dir)
+    } else {
+      script.dir
+    }
+  }
+
+  candidates <- unique(c(
+    Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
+    path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
+    path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files"),
+    Sys.glob(path.expand(
+      "~/Library/CloudStorage/Dropbox*/K P/Gateway_to_Hao/enhancer/r_files"
+    )),
+    Sys.glob(path.expand(
+      "~/Library/CloudStorage/Dropbox*/Gateway_to_Hao/enhancer/r_files"
+    )),
+    script.candidate,
+    path.expand("~/Desktop/playground/enhancer/r_files")
+  ))
+  candidates <- candidates[
+    !is.na(candidates) & nzchar(candidates) & dir.exists(candidates)
+  ]
+  candidates <- candidates[
+    file.exists(file.path(candidates, "funcs.R"))
+  ]
+  if (length(candidates) == 0L) {
+    stop(
+      paste0(
+        "Cannot locate enhancer/r_files with funcs.R. Run this script from ",
+        "the shared Dropbox project or set ENHANCER_R_FILES_DIR."
+      ),
+      call. = FALSE
+    )
+  }
+  normalizePath(candidates[[1]], winslash = "/", mustWork = TRUE)
+}
+
+r.files.dir <- resolve_enhancer_r_files_dir()
+enhancer.project.dir <- Sys.getenv(
+  "ENHANCER_PROJECT_DIR",
+  unset = dirname(r.files.dir)
+)
+enhancer.project.dir <- normalizePath(
+  path.expand(enhancer.project.dir),
+  winslash = "/",
+  mustWork = TRUE
+)
+gateway.to.hao.dir <- dirname(enhancer.project.dir)
+
+message("Using shared enhancer project: ", enhancer.project.dir)
+
 library("tidyverse")
 library("GenomicRanges")
 library("GenomeInfoDb")
@@ -35,16 +131,6 @@ options(scipen = 999)
 ########################
 # 0. Directories and files
 ########################
-
-r.files.dir <- path.expand("~/Desktop/playground/enhancer/r_files")
-# Fall back to the Dropbox mirror when the primary local path is unavailable.
-if (!dir.exists(r.files.dir)) {
-  r.files.dir <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files")
-}
-# Stop early when neither supported project path can be located.
-if (!dir.exists(r.files.dir)) {
-  stop("Cannot locate the enhancer/r_files directory.", call. = FALSE)
-}
 
 setwd(r.files.dir)
 
@@ -128,8 +214,96 @@ load_coordinate_cache_objects(
   envir = environment()
 )
 
-# Recover downstream input paths from the same cached input table used during
-# coordinate preparation, avoiding a second set of path declarations here.
+# Rebase cached absolute paths onto the current user's shared Dropbox tree.
+# Coordinate objects remain reusable across computers, while provenance and
+# any downstream file reads point to the inputs on the machine running now.
+hiccups.loop.root <- Sys.getenv(
+  "HICCUPS_LOOP_ROOT",
+  unset = file.path(
+    gateway.to.hao.dir,
+    "hic",
+    "2023A",
+    "hic30_w_sb_options"
+  )
+)
+hiccups.loop.root <- path.expand(hiccups.loop.root)
+data.dir <- file.path(enhancer.project.dir, "data")
+
+df.analysis.input.files <- df.analysis.input.files %>%
+  mutate(
+    input_path = case_when(
+      str_starts(input_name, "hiccups_loop_") ~ file.path(
+        hiccups.loop.root,
+        str_remove(input_name, "^hiccups_loop_"),
+        "hiccups_5k10k25k",
+        "merged_loops.bedpe"
+      ),
+      input_name == "ctcf_motif" ~ file.path(
+        data.dir,
+        "ctcf",
+        "submission",
+        "E4",
+        "fimo.4.tsv"
+      ),
+      input_name == "atac_peak" ~ file.path(
+        data.dir,
+        "Duttke2022_snATAC_peaks_rn7.narrowPeak"
+      ),
+      input_name == "ensembl_gtf" ~ file.path(
+        data.dir,
+        "Rattus_norvegicus.mRatBN7.2.113.gtf"
+      ),
+      input_name == "epd_rn6_bed" ~ file.path(
+        data.dir,
+        "epdnew",
+        "001",
+        "Rn_EPDnew_001_rn6.bed"
+      ),
+      input_name == "epd_coordinate" ~ file.path(
+        data.dir,
+        "epdnew",
+        "001",
+        "db",
+        "promoter_coordinate.txt"
+      ),
+      input_name == "epd_rn6_to_rn7_chain" ~ file.path(
+        data.dir,
+        "epdnew",
+        "rn6ToRn7.over.chain"
+      ),
+      input_name == "epd_promoter_mapping" ~ file.path(
+        data.dir,
+        "epdnew",
+        "001",
+        "db",
+        "promoter_ensembl.txt"
+      ),
+      input_name == "library_complexity" ~ file.path(
+        data.dir,
+        "library_complexity_592BB.tsv"
+      ),
+      input_name == "genetic_distance" ~ Sys.getenv(
+        "HRDP_GENETIC_DISTANCE_FILE",
+        unset = file.path(revision.dir, "hrdp_genetic_distance.tsv")
+      ),
+      TRUE ~ input_path
+    )
+  )
+
+# Fail early with a useful Dropbox/offline-files message on another computer.
+missing.required.input.files <- df.analysis.input.files %>%
+  filter(required, !file.exists(input_path)) %>%
+  pull(input_path)
+if (length(missing.required.input.files) > 0L) {
+  stop(
+    "Missing required shared input file(s):\n",
+    paste(missing.required.input.files, collapse = "\n"),
+    "\nMake these Dropbox files available offline before running the analysis.",
+    call. = FALSE
+  )
+}
+
+# Recover downstream input paths from the rebased input provenance table.
 input.file.paths <- setNames(
   df.analysis.input.files$input_path,
   df.analysis.input.files$input_name
@@ -176,8 +350,6 @@ message(
   " coordinate objects from: ",
   coord.cache.dir
 )
-df.coordinate.system.audit
-
 ################################################################################
 # 2. Strand-aware true TSS generation
 #
@@ -193,10 +365,8 @@ df.coordinate.system.audit
 df.true.tss.transcript <- build_true_tss_annotation(
   df.ensembl.transcript.coordinate.normalized
 )
-df.true.tss.transcript %>% head(2)
 
 gr.true.tss <- create_true_tss_granges(df.true.tss.transcript)
-gr.true.tss %>% head(2)
 
 # Verify that TSS conversion preserves one record and range per transcript.
 assert_analysis_condition(
@@ -268,19 +438,6 @@ message(
   n_distinct(df.true.tss.transcript$gene_id),
   " Ensembl genes."
 )
-print(df.true.tss.summary)
-#    metric                                  n
-#    <chr>                               <int>
-#  1 normalized_Ensembl_transcripts      54993: ********************************
-#  2 transcript_level_true_TSS_records   54993
-#  3 unique_Ensembl_genes                30562
-#  4 unique_strand_aware_TSS_sites       45131
-#  5 unique_genomic_TSS_positions        45129
-#  6 plus_strand_transcript_TSS          27342
-#  7 minus_strand_transcript_TSS         27651
-#  8 transcripts_with_start_le_end       54993
-#  9 plus_strand_TSS_at_transcript_start 27342
-# 10 minus_strand_TSS_at_transcript_end  27651
 
 ################################################################################
 # 3. Define strict and primary direct promoter/TSS-anchor overlap tiers
@@ -302,218 +459,34 @@ gr.epd.promoter <- create_epd_promoter_granges(
   df.promoter.annotation.coordinate.normalized
 )
 
-# Find every transcript-level true-TSS hit at either anchor. annotation_index
-# points back to the complete transcript table and prevents information loss
-# when multiple transcripts or genes overlap the same anchor.
-df.direct.true.tss.anchor.hit <- map_loop_anchors_dfr(
-  gr.loop.anchor.by.side,
-  find_direct_anchor_annotation_overlaps,
-  gr.annotation = gr.true.tss
-)
-df.direct.true.tss.anchor.hit %>% head(2)
-#  loop_id                                         resolution anchor_side    opposite_anchor_side anchor_chr anchor_start anchor_end anchor_width_bp   annotation_index annotation_chr annotation_start annotation_end      annotation_width_bp annotation_strand direct_overlap_bp
-# 1 chr1_1400000_1425000_chr1_1800000_1825000_25000 25K        anchor1       anchor2              chr1            1400001    1425000           25000 1               39 chr1                    1401020        1401020                      1 -                                 1
-# 2 chr1_1400000_1425000_chr1_1800000_1825000_25000 25K        anchor1       anchor2              chr1            1400001    1425000           25000 2               40 chr1                    1401588        1401588                      1 +                                 1
-
-df.true.tss.lookup <- df.true.tss.transcript %>%
-  mutate(annotation_index = row_number()) %>%
-  dplyr::select(
-    annotation_index,
-    true_tss_id,
-    true_tss_start,
-    true_tss_end,
-    gene_id,
-    gene_id_versioned,
-    gene_name,
-    gene_biotype,
-    transcript_id,
-    transcript_id_versioned,
-    transcript_name,
-    transcript_biotype,
-    is_ensembl_canonical,
-    transcript_start,
-    transcript_end,
-    source,
-    source_coordinate_system,
-    analysis_coordinate_system
-  )
-
-df.true.tss.lookup %>% head(2)
-#   annotation_index true_tss_id                       gene_id
-# 1                1 chr1:31564:+:ENSRNOT00000109151.1 ENSRNOG00000065394
-# 2                2 chr1:41635:-:ENSRNOT00000111965.1 ENSRNOG00000065356
-#   gene_id_versioned    gene_name          gene_biotype transcript_id
-# 1 ENSRNOG00000065394.1 ENSRNOG00000065394 lncRNA       ENSRNOT00000109151
-# 2 ENSRNOG00000065356.1 ENSRNOG00000065356 pseudogene   ENSRNOT00000111965
-#   transcript_id_versioned transcript_name    transcript_biotype transcript_start
-# 1 ENSRNOT00000109151.1    ENSRNOT00000109151 lncRNA                        31564
-# 2 ENSRNOT00000111965.1    ENSRNOT00000111965 pseudogene                    40734
-#   transcript_end source  source_coordinate_system analysis_coordinate_system
-# 1          36478 ensembl GTF_1_based_inclusive    rn7_1_based_inclusive
-# 2          41635 ensembl GTF_1_based_inclusive    rn7_1_based_inclusive
-
-df.direct.true.tss.anchor.overlap <-
-  df.direct.true.tss.anchor.hit %>%
-  left_join(df.true.tss.lookup, by = "annotation_index") %>%
-  transmute(
-    loop_id,
-    resolution,
-    anchor_side,
-    opposite_anchor_side,
-    anchor_chr,
-    anchor_start,
-    anchor_end,
-    anchor_width_bp,
-    annotation_class = "true_TSS",
-    annotation_source = str_c(source, "_GTF_transcript"),
-    annotation_id = true_tss_id,
-    annotation_chr,
-    annotation_start,
-    annotation_end,
-    annotation_width_bp,
-    annotation_strand,
-    direct_overlap_bp,
-    gene_id,
-    gene_id_versioned,
-    gene_name,
-    gene_biotype,
-    transcript_id,
-    transcript_id_versioned,
-    transcript_name,
-    transcript_biotype,
-    is_ensembl_canonical,
-    transcript_start,
-    transcript_end,
-    promoter_annotation_id = NA_character_,
-    epd_promoter_name = NA_character_,
-    epd_tss_start = NA_integer_,
-    epd_tss_end = NA_integer_,
-    annotation_source_coordinate_system = source_coordinate_system,
-    analysis_coordinate_system
-  ) %>%
-  mutate(
-    direct_evidence_id = str_c(
-      loop_id,
-      anchor_side,
-      annotation_source,
-      annotation_id,
-      sep = "|"
-    ),
-    .before = 1
-  )
-
-# Find every direct EPD promoter-interval hit at either anchor. These records
-# complement the one-base Ensembl true TSS points but remain a separate evidence
-# class so overlap with both annotations is not mistaken for two genes.
-df.direct.epd.promoter.anchor.hit <- map_loop_anchors_dfr(
-  gr.loop.anchor.by.side,
-  find_direct_anchor_annotation_overlaps,
-  gr.annotation = gr.epd.promoter
+# Build the strict exact-coordinate promoter/TSS tier once for both Ensembl
+# transcript TSS points and EPD promoter intervals.
+strict.direct.tier <- build_direct_promoter_tss_tier(
+  gr.loop.anchor.by.side = gr.loop.anchor.by.side,
+  gr.true.tss.annotation = gr.true.tss,
+  gr.epd.annotation = gr.epd.promoter,
+  df.true.tss = df.true.tss.transcript,
+  df.epd.promoter = df.promoter.annotation.coordinate.normalized,
+  df.loop.universe = df.loop.universe,
+  evidence.definition = "strict"
 )
 
-df.epd.promoter.lookup <-
-  df.promoter.annotation.coordinate.normalized %>%
-  mutate(annotation_index = row_number()) %>%
-  dplyr::select(
-    annotation_index,
-    promoter_annotation_id,
-    epd_promoter_name,
-    epd_tss_start,
-    epd_tss_end,
-    gene_id,
-    gene_name,
-    source_coordinate_system,
-    analysis_coordinate_system
-  )
-
-df.direct.epd.promoter.anchor.overlap <-
-  df.direct.epd.promoter.anchor.hit %>%
-  left_join(df.epd.promoter.lookup, by = "annotation_index") %>%
-  transmute(
-    loop_id,
-    resolution,
-    anchor_side,
-    opposite_anchor_side,
-    anchor_chr,
-    anchor_start,
-    anchor_end,
-    anchor_width_bp,
-    annotation_class = "EPD_promoter",
-    annotation_source = "EPDnew_promoter",
-    annotation_id = promoter_annotation_id,
-    annotation_chr,
-    annotation_start,
-    annotation_end,
-    annotation_width_bp,
-    annotation_strand,
-    direct_overlap_bp,
-    gene_id,
-    gene_id_versioned = gene_id,
-    gene_name,
-    gene_biotype = NA_character_,
-    transcript_id = NA_character_,
-    transcript_id_versioned = NA_character_,
-    transcript_name = NA_character_,
-    transcript_biotype = NA_character_,
-    is_ensembl_canonical = NA,
-    transcript_start = NA_integer_,
-    transcript_end = NA_integer_,
-    promoter_annotation_id,
-    epd_promoter_name,
-    epd_tss_start,
-    epd_tss_end,
-    annotation_source_coordinate_system = source_coordinate_system,
-    analysis_coordinate_system
-  ) %>%
-  mutate(
-    direct_evidence_id = str_c(
-      loop_id,
-      anchor_side,
-      annotation_source,
-      annotation_id,
-      sep = "|"
-    ),
-    .before = 1
-  )
-
-# The combined long table is the lossless Section 3 output. Duplicate biological
-# support across Ensembl and EPD is retained as distinct annotation evidence,
-# while the gene-assignment table below provides one row per loop-anchor-gene.
-df.direct.promoter.tss.anchor.overlap <- bind_rows(
-  df.direct.true.tss.anchor.overlap,
-  df.direct.epd.promoter.anchor.overlap
-) %>%
-  arrange(
-    loop_id,
-    anchor_side,
-    gene_id,
-    annotation_class,
-    annotation_start,
-    annotation_id
-  )
+df.true.tss.lookup <- strict.direct.tier$true_tss_lookup
+df.epd.promoter.lookup <- strict.direct.tier$epd_promoter_lookup
+df.strict.direct.true.tss.anchor.overlap <-
+  strict.direct.tier$true_tss_overlap
+df.strict.direct.epd.promoter.anchor.overlap <-
+  strict.direct.tier$epd_promoter_overlap
+df.strict.direct.promoter.tss.anchor.overlap <-
+  strict.direct.tier$combined_overlap
+strict.direct.summary <- strict.direct.tier$summary
 
 # Confirm that exact Ensembl TSS overlaps remain one-base intervals.
 assert_analysis_condition(
-  !any(df.direct.true.tss.anchor.overlap$direct_overlap_bp != 1L),
+  !any(df.strict.direct.true.tss.anchor.overlap$direct_overlap_bp != 1L),
   "A one-base true TSS has an unexpected direct-overlap width."
 )
 
-# Reuse one summary implementation for both strict and primary direct tiers.
-strict.direct.summary <- summarise_direct_promoter_tss_evidence(
-  df.direct.promoter.tss.anchor.overlap,
-  df.loop.universe
-)
-
-# Preserve the original exact-coordinate analysis as a strict sensitivity tier.
-# This tier uses one-base Ensembl TSS points and the original 81-bp EPD promoter
-# intervals. The generic df.direct.* objects are replaced below by the primary
-# TSS +/-1-kb promoter-window definition used in all downstream revised analyses.
-df.strict.direct.true.tss.anchor.overlap <-
-  df.direct.true.tss.anchor.overlap
-df.strict.direct.epd.promoter.anchor.overlap <-
-  df.direct.epd.promoter.anchor.overlap
-df.strict.direct.promoter.tss.anchor.overlap <-
-  df.direct.promoter.tss.anchor.overlap
 df.strict.direct.promoter.tss.gene.assignment <-
   strict.direct.summary$gene_assignment
 df.strict.direct.promoter.tss.anchor.count <-
@@ -529,8 +502,7 @@ df.strict.direct.promoter.tss.loop.summary <-
 df.strict.direct.promoter.tss.summary <-
   strict.direct.summary$summary
 
-# Define the primary promoter evidence as direct overlap between an anchor and a
-# promoter window extending 1 kb upstream and downstream of an annotated TSS.
+# Build the primary tier from +/-1-kb TSS windows for both annotation sources.
 promoter.window.flank.bp <- 1000L
 gr.epd.tss <- create_epd_tss_granges(
   df.promoter.annotation.coordinate.normalized
@@ -544,144 +516,24 @@ gr.epd.tss.promoter.window.1kb <- expand_tss_to_promoter_windows(
   flank.bp = promoter.window.flank.bp
 )
 
-# Query both loop anchors against Ensembl TSS +/-1-kb promoter windows.
-df.primary.direct.true.tss.anchor.hit <- map_loop_anchors_dfr(
-  gr.loop.anchor.by.side,
-  find_direct_anchor_annotation_overlaps,
-  gr.annotation = gr.true.tss.promoter.window.1kb
+primary.direct.tier <- build_direct_promoter_tss_tier(
+  gr.loop.anchor.by.side = gr.loop.anchor.by.side,
+  gr.true.tss.annotation = gr.true.tss.promoter.window.1kb,
+  gr.epd.annotation = gr.epd.tss.promoter.window.1kb,
+  df.true.tss = df.true.tss.transcript,
+  df.epd.promoter = df.promoter.annotation.coordinate.normalized,
+  df.loop.universe = df.loop.universe,
+  evidence.definition = "primary_1kb",
+  promoter.window.flank.bp = promoter.window.flank.bp
 )
 
 df.primary.direct.true.tss.anchor.overlap <-
-  df.primary.direct.true.tss.anchor.hit %>%
-  left_join(df.true.tss.lookup, by = "annotation_index") %>%
-  transmute(
-    loop_id,
-    resolution,
-    anchor_side,
-    opposite_anchor_side,
-    anchor_chr,
-    anchor_start,
-    anchor_end,
-    anchor_width_bp,
-    annotation_class = "true_TSS",
-    annotation_source = str_c(source, "_GTF_TSS_plus_minus_1kb"),
-    annotation_id = str_c(true_tss_id, ":TSS_pm1kb"),
-    annotation_chr,
-    annotation_start,
-    annotation_end,
-    annotation_width_bp,
-    annotation_strand,
-    direct_overlap_bp,
-    tss_start = true_tss_start,
-    tss_end = true_tss_end,
-    promoter_window_flank_bp = promoter.window.flank.bp,
-    gene_id,
-    gene_id_versioned,
-    gene_name,
-    gene_biotype,
-    transcript_id,
-    transcript_id_versioned,
-    transcript_name,
-    transcript_biotype,
-    is_ensembl_canonical,
-    transcript_start,
-    transcript_end,
-    promoter_annotation_id = NA_character_,
-    epd_promoter_name = NA_character_,
-    epd_tss_start = NA_integer_,
-    epd_tss_end = NA_integer_,
-    annotation_source_coordinate_system = source_coordinate_system,
-    analysis_coordinate_system
-  ) %>%
-  mutate(
-    direct_evidence_id = str_c(
-      loop_id,
-      anchor_side,
-      annotation_source,
-      annotation_id,
-      sep = "|"
-    ),
-    .before = 1
-  )
-
-# Query both anchors against EPD TSS +/-1-kb promoter windows. EPD-derived
-# evidence remains distinguishable from Ensembl transcript-derived evidence.
-df.primary.direct.epd.promoter.anchor.hit <- map_loop_anchors_dfr(
-  gr.loop.anchor.by.side,
-  find_direct_anchor_annotation_overlaps,
-  gr.annotation = gr.epd.tss.promoter.window.1kb
-)
-
+  primary.direct.tier$true_tss_overlap
 df.primary.direct.epd.promoter.anchor.overlap <-
-  df.primary.direct.epd.promoter.anchor.hit %>%
-  left_join(df.epd.promoter.lookup, by = "annotation_index") %>%
-  transmute(
-    loop_id,
-    resolution,
-    anchor_side,
-    opposite_anchor_side,
-    anchor_chr,
-    anchor_start,
-    anchor_end,
-    anchor_width_bp,
-    annotation_class = "EPD_promoter",
-    annotation_source = "EPDnew_TSS_plus_minus_1kb",
-    annotation_id = str_c(promoter_annotation_id, ":TSS_pm1kb"),
-    annotation_chr,
-    annotation_start,
-    annotation_end,
-    annotation_width_bp,
-    annotation_strand,
-    direct_overlap_bp,
-    tss_start = epd_tss_start,
-    tss_end = epd_tss_end,
-    promoter_window_flank_bp = promoter.window.flank.bp,
-    gene_id,
-    gene_id_versioned = gene_id,
-    gene_name,
-    gene_biotype = NA_character_,
-    transcript_id = NA_character_,
-    transcript_id_versioned = NA_character_,
-    transcript_name = NA_character_,
-    transcript_biotype = NA_character_,
-    is_ensembl_canonical = NA,
-    transcript_start = NA_integer_,
-    transcript_end = NA_integer_,
-    promoter_annotation_id,
-    epd_promoter_name,
-    epd_tss_start,
-    epd_tss_end,
-    annotation_source_coordinate_system = source_coordinate_system,
-    analysis_coordinate_system
-  ) %>%
-  mutate(
-    direct_evidence_id = str_c(
-      loop_id,
-      anchor_side,
-      annotation_source,
-      annotation_id,
-      sep = "|"
-    ),
-    .before = 1
-  )
-
-df.primary.direct.promoter.tss.anchor.overlap <- bind_rows(
-  df.primary.direct.true.tss.anchor.overlap,
-  df.primary.direct.epd.promoter.anchor.overlap
-) %>%
-  arrange(
-    loop_id,
-    anchor_side,
-    gene_id,
-    annotation_class,
-    annotation_start,
-    annotation_id
-  )
-
-primary.direct.summary <- summarise_direct_promoter_tss_evidence(
-  df.primary.direct.promoter.tss.anchor.overlap,
-  df.loop.universe
-)
+  primary.direct.tier$epd_promoter_overlap
+df.primary.direct.promoter.tss.anchor.overlap <-
+  primary.direct.tier$combined_overlap
+primary.direct.summary <- primary.direct.tier$summary
 
 # From this point onward, df.direct.* means the primary TSS +/-1-kb direct tier.
 df.direct.true.tss.anchor.overlap <-
@@ -803,19 +655,6 @@ df.promoter.anchor.assignment.definitions <- tribble(
   )
 )
 
-# Explicitly record the transition state so revised direct assignments are not
-# accidentally described as the basis of the still-legacy ATAC/category results.
-df.revised.assignment.pipeline.status <- tribble(
-  ~analysis_component, ~current_status, ~replacement_section,
-  ~uses_revised_direct_assignment,
-  "direct_promoter_TSS_anchor_overlap", "revised_complete", "Section 3", TRUE,
-  "proximal_promoter_TSS_assignment", "pending", "Section 4", FALSE,
-  "ATAC_support", "pending", "Section 5", FALSE,
-  "transcript_containment_flags", "pending", "Section 6", FALSE,
-  "loop_categories", "pending", "Section 8", FALSE,
-  "downstream_gene_resource_GO", "pending", "Section 12", FALSE
-)
-
 message(
   "Direct promoter/TSS overlap retained ",
   nrow(df.direct.promoter.tss.gene.assignment),
@@ -825,16 +664,6 @@ message(
   ),
   " pooled loops."
 )
-print(df.direct.promoter.tss.summary)
-
-# 1 pooled_loops                                      31021
-# 2 direct_true_TSS_overlap_records                   43961
-# 3 direct_EPD_promoter_overlap_records               11794
-# 4 unique_loop_anchor_gene_assignments               26920
-# 5 loops_with_any_direct_promoter_or_TSS             16343
-# 6 loops_with_direct_promoter_or_TSS_at_one_anchor   12295
-# 7 loops_with_direct_promoter_or_TSS_at_both_anchors  4048
-# 8 loops_without_direct_promoter_or_TSS              14678
 
 ################################################################################
 # 4. Generate a separate proximal promoter/TSS-assignment tier
@@ -2178,24 +2007,6 @@ df.proximal.promoter.tss.summary <- tibble(
   )
 )
 
-df.revised.assignment.pipeline.status <-
-  df.revised.assignment.pipeline.status %>%
-  mutate(
-    current_status = if_else(
-      analysis_component == "proximal_promoter_TSS_assignment",
-      paste0(
-        "revised_complete_secondary_inward_10kb_and_exploratory_",
-        "200kb_catalog"
-      ),
-      current_status
-    ),
-    uses_revised_direct_assignment = if_else(
-      analysis_component == "proximal_promoter_TSS_assignment",
-      TRUE,
-      uses_revised_direct_assignment
-    )
-  )
-
 message(
   "Proximal promoter/TSS analysis retained ",
   nrow(df.proximal.promoter.tss.gene.assignment),
@@ -2215,12 +2026,6 @@ message(
   ),
   " pooled loops."
 )
-print(df.proximal.promoter.tss.summary)
-message("\nMutually exclusive promoter/TSS evidence categories:")
-print(df.promoter.tss.exclusive.loop.category.summary)
-message("\nProximal-distance sensitivity summary:")
-print(df.proximal.promoter.tss.cumulative.threshold.summary)
-
 ################################################################################
 # 5. Recalculate ATAC support using true TSS exclusion regions
 #
@@ -3203,21 +3008,6 @@ df.revised.atac.analysis.definition <- tribble(
   )
 )
 
-df.revised.assignment.pipeline.status <-
-  df.revised.assignment.pipeline.status %>%
-  mutate(
-    current_status = if_else(
-      analysis_component == "ATAC_support",
-      "revised_complete_true_TSS_excluded_direct_orientation",
-      current_status
-    ),
-    uses_revised_direct_assignment = if_else(
-      analysis_component == "ATAC_support",
-      TRUE,
-      uses_revised_direct_assignment
-    )
-  )
-
 message(
   "Revised non-TSS ATAC support (>=50 bp) was found at the opposite anchor in ",
   sum(
@@ -3228,7 +3018,6 @@ message(
   nrow(df.revised.atac.unambiguous.orientation),
   " single-direct-promoter/TSS loops."
 )
-print(df.revised.atac.support.by.resolution)
 
 ################################################################################
 # 6. Add transcript-contained and related positional flags
@@ -3391,21 +3180,6 @@ df.transcript.position.definition <- tribble(
   )
 )
 
-df.revised.assignment.pipeline.status <-
-  df.revised.assignment.pipeline.status %>%
-  mutate(
-    current_status = if_else(
-      analysis_component == "transcript_containment_flags",
-      "revised_complete_descriptive_not_filtering",
-      current_status
-    ),
-    uses_revised_direct_assignment = if_else(
-      analysis_component == "transcript_containment_flags",
-      TRUE,
-      uses_revised_direct_assignment
-    )
-  )
-
 message(
   "Added transcript-position flags to ",
   nrow(df.direct.gene.assignment.position.flags),
@@ -3413,7 +3187,6 @@ message(
   nrow(df.proximal.gene.assignment.position.flags),
   " proximal loop-anchor-gene assignments."
 )
-print(df.transcript.position.summary)
 
 ################################################################################
 # 7. Predicted CTCF motif annotation
@@ -3621,22 +3394,7 @@ df.revised.loop.category.by.resolution <- df.revised.loop.evidence %>%
   ungroup() %>%
   arrange(resolution, desc(n_loops), revised_major_category)
 
-df.revised.assignment.pipeline.status <- df.revised.assignment.pipeline.status %>%
-  mutate(
-    current_status = if_else(
-      analysis_component == "loop_categories",
-      "revised_complete_direct_promoter_TSS_and_ATAC_categories",
-      current_status
-    ),
-    uses_revised_direct_assignment = if_else(
-      analysis_component == "loop_categories",
-      TRUE,
-      uses_revised_direct_assignment
-    )
-  )
-
 message("Revised loop categories cover all ", nrow(df.loop.universe), " calls.")
-print(df.revised.loop.category.summary)
 
 ################################################################################
 # 12. Revised resource tables and downstream gene summaries
@@ -4018,24 +3776,6 @@ revised.resource.tables <- list(
       filter(revised_no_direct_promoter_tss)
 )
 
-df.revised.assignment.pipeline.status <-
-  df.revised.assignment.pipeline.status %>%
-  mutate(
-    current_status = if_else(
-      analysis_component == "downstream_gene_resource_GO",
-      "revised_complete_multi_gene_direct_assignment",
-      current_status
-    ),
-    uses_revised_direct_assignment = if_else(
-      analysis_component == "downstream_gene_resource_GO",
-      TRUE,
-      uses_revised_direct_assignment
-    )
-  )
-
-message("Revised downstream gene-loop counts:")
-print(df.revised.gene.count.threshold.summary)
-
 ################################################################################
 # 12-1. HiCCUPS provenance and gene-ranking sensitivity analyses
 #
@@ -4086,11 +3826,12 @@ df.hiccups.quality.field.definition <- tribble(
   ),
   "centroid1_centroid2_radius", paste0(
     "Retained source geometry; pooled centroid medians support the ",
-    "cross-resolution approximate-loop-locus sensitivity analysis."
+    "all-resolution canonical-loop-locus sensitivity analysis."
   )
 )
 
-# Construct a separate approximate-locus map without changing exact loop IDs.
+# Construct an all-resolution canonical-locus sensitivity without changing the
+# exact pooled HiCCUPS call IDs or their source-library provenance.
 approximate.loop.locus.analysis <- build_approximate_loop_loci(
   df.loop.universe
 )
@@ -4098,6 +3839,20 @@ df.approximate.loop.locus.edge <- approximate.loop.locus.analysis$edge
 df.approximate.loop.locus.map <- approximate.loop.locus.analysis$map
 df.approximate.loop.locus.summary <- approximate.loop.locus.analysis$summary
 df.approximate.loop.locus.method <- approximate.loop.locus.analysis$method
+
+# Repeat canonicalization with half-sized distance tolerances to quantify how
+# strongly the locus count depends on the HiCCUPS-derived midpoint thresholds.
+strict.approximate.loop.locus.analysis <- build_approximate_loop_loci(
+  df.loop.universe,
+  merge.distance.bp = c("5K" = 10000L, "10K" = 10000L, "25K" = 25000L)
+)
+df.approximate.loop.locus.threshold.sensitivity <- bind_rows(
+  df.approximate.loop.locus.method %>%
+    mutate(tolerance_set = "HiCCUPS_default_20kb_20kb_50kb", .before = 1),
+  strict.approximate.loop.locus.analysis$method %>%
+    mutate(tolerance_set = "half_distance_10kb_10kb_25kb", .before = 1)
+)
+rm(strict.approximate.loop.locus.analysis)
 
 # Select the primary main-set loop-gene membership based on all retained TSS and
 # EPD evidence, then derive a stricter Ensembl-canonical-TSS-only sensitivity.
@@ -4228,9 +3983,6 @@ df.revised.go.significance.summary <-
   ) %>%
   arrange(gene_set)
 
-message("Revised exploratory GO input and significance summary:")
-print(df.revised.go.significance.summary)
-
 df.main.all.annotation.gene.loop.locus.count <-
   summarise_gene_loop_locus_counts(
     df.main.all.annotation.gene.loop.membership,
@@ -4315,11 +4067,6 @@ df.gene.rank.sensitivity.correlation <- bind_rows(
     "all_annotation_vs_canonical_TSS_approximate_loci"
   )
 )
-
-message("Approximate cross-resolution loop-locus sensitivity:")
-print(df.approximate.loop.locus.method)
-message("Gene-ranking sensitivity correlations:")
-print(df.gene.rank.sensitivity.correlation)
 
 ################################################################################
 # 12-2. Revised Figure 5b-c positional-density analysis
@@ -4592,9 +4339,6 @@ ggsave(
   dpi = 300,
   bg = "white"
 )
-
-message("Revised Figure 5b-c feature counts by resolution:")
-print(df.figure5.revised.feature.summary)
 
 ################################################################################
 # 12-3. Legacy comparison is intentionally excluded from production
@@ -5052,20 +4796,39 @@ df.genetic.proxy.deprecation <- tibble(
   )
 )
 
+# Record the final production state once, after every revised component has run.
+df.revised.assignment.pipeline.status <- tribble(
+  ~analysis_component, ~current_status, ~replacement_section,
+  ~uses_revised_direct_assignment,
+  "direct_promoter_TSS_anchor_overlap",
+  "revised_complete", "Section 3", TRUE,
+  "proximal_promoter_TSS_assignment",
+  "revised_complete_secondary_inward_10kb_and_exploratory_200kb_catalog",
+  "Section 4", TRUE,
+  "ATAC_support",
+  "revised_complete_true_TSS_excluded_direct_orientation",
+  "Section 5", TRUE,
+  "transcript_containment_flags",
+  "revised_complete_descriptive_not_filtering",
+  "Section 6", TRUE,
+  "loop_categories",
+  "revised_complete_direct_promoter_TSS_and_ATAC_categories",
+  "Section 8", TRUE,
+  "downstream_gene_resource_GO",
+  "revised_complete_multi_gene_direct_assignment",
+  "Section 12", TRUE
+)
+
 # Compute reproducible SHA-256 checksums for source inputs and analysis scripts.
 sha256_file <- function(path) {
   if (!file.exists(path)) return(NA_character_)
-  checksum.output <- system2(
-    "shasum",
-    args = c("-a", "256", shQuote(path)),
-    stdout = TRUE,
-    stderr = TRUE
-  )
-  checksum <- str_extract(checksum.output[[1]], "^[0-9a-fA-F]{64}")
-  if (is.na(checksum)) {
-    stop("Unable to compute SHA-256 for: ", path, call. = FALSE)
+  if (!requireNamespace("digest", quietly = TRUE)) {
+    stop(
+      "The cross-platform 'digest' package is required for SHA-256 checksums.",
+      call. = FALSE
+    )
   }
-  str_to_lower(checksum)
+  digest::digest(file = path, algo = "sha256", serialize = FALSE)
 }
 
 analysis.script.files <- tibble(
@@ -5140,240 +4903,93 @@ assert_analysis_condition(
 # 16. Write resubmission outputs
 ################################################################################
 
-# Keep output filenames and their source objects in two explicit registries so
-# revised and legacy deliverables remain auditable without repeated write calls.
+# Register only the curated production tables instead of registering every
+# intermediate object and filtering the registry afterward.
 revised.output.table.registry <- tribble(
   ~output_file, ~object_name,
   "source_data_versions.tsv", "df.source.data.versions",
   "coordinate_system_audit.tsv", "df.coordinate.system.audit",
   "hiccups_sample_loop_quality.tsv.gz", "df.hiccups.sample.loop.quality",
-  "hiccups_pooled_exact_loop_support_summary.tsv", "df.loop.pooled.support.summary",
   "hiccups_quality_field_definitions.tsv", "df.hiccups.quality.field.definition",
-  "true_tss_transcript_annotation.tsv", "df.true.tss.transcript",
   "true_tss_generation_summary.tsv", "df.true.tss.summary",
-  "strict_direct_true_tss_anchor_overlaps.tsv", "df.strict.direct.true.tss.anchor.overlap",
-  "strict_direct_epd_promoter_anchor_overlaps.tsv", "df.strict.direct.epd.promoter.anchor.overlap",
-  "strict_direct_promoter_tss_anchor_overlaps.tsv", "df.strict.direct.promoter.tss.anchor.overlap",
-  "strict_direct_promoter_tss_gene_assignments.tsv", "df.strict.direct.promoter.tss.gene.assignment",
-  "strict_direct_promoter_tss_anchor_summary.tsv", "df.strict.direct.promoter.tss.anchor.summary",
-  "strict_direct_promoter_tss_loop_summary.tsv", "df.strict.direct.promoter.tss.loop.summary",
-  "strict_direct_promoter_tss_summary.tsv", "df.strict.direct.promoter.tss.summary",
-  "direct_true_tss_anchor_overlaps.tsv", "df.direct.true.tss.anchor.overlap",
-  "direct_epd_promoter_anchor_overlaps.tsv", "df.direct.epd.promoter.anchor.overlap",
-  "direct_promoter_tss_anchor_overlaps.tsv", "df.direct.promoter.tss.anchor.overlap",
-  "direct_promoter_tss_gene_assignments.tsv", "df.direct.promoter.tss.gene.assignment",
-  "direct_promoter_tss_anchor_summary.tsv", "df.direct.promoter.tss.anchor.summary",
-  "direct_promoter_tss_loop_summary.tsv", "df.direct.promoter.tss.loop.summary",
+  "promoter_tss_anchor_evidence_definition_summary.tsv",
+    "df.promoter.tss.anchor.evidence.definition.summary",
   "direct_promoter_tss_summary.tsv", "df.direct.promoter.tss.summary",
-  "strict_vs_primary_promoter_window_loop_comparison.tsv", "df.strict.vs.primary.promoter.window.loop.comparison",
-  "strict_vs_primary_promoter_window_summary.tsv", "df.strict.vs.primary.promoter.window.summary",
-  "promoter_anchor_assignment_definitions.tsv", "df.promoter.anchor.assignment.definitions",
-  "promoter_tss_anchor_evidence_definition_summary.tsv", "df.promoter.tss.anchor.evidence.definition.summary",
-  "promoter_tss_mutually_exclusive_loop_categories.tsv.gz", "df.promoter.tss.exclusive.loop.category",
-  "promoter_tss_mutually_exclusive_loop_category_summary.tsv", "df.promoter.tss.exclusive.loop.category.summary",
-  "dual_primary_representative_anchor_selection.tsv", "df.dual.primary.anchor.representative.score",
-  "dual_primary_representative_anchor_selection_summary.tsv", "df.dual.primary.anchor.representative.summary",
-  "dual_primary_representative_anchor_gene_assignments.tsv", "df.dual.primary.representative.gene.assignment",
-  "proximal_promoter_tss_anchor_pairs.tsv.gz", "df.proximal.promoter.tss.anchor.pair",
-  "proximal_promoter_tss_gene_assignments.tsv.gz", "df.proximal.promoter.tss.gene.assignment",
-  "secondary_inward_proximal_10kb_gene_assignments.tsv", "df.secondary.inward.proximal.gene.assignment",
-  "secondary_inward_proximal_10kb_loop_summary.tsv", "df.secondary.inward.proximal.loop.summary",
-  "secondary_inward_proximal_10kb_by_resolution.tsv", "df.secondary.inward.proximal.by.resolution",
-  "proximal_promoter_tss_anchor_summary.tsv", "df.proximal.promoter.tss.anchor.summary",
-  "proximal_promoter_tss_loop_summary.tsv", "df.proximal.promoter.tss.loop.summary",
-  "proximal_promoter_tss_by_resolution_and_distance.tsv", "df.proximal.promoter.tss.by.resolution.distance",
-  "proximal_promoter_tss_cumulative_threshold_summary.tsv", "df.proximal.promoter.tss.cumulative.threshold.summary",
-  "proximal_promoter_tss_analysis_definition.tsv", "df.proximal.promoter.tss.analysis.definition",
-  "proximal_promoter_tss_summary.tsv", "df.proximal.promoter.tss.summary",
-  "revised_atac_known_tss_source_records.tsv.gz", "df.known.tss.source.record",
-  "revised_atac_true_tss_exclusion_regions.tsv", "df.revised.atac.true.tss.exclusion.region",
-  "revised_atac_exclusion_summary.tsv", "df.revised.atac.exclusion.summary",
-  "revised_promoter_window_atac_anchor_summary.tsv.gz", "df.revised.promoter.window.atac.anchor.summary",
-  "revised_atac_anchor_evidence.tsv", "df.revised.atac.anchor.evidence",
-  "revised_atac_direct_orientations.tsv", "df.revised.atac.direct.orientation",
-  "dual_promoter_atac_directional_category_definitions.tsv", "df.dual.promoter.atac.directional.category.definition",
-  "dual_promoter_atac_directional_classification.tsv", "df.dual.promoter.atac.directional.classification",
-  "dual_promoter_atac_directional_summary.tsv", "df.dual.promoter.atac.directional.summary",
-  "revised_atac_loop_summary.tsv", "df.revised.atac.loop.summary",
-  "revised_atac_support_by_resolution.tsv", "df.revised.atac.support.by.resolution",
-  "revised_atac_paired_anchor_mcnemar.tsv", "df.revised.atac.paired.anchor.mcnemar",
-  "revised_atac_candidate_non_tss_fragment_evidence.tsv.gz", "df.revised.atac.candidate.non.tss.fragment.evidence",
-  "revised_atac_fragment_anchor_summary.tsv", "df.revised.atac.fragment.anchor.summary",
-  "revised_atac_method_comparison_summary.tsv", "df.revised.atac.method.comparison.summary",
+  "dual_promoter_atac_directional_category_definitions.tsv",
+    "df.dual.promoter.atac.directional.category.definition",
+  "dual_promoter_atac_directional_summary.tsv",
+    "df.dual.promoter.atac.directional.summary",
+  "revised_atac_support_by_resolution.tsv",
+    "df.revised.atac.support.by.resolution",
+  "revised_atac_paired_anchor_mcnemar.tsv",
+    "df.revised.atac.paired.anchor.mcnemar",
   "revised_atac_analysis_definition.tsv", "df.revised.atac.analysis.definition",
-  "direct_transcript_position_detail.tsv.gz", "df.direct.transcript.position.detail",
-  "proximal_transcript_position_detail.tsv.gz", "df.proximal.transcript.position.detail",
-  "direct_gene_assignment_position_flags.tsv", "df.direct.gene.assignment.position.flags",
-  "proximal_gene_assignment_position_flags.tsv.gz", "df.proximal.gene.assignment.position.flags",
   "transcript_position_summary.tsv", "df.transcript.position.summary",
   "transcript_position_definitions.tsv", "df.transcript.position.definition",
-  "revised_loop_evidence_table.tsv", "df.revised.loop.evidence",
-  "revised_loop_category_definitions.tsv", "df.revised.loop.category.definition",
+  "revised_assignment_pipeline_status.tsv",
+    "df.revised.assignment.pipeline.status",
+  "revised_loop_category_definitions.tsv",
+    "df.revised.loop.category.definition",
   "revised_loop_category_summary.tsv", "df.revised.loop.category.summary",
-  "revised_loop_category_by_resolution.tsv", "df.revised.loop.category.by.resolution",
-  "revised_assignment_pipeline_status.tsv", "df.revised.assignment.pipeline.status",
-  "revised_gene_loop_membership.tsv", "df.revised.gene.loop.membership",
-  "revised_gene_count_by_set.tsv", "df.revised.gene.count.by.set",
-  "approach_2nd_gene_loop_counts_all_sets.tsv", "df.approach2.gene.loop.count",
-  "approach_2nd_multiple_interaction_genes_all_sets.tsv", "df.approach2.multiple.interaction.genes",
-  "approach_2nd_multiple_interaction_summary.tsv", "df.approach2.multiple.interaction.summary",
-  "revised_gene_count_threshold_summary.tsv", "df.revised.gene.count.threshold.summary",
-  "revised_gene_count_threshold_detail.tsv", "df.revised.gene.count.threshold.detail",
+  "revised_loop_category_by_resolution.tsv",
+    "df.revised.loop.category.by.resolution",
   "revised_go_input_summary.tsv", "df.revised.go.input.summary",
-  "revised_go_significance_summary.tsv", "df.revised.go.significance.summary",
-  "revised_downstream_analysis_definitions.tsv", "df.revised.downstream.analysis.definition",
-  "approximate_loop_locus_edges.tsv.gz", "df.approximate.loop.locus.edge",
+  "revised_go_significance_summary.tsv",
+    "df.revised.go.significance.summary",
+  "revised_downstream_analysis_definitions.tsv",
+    "df.revised.downstream.analysis.definition",
   "approximate_loop_locus_map.tsv", "df.approximate.loop.locus.map",
   "approximate_loop_locus_summary.tsv", "df.approximate.loop.locus.summary",
   "approximate_loop_locus_method.tsv", "df.approximate.loop.locus.method",
-  "main_all_annotation_gene_loop_locus_counts.tsv", "df.main.all.annotation.gene.loop.locus.count",
-  "canonical_TSS_main_loop_gene_membership.tsv", "df.canonical.tss.main.loop.gene.membership",
-  "canonical_TSS_main_gene_loop_locus_counts.tsv", "df.main.canonical.tss.gene.loop.locus.count",
+  "approximate_loop_locus_threshold_sensitivity.tsv",
+    "df.approximate.loop.locus.threshold.sensitivity",
   "gene_rank_sensitivity_detail.tsv", "df.gene.rank.sensitivity.detail",
-  "gene_rank_sensitivity_correlations.tsv", "df.gene.rank.sensitivity.correlation",
-  "figure5_true_TSS_sites.tsv.gz", "df.figure5.true.tss.site",
-  "figure5_true_TSS_relative_positions.tsv.gz", "df.figure5.true.tss.relative.position",
-  "figure5_coordinate_normalized_promoter_sites.tsv.gz", "df.figure5.promoter.site",
-  "figure5_coordinate_normalized_promoter_relative_positions.tsv.gz", "df.figure5.promoter.relative.position",
-  "figure5_revised_feature_summary_by_resolution.tsv", "df.figure5.revised.feature.summary",
+  "gene_rank_sensitivity_correlations.tsv",
+    "df.gene.rank.sensitivity.correlation",
+  "figure5_revised_feature_summary_by_resolution.tsv",
+    "df.figure5.revised.feature.summary",
   "hrdp_sample_strain_key.tsv", "df.sample.strain.key",
   "depth_qc_by_strain.tsv", "df.depth.qc.by.strain",
   "depth_qc_summary.tsv", "df.depth.qc.summary",
-  "depth_loop_correlation_by_resolution.tsv", "df.depth.loop.correlation.by.resolution",
+  "depth_loop_correlation_by_resolution.tsv",
+    "df.depth.loop.correlation.by.resolution",
   "depth_analysis_interpretation.tsv", "df.depth.analysis.interpretation"
 )
 
-# Resolve production output objects after all revised analyses have completed.
-revised.static.output.tables <- resolve_output_table_registry(
+output.tables <- resolve_output_table_registry(
   revised.output.table.registry,
   envir = environment()
 )
 
-# Include the combined enrichment table only when the GO analysis returned rows.
+# Add the selected final resource and GO-input tables with stable filenames.
+selected.resource.table.names <- c(
+  "revised_pooled_loop_annotation_resource",
+  "revised_direct_loop_gene_assignments",
+  "revised_putative_regulatory_loops"
+)
+output.tables <- c(
+  output.tables,
+  set_names(
+    revised.resource.tables[selected.resource.table.names],
+    paste0(selected.resource.table.names, ".tsv")
+  ),
+  set_names(
+    revised.go.gene.sets,
+    paste0("go_input_", names(revised.go.gene.sets), "_genes.tsv")
+  )
+)
+
+# GO output is optional when no significant or reportable terms are returned.
 if (nrow(df.revised.go.result) > 0L) {
-  revised.static.output.tables[[
-    "revised_go_enrichment_BP_all_sets.tsv"
-  ]] <- df.revised.go.result
+  output.tables[["revised_go_enrichment_BP_all_sets.tsv"]] <-
+    df.revised.go.result
 }
 
-revised.resource.output.tables <- set_names(
-  revised.resource.tables,
-  paste0(names(revised.resource.tables), ".tsv")
-)
-revised.go.output.tables <- set_names(
-  revised.go.gene.sets,
-  paste0("go_input_", names(revised.go.gene.sets), "_genes.tsv")
-)
-
-revised.go.output.vectors <- set_names(
-  map(revised.go.gene.sets, ~ .x$ensembl_gene_id),
-  paste0(
-    "go_input_",
-    names(revised.go.gene.sets),
-    "_ensembl_ids.txt"
-  )
-)
-
-approach2.gprofiler.output.files <- paste0(
-  "gprofiler_input_",
-  approach2.gene.set.names,
-  "_multiple_interactions_ge2.txt"
-)
-approach2.gprofiler.output.vectors <- set_names(
-  map(
-    approach2.gene.set.names,
-    function(set.name) {
-      df.approach2.multiple.interaction.genes %>%
-        filter(gene_set == set.name) %>%
-        arrange(desc(n), gene_id) %>%
-        pull(gene_id)
-    }
-  ),
-  approach2.gprofiler.output.files
-)
-
-output.tables <- c(
-  revised.static.output.tables,
-  revised.resource.output.tables,
-  revised.go.output.tables
-)
-output.line.vectors <- c(
-  revised.go.output.vectors,
-  approach2.gprofiler.output.vectors
-)
-
-# Keep the resubmission output directory limited to final resources, compact
-# method/QC summaries, and the sensitivity analyses required for reporting.
-curated.output.table.files <- c(
-  "source_data_versions.tsv",
-  "coordinate_system_audit.tsv",
-  "hiccups_sample_loop_quality.tsv.gz",
-  "hiccups_quality_field_definitions.tsv",
-  "true_tss_generation_summary.tsv",
-  "promoter_tss_anchor_evidence_definition_summary.tsv",
-  "direct_promoter_tss_summary.tsv",
-  "dual_promoter_atac_directional_category_definitions.tsv",
-  "dual_promoter_atac_directional_summary.tsv",
-  "revised_atac_support_by_resolution.tsv",
-  "revised_atac_paired_anchor_mcnemar.tsv",
-  "revised_atac_analysis_definition.tsv",
-  "transcript_position_summary.tsv",
-  "transcript_position_definitions.tsv",
-  "revised_assignment_pipeline_status.tsv",
-  "revised_loop_category_definitions.tsv",
-  "revised_loop_category_summary.tsv",
-  "revised_loop_category_by_resolution.tsv",
-  "revised_go_input_summary.tsv",
-  "revised_go_significance_summary.tsv",
-  "revised_downstream_analysis_definitions.tsv",
-  "approximate_loop_locus_map.tsv",
-  "approximate_loop_locus_summary.tsv",
-  "approximate_loop_locus_method.tsv",
-  "gene_rank_sensitivity_detail.tsv",
-  "gene_rank_sensitivity_correlations.tsv",
-  "figure5_revised_feature_summary_by_resolution.tsv",
-  "revised_pooled_loop_annotation_resource.tsv",
-  "revised_direct_loop_gene_assignments.tsv",
-  "revised_putative_regulatory_loops.tsv",
-  "go_input_revised_putative_all_genes.tsv",
-  "go_input_revised_putative_canonical_TSS_only_genes.tsv",
-  "revised_go_enrichment_BP_all_sets.tsv",
-  "hrdp_sample_strain_key.tsv",
-  "depth_qc_by_strain.tsv",
-  "depth_qc_summary.tsv",
-  "depth_loop_correlation_by_resolution.tsv",
-  "depth_analysis_interpretation.tsv"
-)
-curated.output.vector.files <- character()
-
-output.tables <- output.tables[
-  intersect(curated.output.table.files, names(output.tables))
-]
-output.line.vectors <- output.line.vectors[
-  intersect(curated.output.vector.files, names(output.line.vectors))
-]
-
-missing.curated.output.tables <- setdiff(
-  setdiff(
-    curated.output.table.files,
-    "revised_go_enrichment_BP_all_sets.tsv"
-  ),
-  names(output.tables)
-)
 assert_analysis_condition(
-  length(missing.curated.output.tables) == 0L,
-  paste0(
-    "Curated resubmission table(s) were not registered: ",
-    paste(missing.curated.output.tables, collapse = ", ")
-  )
+  !anyDuplicated(names(output.tables)),
+  "The curated output table registry contains duplicate filenames."
 )
-assert_analysis_condition(
-  setequal(names(output.line.vectors), curated.output.vector.files),
-  "Curated resubmission vector outputs were not registered completely."
-)
-
 write_named_tsv_tables(output.tables, output.dir)
-write_named_line_vectors(output.line.vectors, output.dir)
 
 # Keep separately generated ATAC matched-null deliverables across production
 # reruns and include them in the release manifest whenever they are present.
@@ -5401,7 +5017,6 @@ writeLines(
 
 generated.output.files <- c(
   names(output.tables),
-  names(output.line.vectors),
   figure5.output.files,
   available.atac.matched.null.output.files,
   "resubmit_session_info.txt"

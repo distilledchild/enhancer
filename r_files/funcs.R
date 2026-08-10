@@ -1124,17 +1124,27 @@ assign_connected_components_from_edges <- function(
   component.order$component_id[match(roots, component.order$root)]
 }
 
-# Build conservative cross-resolution approximate loop loci for sensitivity analysis only.
-build_approximate_loop_loci <- function(df.loop) {
+# Group nearby exact HiCCUPS calls into all-pairs-constrained canonical loci.
+build_approximate_loop_loci <- function(
+  df.loop,
+  merge.distance.bp = c("5K" = 20000L, "10K" = 20000L, "25K" = 50000L)
+) {
   check_required_columns(
     df.loop,
     c(
       "loop_id", "chr1", "start1", "end1", "chr2", "start2", "end2",
       "resolution", "resolution_bp", "hiccups_centroid1_1based_median",
-      "hiccups_centroid2_1based_median", "hiccups_radius_bp_max"
+      "hiccups_centroid2_1based_median", "hiccups_radius_bp_max",
+      "n_supporting_libraries", "supporting_samples"
     ),
     "Exact pooled HiCCUPS loop resource"
   )
+
+  merge.distance.bp <- as.integer(merge.distance.bp)
+  names(merge.distance.bp) <- c("5K", "10K", "25K")
+  if (any(is.na(merge.distance.bp)) || any(merge.distance.bp <= 0L)) {
+    stop("HiCCUPS merge-distance values must be positive integers.", call. = FALSE)
+  }
 
   df.loop.ordered <- df.loop %>%
     arrange(chr1, start1, end1, chr2, start2, end2, resolution_bp, loop_id) %>%
@@ -1147,14 +1157,27 @@ build_approximate_loop_loci <- function(df.loop) {
       locus_centroid2 = coalesce(
         hiccups_centroid2_1based_median,
         (start2 + end2) / 2
-      )
+      ),
+      locus_merge_distance_bp = unname(merge.distance.bp[resolution])
     )
 
+  if (any(is.na(df.loop.ordered$locus_merge_distance_bp))) {
+    stop("A loop resolution lacks a canonical-locus merge distance.", call. = FALSE)
+  }
+
+  # Use a broad anchor-1 window to enumerate nearby candidates efficiently;
+  # the exact two-dimensional threshold is applied below.
+  maximum.merge.distance.bp <- max(merge.distance.bp)
   gr.anchor1 <- GRanges(
     seqnames = df.loop.ordered$chr1,
     ranges = IRanges(
-      start = df.loop.ordered$start1,
-      end = df.loop.ordered$end1
+      start = pmax(
+        1L,
+        floor(df.loop.ordered$locus_centroid1 - maximum.merge.distance.bp)
+      ),
+      end = ceiling(
+        df.loop.ordered$locus_centroid1 + maximum.merge.distance.bp
+      )
     )
   )
   anchor1.hits <- findOverlaps(gr.anchor1, gr.anchor1, type = "any")
@@ -1173,6 +1196,10 @@ build_approximate_loop_loci <- function(df.loop) {
       resolution_2 = df.loop.ordered$resolution[loop_index_2],
       resolution_bp_1 = df.loop.ordered$resolution_bp[loop_index_1],
       resolution_bp_2 = df.loop.ordered$resolution_bp[loop_index_2],
+      supporting_samples_1 =
+        df.loop.ordered$supporting_samples[loop_index_1],
+      supporting_samples_2 =
+        df.loop.ordered$supporting_samples[loop_index_2],
       chr2_1 = df.loop.ordered$chr2[loop_index_1],
       chr2_2 = df.loop.ordered$chr2[loop_index_2],
       start1_1 = df.loop.ordered$start1[loop_index_1],
@@ -1186,13 +1213,14 @@ build_approximate_loop_loci <- function(df.loop) {
       centroid1_1 = df.loop.ordered$locus_centroid1[loop_index_1],
       centroid1_2 = df.loop.ordered$locus_centroid1[loop_index_2],
       centroid2_1 = df.loop.ordered$locus_centroid2[loop_index_1],
-      centroid2_2 = df.loop.ordered$locus_centroid2[loop_index_2]
+      centroid2_2 = df.loop.ordered$locus_centroid2[loop_index_2],
+      merge_distance_1 =
+        df.loop.ordered$locus_merge_distance_bp[loop_index_1],
+      merge_distance_2 =
+        df.loop.ordered$locus_merge_distance_bp[loop_index_2]
     ) %>%
     filter(
-      resolution_1 != resolution_2,
-      chr2_1 == chr2_2,
-      start2_1 <= end2_2,
-      start2_2 <= end2_1
+      chr2_1 == chr2_2
     ) %>%
     mutate(
       anchor1_overlap_bp =
@@ -1204,16 +1232,100 @@ build_approximate_loop_loci <- function(df.loop) {
       centroid_distance_2d_bp = sqrt(
         centroid1_difference_bp^2 + centroid2_difference_bp^2
       ),
-      centroid_threshold_bp = pmax(resolution_bp_1, resolution_bp_2)
+      centroid_threshold_bp = pmax(merge_distance_1, merge_distance_2),
+      shares_source_library = map2_lgl(
+        supporting_samples_1,
+        supporting_samples_2,
+        function(samples.1, samples.2) {
+          samples.1 <- str_split(samples.1, fixed(";"), simplify = FALSE)[[1]]
+          samples.2 <- str_split(samples.2, fixed(";"), simplify = FALSE)[[1]]
+          length(intersect(samples.1, samples.2)) > 0L
+        }
+      ),
+      normalized_centroid_distance =
+        centroid_distance_2d_bp / centroid_threshold_bp
     ) %>%
-    filter(centroid_distance_2d_bp <= centroid_threshold_bp) %>%
+    filter(
+      !shares_source_library,
+      centroid_distance_2d_bp <= centroid_threshold_bp
+    ) %>%
     arrange(loop_index_1, loop_index_2)
 
-  component.id <- assign_connected_components_from_edges(
+  candidate.component.id <- assign_connected_components_from_edges(
     n.nodes = nrow(df.loop.ordered),
     from = df.candidate.edge$loop_index_1,
     to = df.candidate.edge$loop_index_2
   )
+
+  # Partition each candidate component so every pair within a final locus has
+  # a qualifying edge. This prevents transitive A-B-C chaining from merging A
+  # and C when they are too far apart or were resolved separately in one library.
+  qualifying.edge.distance <- setNames(
+    df.candidate.edge$normalized_centroid_distance,
+    str_c(
+      pmin(df.candidate.edge$loop_index_1, df.candidate.edge$loop_index_2),
+      pmax(df.candidate.edge$loop_index_1, df.candidate.edge$loop_index_2),
+      sep = ":"
+    )
+  )
+  final.cluster.id <- integer(nrow(df.loop.ordered))
+  next.cluster.id <- 0L
+
+  for (component in sort(unique(candidate.component.id))) {
+    component.members <- which(candidate.component.id == component)
+    member.order <- df.loop.ordered %>%
+      filter(loop_index %in% component.members) %>%
+      arrange(
+        dplyr::desc(n_supporting_libraries),
+        resolution_bp,
+        loop_id
+      ) %>%
+      pull(loop_index)
+
+    component.clusters <- list()
+    for (member in member.order) {
+      eligible.cluster <- which(vapply(
+        component.clusters,
+        function(cluster.members) {
+          pair.keys <- str_c(
+            pmin(member, cluster.members),
+            pmax(member, cluster.members),
+            sep = ":"
+          )
+          all(pair.keys %in% names(qualifying.edge.distance))
+        },
+        logical(1)
+      ))
+
+      if (length(eligible.cluster) == 0L) {
+        component.clusters[[length(component.clusters) + 1L]] <- member
+      } else {
+        mean.distance <- vapply(
+          eligible.cluster,
+          function(cluster.index) {
+            cluster.members <- component.clusters[[cluster.index]]
+            pair.keys <- str_c(
+              pmin(member, cluster.members),
+              pmax(member, cluster.members),
+              sep = ":"
+            )
+            mean(qualifying.edge.distance[pair.keys])
+          },
+          numeric(1)
+        )
+        chosen.cluster <- eligible.cluster[[which.min(mean.distance)]]
+        component.clusters[[chosen.cluster]] <- c(
+          component.clusters[[chosen.cluster]],
+          member
+        )
+      }
+    }
+
+    for (cluster.members in component.clusters) {
+      next.cluster.id <- next.cluster.id + 1L
+      final.cluster.id[cluster.members] <- next.cluster.id
+    }
+  }
 
   df.loop.locus.map <- df.loop.ordered %>%
     transmute(
@@ -1222,7 +1334,7 @@ build_approximate_loop_loci <- function(df.loop) {
       resolution_bp,
       approximate_loop_locus_id = str_c(
         "approx_locus_",
-        str_pad(component.id, width = 6L, pad = "0")
+        str_pad(final.cluster.id, width = 6L, pad = "0")
       )
     ) %>%
     add_count(
@@ -1250,21 +1362,84 @@ build_approximate_loop_loci <- function(df.loop) {
     ) %>%
     left_join(
       df.loop.locus.map %>%
-        dplyr::select(loop_id_1 = loop_id, approximate_loop_locus_id),
+        dplyr::select(
+          loop_id_1 = loop_id,
+          approximate_loop_locus_id_1 = approximate_loop_locus_id
+        ),
       by = "loop_id_1"
+    ) %>%
+    left_join(
+      df.loop.locus.map %>%
+        dplyr::select(
+          loop_id_2 = loop_id,
+          approximate_loop_locus_id_2 = approximate_loop_locus_id
+        ),
+      by = "loop_id_2"
+    ) %>%
+    filter(
+      approximate_loop_locus_id_1 == approximate_loop_locus_id_2
+    ) %>%
+    transmute(
+      approximate_loop_locus_id = approximate_loop_locus_id_1,
+      dplyr::across(-c(
+        approximate_loop_locus_id_1,
+        approximate_loop_locus_id_2
+      ))
     )
 
-  df.loop.locus.summary <- df.loop.ordered %>%
+  df.loop.with.locus <- df.loop.ordered %>%
     left_join(
       df.loop.locus.map %>%
         dplyr::select(loop_id, approximate_loop_locus_id),
       by = "loop_id"
+    )
+
+  # Select a real source call as the representative medoid; supporting-library
+  # count and finer resolution are used only to resolve exact distance ties.
+  df.loop.locus.representative <- df.loop.with.locus %>%
+    group_by(approximate_loop_locus_id) %>%
+    mutate(
+      locus_centroid1_median = median(locus_centroid1),
+      locus_centroid2_median = median(locus_centroid2),
+      distance_to_locus_median = sqrt(
+        (locus_centroid1 - locus_centroid1_median)^2 +
+          (locus_centroid2 - locus_centroid2_median)^2
+      )
     ) %>%
+    arrange(
+      distance_to_locus_median,
+      dplyr::desc(n_supporting_libraries),
+      resolution_bp,
+      loop_id,
+      .by_group = TRUE
+    ) %>%
+    dplyr::slice(1L) %>%
+    ungroup() %>%
+    transmute(
+      approximate_loop_locus_id,
+      representative_loop_id = loop_id,
+      representative_resolution = resolution,
+      representative_chr1 = chr1,
+      representative_start1 = start1,
+      representative_end1 = end1,
+      representative_chr2 = chr2,
+      representative_start2 = start2,
+      representative_end2 = end2
+    )
+
+  df.loop.locus.summary <- df.loop.with.locus %>%
     group_by(approximate_loop_locus_id) %>%
     summarise(
       n_exact_loop_calls = n(),
       n_resolutions = n_distinct(resolution),
       resolutions = str_c(sort(unique(resolution)), collapse = ";"),
+      n_supporting_libraries = n_distinct(
+        unlist(str_split(supporting_samples, fixed(";")))
+      ),
+      supporting_samples = str_c(
+        sort(unique(unlist(str_split(supporting_samples, fixed(";"))))),
+        collapse = ";"
+      ),
       chr1 = dplyr::first(chr1),
       locus_anchor1_start = min(start1),
       locus_anchor1_end = max(end1),
@@ -1276,15 +1451,30 @@ build_approximate_loop_loci <- function(df.loop) {
       maximum_source_hiccups_radius_bp = max(hiccups_radius_bp_max),
       .groups = "drop"
     ) %>%
+    left_join(
+      df.loop.locus.representative,
+      by = "approximate_loop_locus_id"
+    ) %>%
     arrange(chr1, locus_anchor1_start, chr2, locus_anchor2_start)
 
   df.loop.locus.method <- tibble(
-    analysis_role = "sensitivity_only_main_exact_loop_calls_unchanged",
+    analysis_role = "canonical_locus_sensitivity_main_exact_calls_preserved",
     pair_requirement = paste0(
-      "different HiCCUPS resolutions; both anchor intervals overlap; ",
-      "two-dimensional centroid distance <= larger anchor resolution"
+      "same chromosome pair; no shared source library; two-dimensional ",
+      "centroid distance <= max of resolution-specific HiCCUPS-like ",
+      "merge distances (5K=", merge.distance.bp[["5K"]],
+      ",10K=", merge.distance.bp[["10K"]],
+      ",25K=", merge.distance.bp[["25K"]], " bp)"
     ),
-    aggregation = "connected_components_of_qualifying_cross_resolution_pairs",
+    aggregation = paste0(
+      "deterministic all-pairs-constrained partition; every call pair within ",
+      "a locus must qualify, preventing transitive chaining"
+    ),
+    representative_rule = paste0(
+      "source call nearest the locus median two-anchor centroid; ties resolved ",
+      "by more supporting libraries, then finer resolution; exact calls and ",
+      "provenance remain unchanged"
+    ),
     n_exact_loop_calls = nrow(df.loop.ordered),
     n_qualifying_pair_edges = nrow(df.loop.locus.edge),
     n_approximate_loop_loci = nrow(df.loop.locus.summary),
@@ -2300,6 +2490,213 @@ find_direct_anchor_annotation_overlaps <- function(
   }
 
   df.overlap
+}
+
+# Build one strict or +/-1-kb direct promoter/TSS evidence tier from normalized
+# Ensembl and EPD annotations, then return the lossless records and summaries.
+build_direct_promoter_tss_tier <- function(
+  gr.loop.anchor.by.side,
+  gr.true.tss.annotation,
+  gr.epd.annotation,
+  df.true.tss,
+  df.epd.promoter,
+  df.loop.universe,
+  evidence.definition = c("strict", "primary_1kb"),
+  promoter.window.flank.bp = NA_integer_
+) {
+  evidence.definition <- match.arg(evidence.definition)
+  is.primary <- evidence.definition == "primary_1kb"
+
+  true.source.lookup <- df.true.tss %>%
+    mutate(annotation_index = row_number()) %>%
+    select(
+      annotation_index,
+      true_tss_id,
+      true_tss_start,
+      true_tss_end,
+      gene_id,
+      gene_id_versioned,
+      gene_name,
+      gene_biotype,
+      transcript_id,
+      transcript_id_versioned,
+      transcript_name,
+      transcript_biotype,
+      is_ensembl_canonical,
+      transcript_start,
+      transcript_end,
+      source,
+      source_coordinate_system,
+      analysis_coordinate_system
+    )
+
+  epd.source.lookup <- df.epd.promoter %>%
+    mutate(annotation_index = row_number()) %>%
+    select(
+      annotation_index,
+      promoter_annotation_id,
+      epd_promoter_name,
+      epd_tss_start,
+      epd_tss_end,
+      gene_id,
+      gene_name,
+      source_coordinate_system,
+      analysis_coordinate_system
+    )
+
+  true.lookup <- true.source.lookup %>%
+    transmute(
+      annotation_index,
+      annotation_class = "true_TSS",
+      base_annotation_id = true_tss_id,
+      gene_id,
+      gene_id_versioned,
+      gene_name,
+      gene_biotype,
+      transcript_id,
+      transcript_id_versioned,
+      transcript_name,
+      transcript_biotype,
+      is_ensembl_canonical,
+      transcript_start,
+      transcript_end,
+      promoter_annotation_id = NA_character_,
+      epd_promoter_name = NA_character_,
+      epd_tss_start = NA_integer_,
+      epd_tss_end = NA_integer_,
+      tss_start = true_tss_start,
+      tss_end = true_tss_end,
+      lookup_source = source,
+      source_coordinate_system,
+      analysis_coordinate_system
+    )
+
+  epd.lookup <- epd.source.lookup %>%
+    transmute(
+      annotation_index,
+      annotation_class = "EPD_promoter",
+      base_annotation_id = promoter_annotation_id,
+      gene_id,
+      gene_id_versioned = gene_id,
+      gene_name,
+      gene_biotype = NA_character_,
+      transcript_id = NA_character_,
+      transcript_id_versioned = NA_character_,
+      transcript_name = NA_character_,
+      transcript_biotype = NA_character_,
+      is_ensembl_canonical = NA,
+      transcript_start = NA_integer_,
+      transcript_end = NA_integer_,
+      promoter_annotation_id,
+      epd_promoter_name,
+      epd_tss_start,
+      epd_tss_end,
+      tss_start = epd_tss_start,
+      tss_end = epd_tss_end,
+      lookup_source = "EPDnew",
+      source_coordinate_system,
+      analysis_coordinate_system
+    )
+
+  build_source_evidence <- function(gr.annotation, df.lookup) {
+    map_loop_anchors_dfr(
+      gr.loop.anchor.by.side,
+      find_direct_anchor_annotation_overlaps,
+      gr.annotation = gr.annotation
+    ) %>%
+      left_join(df.lookup, by = "annotation_index")
+  }
+
+  df.evidence <- bind_rows(
+    build_source_evidence(gr.true.tss.annotation, true.lookup),
+    build_source_evidence(gr.epd.annotation, epd.lookup)
+  ) %>%
+    mutate(
+      annotation_source = if (is.primary) {
+        if_else(
+          annotation_class == "true_TSS",
+          str_c(lookup_source, "_GTF_TSS_plus_minus_1kb"),
+          "EPDnew_TSS_plus_minus_1kb"
+        )
+      } else {
+        if_else(
+          annotation_class == "true_TSS",
+          str_c(lookup_source, "_GTF_transcript"),
+          "EPDnew_promoter"
+        )
+      },
+      annotation_id = if (is.primary) {
+        str_c(base_annotation_id, ":TSS_pm1kb")
+      } else {
+        base_annotation_id
+      }
+    ) %>%
+    transmute(
+      direct_evidence_id = str_c(
+        loop_id, anchor_side, annotation_source, annotation_id, sep = "|"
+      ),
+      loop_id,
+      resolution,
+      anchor_side,
+      opposite_anchor_side,
+      anchor_chr,
+      anchor_start,
+      anchor_end,
+      anchor_width_bp,
+      annotation_class,
+      annotation_source,
+      annotation_id,
+      annotation_chr,
+      annotation_start,
+      annotation_end,
+      annotation_width_bp,
+      annotation_strand,
+      direct_overlap_bp,
+      tss_start,
+      tss_end,
+      promoter_window_flank_bp = as.integer(promoter.window.flank.bp),
+      gene_id,
+      gene_id_versioned,
+      gene_name,
+      gene_biotype,
+      transcript_id,
+      transcript_id_versioned,
+      transcript_name,
+      transcript_biotype,
+      is_ensembl_canonical,
+      transcript_start,
+      transcript_end,
+      promoter_annotation_id,
+      epd_promoter_name,
+      epd_tss_start,
+      epd_tss_end,
+      annotation_source_coordinate_system = source_coordinate_system,
+      analysis_coordinate_system
+    ) %>%
+    arrange(
+      loop_id, anchor_side, gene_id, annotation_class,
+      annotation_start, annotation_id
+    )
+
+  if (!is.primary) {
+    df.evidence <- df.evidence %>%
+      select(-tss_start, -tss_end, -promoter_window_flank_bp)
+  }
+
+  list(
+    true_tss_lookup = true.source.lookup,
+    epd_promoter_lookup = epd.source.lookup,
+    true_tss_overlap = filter(df.evidence, annotation_class == "true_TSS"),
+    epd_promoter_overlap = filter(
+      df.evidence,
+      annotation_class == "EPD_promoter"
+    ),
+    combined_overlap = df.evidence,
+    summary = summarise_direct_promoter_tss_evidence(
+      df.evidence,
+      df.loop.universe
+    )
+  )
 }
 
 # Collapse a lossless direct promoter/TSS evidence table into consistent

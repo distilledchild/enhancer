@@ -1,4 +1,100 @@
 # lintr: disable
+
+# Resolve the shared project from this script's location, an explicit
+# environment variable, or common local/Dropbox layouts on macOS and Windows.
+current_script_path <- function() {
+  file.args <- grep(
+    "^--file=",
+    commandArgs(trailingOnly = FALSE),
+    value = TRUE
+  )
+  if (length(file.args) > 0L) {
+    script.arg <- sub("^--file=", "", file.args[[1]])
+    script.arg <- gsub("~+~", " ", script.arg, fixed = TRUE)
+    return(normalizePath(
+      script.arg,
+      winslash = "/",
+      mustWork = FALSE
+    ))
+  }
+
+  frame.files <- vapply(
+    sys.frames(),
+    function(frame) {
+      if (is.null(frame$ofile)) NA_character_ else as.character(frame$ofile)
+    },
+    character(1)
+  )
+  frame.files <- frame.files[!is.na(frame.files) & nzchar(frame.files)]
+  if (length(frame.files) > 0L) {
+    return(normalizePath(
+      tail(frame.files, 1L),
+      winslash = "/",
+      mustWork = FALSE
+    ))
+  }
+  NA_character_
+}
+
+resolve_enhancer_r_files_dir <- function() {
+  script.path <- current_script_path()
+  script.candidate <- NA_character_
+  if (!is.na(script.path)) {
+    script.dir <- dirname(script.path)
+    script.candidate <- if (
+      basename(script.dir) %in% c("revision", "atac_validation")
+    ) {
+      dirname(script.dir)
+    } else {
+      script.dir
+    }
+  }
+
+  candidates <- unique(c(
+    Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
+    path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
+    path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files"),
+    Sys.glob(path.expand(
+      "~/Library/CloudStorage/Dropbox*/K P/Gateway_to_Hao/enhancer/r_files"
+    )),
+    Sys.glob(path.expand(
+      "~/Library/CloudStorage/Dropbox*/Gateway_to_Hao/enhancer/r_files"
+    )),
+    script.candidate,
+    path.expand("~/Desktop/playground/enhancer/r_files")
+  ))
+  candidates <- candidates[
+    !is.na(candidates) & nzchar(candidates) & dir.exists(candidates)
+  ]
+  candidates <- candidates[
+    file.exists(file.path(candidates, "funcs.R"))
+  ]
+  if (length(candidates) == 0L) {
+    stop(
+      paste0(
+        "Cannot locate enhancer/r_files with funcs.R. Run this script from ",
+        "the shared Dropbox project or set ENHANCER_R_FILES_DIR."
+      ),
+      call. = FALSE
+    )
+  }
+  normalizePath(candidates[[1]], winslash = "/", mustWork = TRUE)
+}
+
+r.files.dir <- resolve_enhancer_r_files_dir()
+enhancer.project.dir <- Sys.getenv(
+  "ENHANCER_PROJECT_DIR",
+  unset = dirname(r.files.dir)
+)
+enhancer.project.dir <- normalizePath(
+  path.expand(enhancer.project.dir),
+  winslash = "/",
+  mustWork = TRUE
+)
+gateway.to.hao.dir <- dirname(enhancer.project.dir)
+
+message("Using shared enhancer project: ", enhancer.project.dir)
+
 library("tidyverse")
 library("GenomicRanges")
 library("GenomeInfoDb")
@@ -26,27 +122,23 @@ options(scipen = 999)
 # 0. Directories and source files
 ########################
 
-r.files.dir <- path.expand("~/Desktop/playground/enhancer/r_files")
-if (!dir.exists(r.files.dir)) {
-  r.files.dir <- path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files")
-}
-if (!dir.exists(r.files.dir)) {
-  stop("Cannot locate the enhancer/r_files directory.", call. = FALSE)
-}
-
 setwd(r.files.dir)
 
 revision.dir <- file.path(r.files.dir, "revision")
 coord.cache.dir <- file.path(revision.dir, "cache_data")
 dir.create(coord.cache.dir, recursive = TRUE, showWarnings = FALSE)
 
-dropbox.root <- path.expand("~/dropbox/Gateway_to_Hao/enhancer")
-hiccups.loop.root <- path.expand(
-  paste0(
-    "~/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/",
-    "hic/2023A/hic30_w_sb_options"
+dropbox.root <- enhancer.project.dir
+hiccups.loop.root <- Sys.getenv(
+  "HICCUPS_LOOP_ROOT",
+  unset = file.path(
+    gateway.to.hao.dir,
+    "hic",
+    "2023A",
+    "hic30_w_sb_options"
   )
 )
+hiccups.loop.root <- path.expand(hiccups.loop.root)
 
 source(file.path(r.files.dir, "funcs.R"))
 
