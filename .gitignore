@@ -2,6 +2,8 @@
 submission.md
 research_notes.md
 results/
+!r_files/revision/hrdp_genotype_diversity/results/
+!r_files/revision/hrdp_genotype_diversity/results/**
 
 # external/local raw data symlink
 /data
