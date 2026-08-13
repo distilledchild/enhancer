@@ -132,20 +132,29 @@ options(scipen = 999)
 
 revision.dir <- file.path(r.files.dir, "revision")
 cache.dir <- file.path(revision.dir, "cache_data")
-output.dir <- Sys.getenv(
-  "RESUBMIT_OUTPUT_DIR",
+script.path <- current_script_path()
+script.dir <- if (is.na(script.path)) getwd() else dirname(script.path)
+resubmit.input.dir <- Sys.getenv(
+  "RESUBMIT_INPUT_DIR",
   unset = file.path(revision.dir, "resubmit_outputs")
+)
+output.dir <- Sys.getenv(
+  "ATAC_VALIDATION_OUTPUT_DIR",
+  unset = Sys.getenv(
+    "RESUBMIT_OUTPUT_DIR",
+    unset = file.path(script.dir, "results")
+  )
 )
 dir.create(output.dir, recursive = TRUE, showWarnings = FALSE)
 
 source(file.path(r.files.dir, "funcs.R"))
 
 loop.resource.file <- file.path(
-  output.dir,
+  resubmit.input.dir,
   "revised_pooled_loop_annotation_resource.tsv"
 )
 direct.assignment.file <- file.path(
-  output.dir,
+  resubmit.input.dir,
   "revised_direct_loop_gene_assignments.tsv"
 )
 ensembl.transcript.file <- file.path(
@@ -476,6 +485,80 @@ relocate_loop_pairs <- function(df.observed) {
     )
 }
 
+# Relocate both anchors of loops lacking direct promoter/TSS overlap by one shared offset so the
+# original chromosome, resolution, anchor widths, and loop distance are kept.
+relocate_no_direct_tss_loop_pairs <- function(df.loops) {
+  max.new.span.start <- df.loops$chromosome_size -
+    df.loops$loop_span_width_bp + 1L
+  if (any(max.new.span.start < 1L)) {
+    stop("A no-direct-TSS loop span exceeds its chromosome.", call. = FALSE)
+  }
+
+  new.span.start <- floor(stats::runif(
+    nrow(df.loops),
+    min = 1,
+    max = max.new.span.start + 1
+  ))
+  relocation.offset <- new.span.start - df.loops$loop_span_start
+
+  bind_rows(
+    df.loops %>%
+      transmute(
+        loop_id, resolution, anchor_side = "anchor1", anchor_chr = chr1,
+        anchor_start = start1 + relocation.offset,
+        anchor_end = end1 + relocation.offset
+      ),
+    df.loops %>%
+      transmute(
+        loop_id, resolution, anchor_side = "anchor2", anchor_chr = chr2,
+        anchor_start = start2 + relocation.offset,
+        anchor_end = end2 + relocation.offset
+      )
+  )
+}
+
+# Summarise ATAC support for no-direct-TSS loops at the anchor level and
+# at the loop level (at least one positive anchor or both positive anchors).
+summarise_no_direct_tss_loop_atac <- function(
+  df.anchor.metric,
+  permutation = NA_integer_
+) {
+  metric.columns <- c("atac_overlap_any", "atac_overlap_ge50")
+  resolution.labels <- c(sort(unique(df.anchor.metric$resolution)), "ALL")
+
+  map_dfr(resolution.labels, function(resolution.i) {
+    df.i <- if (resolution.i == "ALL") {
+      df.anchor.metric
+    } else {
+      filter(df.anchor.metric, resolution == resolution.i)
+    }
+
+    map_dfr(metric.columns, function(metric.i) {
+      df.loop.i <- df.i %>%
+        group_by(loop_id) %>%
+        summarise(
+          n_positive_anchors = sum(.data[[metric.i]]),
+          n_anchors = n(),
+          .groups = "drop"
+        )
+      if (any(df.loop.i$n_anchors != 2L)) {
+        stop("A no-direct-TSS loop does not have two anchors.", call. = FALSE)
+      }
+
+      tibble(
+        permutation,
+        resolution = resolution.i,
+        metric = metric.i,
+        n_loops = nrow(df.loop.i),
+        n_anchors = nrow(df.i),
+        anchor_positive_rate = mean(df.i[[metric.i]]),
+        any_anchor_positive_rate = mean(df.loop.i$n_positive_anchors >= 1L),
+        both_anchors_positive_rate = mean(df.loop.i$n_positive_anchors == 2L)
+      )
+    })
+  })
+}
+
 # Summarise one observed-vs-control permutation using paired binary metrics.
 summarise_one_permutation <- function(
   df.observed,
@@ -693,7 +776,9 @@ df.atac.threshold.sensitivity.by.resolution <- bind_rows(
 # 4. Build chromosome/resolution/distance-matched Hi-C anchor controls
 ################################################################################
 
-# Both anchors from loops lacking direct promoter/TSS evidence form the control pool.
+# Both anchors from loops lacking direct promoter/TSS overlap at either anchor
+# form the control pool. These loops may still contain TSSs elsewhere and are
+# therefore named no-direct-TSS loops, not TSS-free genomic intervals.
 df.promoter.free.control.pool <- bind_rows(
   df.loop.resource %>%
     filter(n_direct_anchor_sides == 0L) %>%
@@ -722,6 +807,44 @@ df.promoter.free.control.pool <- bind_rows(
   add_distance_match_bin() %>%
   measure_non_tss_atac() %>%
   arrange(control_loop_id, anchor_side)
+
+# Keep the complete no-direct-TSS loop geometry for the direct comparison
+# requested in revision: real no-direct-TSS loops versus 1,000 random loci.
+df.no.direct.tss.loops <- df.loop.resource %>%
+  filter(n_direct_anchor_sides == 0L) %>%
+  dplyr::select(
+    loop_id, resolution,
+    chr1, start1, end1,
+    chr2, start2, end2
+  ) %>%
+  mutate(
+    loop_span_start = pmin(start1, start2),
+    loop_span_end = pmax(end1, end2),
+    loop_span_width_bp = loop_span_end - loop_span_start + 1L
+  ) %>%
+  left_join(df.chrom.sizes, by = c("chr1" = "chr"))
+
+assert_analysis_condition(
+  nrow(df.no.direct.tss.loops) ==
+    sum(df.loop.resource$n_direct_anchor_sides == 0L) &&
+    !anyDuplicated(df.no.direct.tss.loops$loop_id) &&
+    all(df.no.direct.tss.loops$chr1 == df.no.direct.tss.loops$chr2) &&
+    !any(is.na(df.no.direct.tss.loops$chromosome_size)),
+  "No-direct-TSS loop geometry is incomplete or duplicated."
+)
+
+df.no.direct.tss.atac.actual <- summarise_no_direct_tss_loop_atac(
+  df.promoter.free.control.pool
+)
+df.no.direct.tss.loop.status <- df.promoter.free.control.pool %>%
+  group_by(loop_id, resolution) %>%
+  summarise(
+    n_anchors_atac_any = sum(atac_overlap_any),
+    n_anchors_atac_ge50 = sum(atac_overlap_ge50),
+    any_anchor_atac_ge50 = n_anchors_atac_ge50 >= 1L,
+    both_anchors_atac_ge50 = n_anchors_atac_ge50 == 2L,
+    .groups = "drop"
+  )
 
 exact.pool.index <- split(
   seq_len(nrow(df.promoter.free.control.pool)),
@@ -831,6 +954,40 @@ assert_analysis_condition(
   "ATAC matched-null permutation output has an unexpected row count."
 )
 
+# Relocate each no-direct-TSS loop as an intact pair. This comparison directly
+# tests whether real no-direct-TSS Hi-C loops overlap open chromatin
+# more often than random genomic loop placements with the same geometry.
+run_one_no_direct_tss_permutation <- function(permutation.i) {
+  set.seed(random.seed + 100000L + permutation.i)
+  relocate_no_direct_tss_loop_pairs(df.no.direct.tss.loops) %>%
+    measure_non_tss_atac() %>%
+    summarise_no_direct_tss_loop_atac(permutation = permutation.i)
+}
+
+message(
+  "Running ", n.permutations,
+  " no-direct-TSS loop relocation permutations on ", n.cores,
+  " core(s)."
+)
+no.direct.tss.permutation.results <- if (.Platform$OS.type == "windows") {
+  lapply(seq_len(n.permutations), run_one_no_direct_tss_permutation)
+} else {
+  parallel::mclapply(
+    seq_len(n.permutations),
+    run_one_no_direct_tss_permutation,
+    mc.cores = n.cores,
+    mc.preschedule = FALSE
+  )
+}
+df.no.direct.tss.atac.random <- bind_rows(
+  no.direct.tss.permutation.results
+)
+
+assert_analysis_condition(
+  nrow(df.no.direct.tss.atac.random) == n.permutations * 4L * 2L,
+  "No-direct-TSS loop randomization output has an unexpected row count."
+)
+
 ################################################################################
 # 6. Summarise enrichment, matched odds ratios, and empirical P-values
 ################################################################################
@@ -862,6 +1019,135 @@ df.atac.matched.null.summary <- df.atac.null.permutation %>%
     factor(resolution, levels = c("5K", "10K", "25K", "ALL")),
     metric
   )
+
+# Contrast the observed no-direct-TSS loops with their geometry-preserving
+# randomized placements for anchor-level, any-anchor, and both-anchor support.
+df.no.direct.tss.atac.random.summary <- df.no.direct.tss.atac.random %>%
+  group_by(resolution, metric) %>%
+  summarise(
+    n_permutations = n(),
+    n_loops = dplyr::first(n_loops),
+    n_anchors = dplyr::first(n_anchors),
+    across(
+      c(
+        anchor_positive_rate,
+        any_anchor_positive_rate,
+        both_anchors_positive_rate
+      ),
+      list(
+        mean = mean,
+        q025 = ~ quantile(.x, 0.025),
+        q975 = ~ quantile(.x, 0.975)
+      )
+    ),
+    .groups = "drop"
+  ) %>%
+  left_join(
+    df.no.direct.tss.atac.actual %>%
+      dplyr::select(-permutation) %>%
+      rename_with(
+        ~ paste0("observed_", .x),
+        c(
+          "anchor_positive_rate",
+          "any_anchor_positive_rate",
+          "both_anchors_positive_rate"
+        )
+      ),
+    by = c("resolution", "metric", "n_loops", "n_anchors")
+  ) %>%
+  mutate(
+    anchor_enrichment_ratio = observed_anchor_positive_rate /
+      anchor_positive_rate_mean,
+    any_anchor_enrichment_ratio = observed_any_anchor_positive_rate /
+      any_anchor_positive_rate_mean,
+    both_anchors_enrichment_ratio = observed_both_anchors_positive_rate /
+      both_anchors_positive_rate_mean
+  )
+
+df.no.direct.tss.atac.random.summary <- df.no.direct.tss.atac.random.summary %>%
+  rowwise() %>%
+  mutate(
+    anchor_empirical_p_greater_equal = (
+      1 + sum(
+        df.no.direct.tss.atac.random$anchor_positive_rate[
+          df.no.direct.tss.atac.random$resolution == resolution &
+            df.no.direct.tss.atac.random$metric == metric
+        ] >= observed_anchor_positive_rate
+      )
+    ) / (n_permutations + 1),
+    any_anchor_empirical_p_greater_equal = (
+      1 + sum(
+        df.no.direct.tss.atac.random$any_anchor_positive_rate[
+          df.no.direct.tss.atac.random$resolution == resolution &
+            df.no.direct.tss.atac.random$metric == metric
+        ] >= observed_any_anchor_positive_rate
+      )
+    ) / (n_permutations + 1),
+    both_anchors_empirical_p_greater_equal = (
+      1 + sum(
+        df.no.direct.tss.atac.random$both_anchors_positive_rate[
+          df.no.direct.tss.atac.random$resolution == resolution &
+            df.no.direct.tss.atac.random$metric == metric
+        ] >= observed_both_anchors_positive_rate
+      )
+    ) / (n_permutations + 1)
+  ) %>%
+  ungroup() %>%
+  arrange(
+    factor(resolution, levels = c("5K", "10K", "25K", "ALL")),
+    metric
+  )
+
+# Put the three controls discussed with the PI in one resolution-stratified
+# table. Anchor-level rates are directly comparable because each row evaluates
+# one anchor rather than giving no-TSS loops two chances to overlap ATAC.
+df.atac.three_way.anchor.comparison <- df.atac.matched.null.summary %>%
+  filter(
+    metric == "atac_overlap_ge50",
+    null_method == "matched_HiC_anchor"
+  ) %>%
+  dplyr::select(
+    resolution,
+    promoter_supported_opposite_anchor_rate = observed_rate,
+    matched_real_no_direct_tss_anchor_rate = mean_null_rate
+  ) %>%
+  left_join(
+    df.atac.matched.null.summary %>%
+      filter(
+        metric == "atac_overlap_ge50",
+        null_method == "rigid_loop_pair_relocation"
+      ) %>%
+      dplyr::select(
+        resolution,
+        promoter_supported_random_relocation_anchor_rate = mean_null_rate
+      ),
+    by = "resolution"
+  ) %>%
+  left_join(
+    df.no.direct.tss.atac.actual %>%
+      filter(metric == "atac_overlap_ge50") %>%
+      dplyr::select(
+        resolution,
+        no_direct_tss_real_anchor_rate = anchor_positive_rate,
+        no_direct_tss_real_loop_any_anchor_rate = any_anchor_positive_rate,
+        no_direct_tss_real_loop_both_anchors_rate = both_anchors_positive_rate
+      ),
+    by = "resolution"
+  ) %>%
+  left_join(
+    df.no.direct.tss.atac.random.summary %>%
+      filter(metric == "atac_overlap_ge50") %>%
+      dplyr::select(
+        resolution,
+        no_direct_tss_random_anchor_rate = anchor_positive_rate_mean,
+        no_direct_tss_random_loop_any_anchor_rate =
+          any_anchor_positive_rate_mean,
+        no_direct_tss_random_loop_both_anchors_rate =
+          both_anchors_positive_rate_mean
+      ),
+    by = "resolution"
+  ) %>%
+  arrange(factor(resolution, levels = c("5K", "10K", "25K", "ALL")))
 
 # Record exact matching coverage independently from random control selection.
 df.atac.matched.hic.control.quality <- df.match.availability %>%
@@ -977,6 +1263,14 @@ output.tables <- list(
   revised_atac_matched_null_method = df.atac.matched.null.method,
   revised_atac_matched_control_quality = df.atac.matched.hic.control.quality,
   revised_atac_matched_control_strata = df.match.availability,
+  revised_atac_no_direct_tss_loop_status = df.no.direct.tss.loop.status,
+  revised_atac_no_direct_tss_observed = df.no.direct.tss.atac.actual,
+  revised_atac_no_direct_tss_random_permutation =
+    df.no.direct.tss.atac.random,
+  revised_atac_no_direct_tss_random_summary =
+    df.no.direct.tss.atac.random.summary,
+  revised_atac_three_way_anchor_comparison =
+    df.atac.three_way.anchor.comparison,
   revised_atac_matched_null_run_metadata = tibble(
     analysis_release = "resubmission-2026-07-28",
     n_permutations = n.permutations,
@@ -1012,7 +1306,7 @@ ggsave(
 )
 
 writeLines(
-  capture.output(sessionInfo()),
+  sub("[[:blank:]]+$", "", capture.output(sessionInfo())),
   file.path(output.dir, "revised_atac_matched_null_session_info.txt")
 )
 
@@ -1036,20 +1330,11 @@ release.output.files <- setdiff(
 release.output.paths <- file.path(output.dir, release.output.files)
 df.output.manifest <- tibble(
   output_file = release.output.files,
-  output_path = release.output.paths,
+  output_path = file.path("results", release.output.files),
   file_exists = file.exists(release.output.paths),
   file_size_bytes = as.numeric(file.info(release.output.paths)$size),
   sha256 = map_chr(release.output.paths, sha256_file),
-  generated_by = if_else(
-    str_starts(output_file, "revised_atac_matched") |
-      str_starts(output_file, "revised_atac_threshold") |
-      output_file %in% c(
-        "revised_atac_observed_vs_matched_null.pdf",
-        "revised_atac_observed_vs_matched_null.png"
-      ),
-    "atac_validation.R",
-    "promoter_enhancer_interaction_resubmit.R"
-  ),
+  generated_by = "atac_validation.R",
   analysis_release = "resubmission-2026-07-28",
   generated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
 )
@@ -1064,4 +1349,8 @@ message("ATAC matched-null enrichment summary:")
 print(df.atac.matched.null.summary)
 message("Matched Hi-C control availability:")
 print(df.atac.matched.hic.control.quality)
+message("No-direct-TSS loops versus randomized loop placements:")
+print(df.no.direct.tss.atac.random.summary)
+message("Three-way ATAC anchor comparison:")
+print(df.atac.three_way.anchor.comparison)
 message("Resubmission ATAC matched-null analysis completed.")

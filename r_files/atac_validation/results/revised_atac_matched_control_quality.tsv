@@ -1,0 +1,2 @@
+n_observed_with_exact_match	n_observed_requiring_side_relaxed_fallback	n_observed_requiring_distance_bin_relaxation	n_match_strata	n_exact_match_strata	n_fallback_match_strata	n_observed_anchors	pct_observed_with_exact_match
+12294	0	1	662	661	1	12295	99.992

@@ -1,0 +1,5 @@
+resolution	n_candidate_anchors	n_atac_any	pct_atac_any	n_atac_ge50	pct_atac_ge50	median_non_tss_atac_overlap_bp	median_non_tss_atac_fraction	n_atac_fraction_ge_0_005	pct_atac_fraction_ge_0_005	n_atac_fraction_ge_0_01	pct_atac_fraction_ge_0_01
+5K	2099	1626	77.47	1617	77.04	884	0.1768	1624	77.37	1617	77.04
+10K	4602	3854	83.75	3846	83.57	1043.5	0.10435	3848	83.62	3835	83.33
+25K	5594	5010	89.56	5006	89.49	2188.5	0.08754	5002	89.42	4999	89.36
+ALL	12295	10490	85.32	10469	85.15	1583	0.10364	10474	85.19	10451	85

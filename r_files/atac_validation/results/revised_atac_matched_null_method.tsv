@@ -1,0 +1,10 @@
+analysis_item	definition
+analysis_population	All pooled loops with direct promoter/TSS support at exactly one anchor; the opposite anchor is evaluated regardless of its ATAC status.
+ATAC_source	Duttke et al. 2022 rat prefrontal-cortex snATAC peaks lifted to rn7.
+TSS_exclusion	Union of strand-aware Ensembl transcript TSS and EPD TSS positions, expanded by +/-1 kb and removed from the reduced ATAC union.
+primary_absolute_overlap	>=50 bp TSS-excluded ATAC overlap at the candidate anchor.
+threshold_sensitivity	>=1 bp, >=50 bp, >=0.5%, and >=1% of available non-TSS anchor bases.
+rigid_loop_pair_relocation	The complete loop geometry is relocated uniformly within the same chromosome, preserving resolution, anchor widths, and loop distance.
+matched_HiC_anchor	Promoter-free pooled Hi-C anchors matched on chromosome, resolution, anchor side, and loop-distance bin; side is relaxed only if necessary.
+empirical_p_value	(1 + permutations with null rate >= observed rate) / (B + 1).
+interpretation	ATAC enrichment supports non-TSS open chromatin but does not validate enhancer function or a promoter-enhancer interaction.
