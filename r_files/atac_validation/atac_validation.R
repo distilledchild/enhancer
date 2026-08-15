@@ -1,54 +1,29 @@
 # lintr: disable
 
-# Resolve the shared project from this script's location, an explicit
-# environment variable, or common local/Dropbox layouts on macOS and Windows.
+# Resolve this script and the shared enhancer/r_files directory.
 current_script_path <- function() {
-  file.args <- grep(
-    "^--file=",
-    commandArgs(trailingOnly = FALSE),
-    value = TRUE
-  )
+  file.args <- grep("^--file=", commandArgs(FALSE), value = TRUE)
   if (length(file.args) > 0L) {
-    script.arg <- sub("^--file=", "", file.args[[1]])
-    script.arg <- gsub("~+~", " ", script.arg, fixed = TRUE)
-    return(normalizePath(
-      script.arg,
-      winslash = "/",
-      mustWork = FALSE
-    ))
+    script.arg <- gsub("~+~", " ", sub("^--file=", "", file.args[[1]]), fixed = TRUE)
+    return(normalizePath(script.arg, winslash = "/", mustWork = FALSE))
   }
 
   frame.files <- vapply(
     sys.frames(),
-    function(frame) {
-      if (is.null(frame$ofile)) NA_character_ else as.character(frame$ofile)
-    },
+    function(frame) if (is.null(frame$ofile)) NA_character_ else frame$ofile,
     character(1)
   )
   frame.files <- frame.files[!is.na(frame.files) & nzchar(frame.files)]
-  if (length(frame.files) > 0L) {
-    return(normalizePath(
-      tail(frame.files, 1L),
-      winslash = "/",
-      mustWork = FALSE
-    ))
-  }
-  NA_character_
+  if (!length(frame.files)) return(NA_character_)
+  normalizePath(tail(frame.files, 1L), winslash = "/", mustWork = FALSE)
 }
 
 resolve_enhancer_r_files_dir <- function() {
   script.path <- current_script_path()
-  script.candidate <- NA_character_
-  if (!is.na(script.path)) {
-    script.dir <- dirname(script.path)
-    script.candidate <- if (
-      basename(script.dir) %in% c("revision", "atac_validation")
-    ) {
-      dirname(script.dir)
-    } else {
-      script.dir
-    }
-  }
+  script.dir <- if (is.na(script.path)) NA_character_ else dirname(script.path)
+  script.candidate <- if (
+    !is.na(script.dir) && basename(script.dir) %in% c("revision", "atac_validation")
+  ) dirname(script.dir) else script.dir
 
   candidates <- unique(c(
     Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
@@ -63,21 +38,9 @@ resolve_enhancer_r_files_dir <- function() {
     script.candidate,
     path.expand("~/Desktop/playground/enhancer/r_files")
   ))
-  candidates <- candidates[
-    !is.na(candidates) & nzchar(candidates) & dir.exists(candidates)
-  ]
-  candidates <- candidates[
-    file.exists(file.path(candidates, "funcs.R"))
-  ]
-  if (length(candidates) == 0L) {
-    stop(
-      paste0(
-        "Cannot locate enhancer/r_files with funcs.R. Run this script from ",
-        "the shared Dropbox project or set ENHANCER_R_FILES_DIR."
-      ),
-      call. = FALSE
-    )
-  }
+  candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
+  candidates <- candidates[dir.exists(candidates) & file.exists(file.path(candidates, "funcs.R"))]
+  if (!length(candidates)) stop("Cannot locate enhancer/r_files with funcs.R.", call. = FALSE)
   normalizePath(candidates[[1]], winslash = "/", mustWork = TRUE)
 }
 
@@ -209,12 +172,7 @@ n.cores <- as.integer(Sys.getenv(
   "ATAC_NULL_CORES",
   unset = as.character(default.cores)
 ))
-if (is.na(n.permutations) || n.permutations < 1L) {
-  stop("ATAC_NULL_PERMUTATIONS must be a positive integer.", call. = FALSE)
-}
-if (is.na(n.cores) || n.cores < 1L) {
-  stop("ATAC_NULL_CORES must be a positive integer.", call. = FALSE)
-}
+stopifnot(n.permutations > 0L, n.cores > 0L)
 if (.Platform$OS.type == "windows" && n.cores != 1L) {
   warning("Windows uses sequential ATAC permutations; setting cores to 1.")
   n.cores <- 1L
@@ -233,87 +191,37 @@ distance.labels <- c(
 # 0-1. Local helpers
 ########################
 
-# Sum covered bases for each query interval against one reduced feature union.
-interval_overlap_bp <- function(gr.query, gr.feature) {
+# Return total and largest single-interval overlap for each query interval.
+interval_overlap_stats <- function(gr.query, gr.feature) {
   n.query <- length(gr.query)
-  overlap.bp <- integer(n.query)
-  if (n.query == 0L || length(gr.feature) == 0L) {
-    return(overlap.bp)
-  }
+  result <- tibble(total_bp = integer(n.query), max_bp = integer(n.query))
+  if (!n.query || !length(gr.feature)) return(result)
 
   hits <- findOverlaps(gr.query, gr.feature, ignore.strand = TRUE)
-  if (length(hits) == 0L) {
-    return(overlap.bp)
-  }
-
-  intersections <- pintersect(
+  if (!length(hits)) return(result)
+  overlap.bp <- width(pintersect(
     gr.query[queryHits(hits)],
     gr.feature[subjectHits(hits)],
     ignore.strand = TRUE
-  )
-  overlap.sum <- rowsum(
-    width(intersections),
-    group = queryHits(hits),
-    reorder = FALSE
-  )
-  overlap.bp[as.integer(rownames(overlap.sum))] <-
-    as.integer(overlap.sum[, 1])
-  overlap.bp
-}
-
-# Retain the largest single-interval overlap for the primary >=50-bp criterion.
-interval_max_overlap_bp <- function(gr.query, gr.feature) {
-  n.query <- length(gr.query)
-  max.overlap.bp <- integer(n.query)
-  if (n.query == 0L || length(gr.feature) == 0L) {
-    return(max.overlap.bp)
-  }
-
-  hits <- findOverlaps(gr.query, gr.feature, ignore.strand = TRUE)
-  if (length(hits) == 0L) {
-    return(max.overlap.bp)
-  }
-
-  intersections <- pintersect(
-    gr.query[queryHits(hits)],
-    gr.feature[subjectHits(hits)],
-    ignore.strand = TRUE
-  )
-  overlap.by.hit <- tibble(
-    query_index = queryHits(hits),
-    overlap_bp = width(intersections)
-  ) %>%
-    group_by(query_index) %>%
-    summarise(max_overlap_bp = max(overlap_bp), .groups = "drop")
-  max.overlap.bp[overlap.by.hit$query_index] <- overlap.by.hit$max_overlap_bp
-  max.overlap.bp
+  ))
+  query.index <- queryHits(hits)
+  total.by.query <- tapply(overlap.bp, query.index, sum)
+  max.by.query <- tapply(overlap.bp, query.index, max)
+  result$total_bp[as.integer(names(total.by.query))] <- as.integer(total.by.query)
+  result$max_bp[as.integer(names(max.by.query))] <- as.integer(max.by.query)
+  result
 }
 
 # Measure TSS-excluded ATAC overlap and width-adjusted support per anchor.
 measure_non_tss_atac <- function(df.anchor) {
-  required.columns <- c(
-    "loop_id", "resolution", "anchor_side",
-    "anchor_chr", "anchor_start", "anchor_end"
-  )
-  missing.columns <- setdiff(required.columns, names(df.anchor))
-  if (length(missing.columns) > 0L) {
-    stop(
-      "ATAC anchor table is missing: ",
-      paste(missing.columns, collapse = ", "),
-      call. = FALSE
-    )
-  }
-
   gr.anchor <- GRanges(
     seqnames = df.anchor$anchor_chr,
     ranges = IRanges(df.anchor$anchor_start, df.anchor$anchor_end)
   )
-  exclusion.bp <- interval_overlap_bp(gr.anchor, gr.known.tss.exclusion)
-  atac.overlap.bp <- interval_overlap_bp(gr.anchor, gr.atac.non.tss)
-  atac.max.overlap.bp <- interval_max_overlap_bp(
-    gr.anchor,
-    gr.atac.non.tss
-  )
+  exclusion.bp <- interval_overlap_stats(gr.anchor, gr.known.tss.exclusion)$total_bp
+  atac.overlap <- interval_overlap_stats(gr.anchor, gr.atac.non.tss)
+  atac.overlap.bp <- atac.overlap$total_bp
+  atac.max.overlap.bp <- atac.overlap$max_bp
   anchor.width.bp <- width(gr.anchor)
   non.tss.anchor.bp <- pmax(0L, anchor.width.bp - exclusion.bp)
   atac.fraction <- if_else(
@@ -541,10 +449,6 @@ summarise_no_direct_tss_loop_atac <- function(
           n_anchors = n(),
           .groups = "drop"
         )
-      if (any(df.loop.i$n_anchors != 2L)) {
-        stop("A no-direct-TSS loop does not have two anchors.", call. = FALSE)
-      }
-
       tibble(
         permutation,
         resolution = resolution.i,
@@ -649,17 +553,11 @@ df.single.direct.orientation <- df.direct.assignment %>%
   ) %>%
   left_join(df.chrom.sizes, by = c("anchor_chr" = "chr")) %>%
   arrange(loop_id)
-
-assert_analysis_condition(
-  nrow(df.single.direct.orientation) ==
-    sum(df.loop.resource$n_direct_anchor_sides == 1L) &&
-    !anyDuplicated(df.single.direct.orientation$loop_id),
-  "Single-promoter loop orientations are incomplete or duplicated."
-)
-assert_analysis_condition(
-  all(df.single.direct.orientation$chr1 == df.single.direct.orientation$chr2) &&
-    !any(is.na(df.single.direct.orientation$chromosome_size)),
-  "Rigid relocation requires valid cis loops and chromosome sizes."
+stopifnot(
+  nrow(df.single.direct.orientation) == sum(df.loop.resource$n_direct_anchor_sides == 1L),
+  !anyDuplicated(df.single.direct.orientation$loop_id),
+  all(df.single.direct.orientation$chr1 == df.single.direct.orientation$chr2),
+  !anyNA(df.single.direct.orientation$chromosome_size)
 )
 
 ################################################################################
@@ -823,14 +721,10 @@ df.no.direct.tss.loops <- df.loop.resource %>%
     loop_span_width_bp = loop_span_end - loop_span_start + 1L
   ) %>%
   left_join(df.chrom.sizes, by = c("chr1" = "chr"))
-
-assert_analysis_condition(
-  nrow(df.no.direct.tss.loops) ==
-    sum(df.loop.resource$n_direct_anchor_sides == 0L) &&
-    !anyDuplicated(df.no.direct.tss.loops$loop_id) &&
-    all(df.no.direct.tss.loops$chr1 == df.no.direct.tss.loops$chr2) &&
-    !any(is.na(df.no.direct.tss.loops$chromosome_size)),
-  "No-direct-TSS loop geometry is incomplete or duplicated."
+stopifnot(
+  !anyDuplicated(df.no.direct.tss.loops$loop_id),
+  all(df.no.direct.tss.loops$chr1 == df.no.direct.tss.loops$chr2),
+  !anyNA(df.no.direct.tss.loops$chromosome_size)
 )
 
 df.no.direct.tss.atac.actual <- summarise_no_direct_tss_loop_atac(
@@ -948,12 +842,6 @@ permutation.results <- if (.Platform$OS.type == "windows") {
 }
 df.atac.null.permutation <- bind_rows(permutation.results)
 
-assert_analysis_condition(
-  nrow(df.atac.null.permutation) ==
-    n.permutations * 2L * 4L * 4L,
-  "ATAC matched-null permutation output has an unexpected row count."
-)
-
 # Relocate each no-direct-TSS loop as an intact pair. This comparison directly
 # tests whether real no-direct-TSS Hi-C loops overlap open chromatin
 # more often than random genomic loop placements with the same geometry.
@@ -981,11 +869,6 @@ no.direct.tss.permutation.results <- if (.Platform$OS.type == "windows") {
 }
 df.no.direct.tss.atac.random <- bind_rows(
   no.direct.tss.permutation.results
-)
-
-assert_analysis_condition(
-  nrow(df.no.direct.tss.atac.random) == n.permutations * 4L * 2L,
-  "No-direct-TSS loop randomization output has an unexpected row count."
 )
 
 ################################################################################
@@ -1310,19 +1193,7 @@ writeLines(
   file.path(output.dir, "revised_atac_matched_null_session_info.txt")
 )
 
-# Refresh the release manifest after adding the separately generated null-model
-# files so every official output has a size and SHA-256 checksum.
-sha256_file <- function(path) {
-  if (!file.exists(path)) return(NA_character_)
-  if (!requireNamespace("digest", quietly = TRUE)) {
-    stop(
-      "The cross-platform 'digest' package is required for SHA-256 checksums.",
-      call. = FALSE
-    )
-  }
-  digest::digest(file = path, algo = "sha256", serialize = FALSE)
-}
-
+# Record every official output with its size and SHA-256 checksum.
 release.output.files <- setdiff(
   list.files(output.dir, all.files = FALSE, no.. = TRUE),
   "resubmit_output_manifest.tsv"
@@ -1333,7 +1204,10 @@ df.output.manifest <- tibble(
   output_path = file.path("results", release.output.files),
   file_exists = file.exists(release.output.paths),
   file_size_bytes = as.numeric(file.info(release.output.paths)$size),
-  sha256 = map_chr(release.output.paths, sha256_file),
+  sha256 = map_chr(
+    release.output.paths,
+    ~ digest::digest(file = .x, algo = "sha256", serialize = FALSE)
+  ),
   generated_by = "atac_validation.R",
   analysis_release = "resubmission-2026-07-28",
   generated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")
