@@ -7,14 +7,11 @@ suppressPackageStartupMessages({
 
 options(scipen = 999)
 
-# Keep results beside this script and discover a genotype archive from the
-# matching enhancer directory structure before using the local Drive fallback.
+# Keep results beside this script and use the matching project archive first.
 script.argument <- grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE)
-script.dir <- if (length(script.argument) > 0L) {
+script.dir <- if (length(script.argument)) {
   dirname(normalizePath(sub("^--file=", "", script.argument[1])))
-} else {
-  getwd()
-}
+} else getwd()
 nearby.archive <- file.path(
   normalizePath(file.path(script.dir, "../../.."), mustWork = FALSE),
   "genotype_hdrp/hrdp_genotype_by_chr.tgz"
@@ -32,9 +29,7 @@ output.dir <- Sys.getenv(
   unset = file.path(script.dir, "results")
 )
 
-if (!file.exists(archive.file)) {
-  stop("Missing HRDP genotype archive: ", archive.file, call. = FALSE)
-}
+if (!file.exists(archive.file)) stop("Missing HRDP genotype archive: ", archive.file)
 dir.create(output.dir, recursive = TRUE, showWarnings = FALSE)
 
 sample.map <- tribble(
@@ -69,7 +64,8 @@ chromosomes <- paste0("chr", 1:20)
 genotype.parts <- vector("list", length(chromosomes))
 variant.qc <- vector("list", length(chromosomes))
 
-for (chromosome.i in chromosomes) {
+for (list.index in seq_along(chromosomes)) {
+  chromosome.i <- chromosomes[[list.index]]
   archive.member <- paste0(
     "hrdp_118strains_plus_F1_genotype_", chromosome.i, ".gvcf.gz"
   )
@@ -86,15 +82,6 @@ for (chromosome.i in chromosomes) {
   ) %>%
     filter(nchar(REF) == 1L, nchar(ALT) == 1L, !str_detect(ALT, fixed(",")))
 
-  missing.samples <- setdiff(sample.map$vcf_sample, names(df.vcf))
-  if (length(missing.samples) > 0L) {
-    stop(
-      "VCF samples missing on ", chromosome.i, ": ",
-      paste(missing.samples, collapse = ", "),
-      call. = FALSE
-    )
-  }
-
   dosage <- vapply(
     df.vcf[sample.map$vcf_sample],
     gt_to_dosage,
@@ -104,7 +91,6 @@ for (chromosome.i in chromosomes) {
   informative <- rowSums(!is.na(dosage)) >= 8L &
     apply(dosage, 1L, function(x) length(unique(x[!is.na(x)])) > 1L)
 
-  list.index <- match(chromosome.i, chromosomes)
   genotype.parts[[list.index]] <- dosage[informative, , drop = FALSE]
   variant.qc[[list.index]] <- tibble(
     chromosome = chromosome.i,
@@ -116,9 +102,7 @@ for (chromosome.i in chromosomes) {
 
 genotype.matrix <- do.call(rbind, genotype.parts)
 variant.qc <- bind_rows(variant.qc)
-if (nrow(genotype.matrix) == 0L) {
-  stop("No informative SNPs remained for the ten libraries.", call. = FALSE)
-}
+if (!nrow(genotype.matrix)) stop("No informative SNPs remained for the ten libraries.")
 
 # Mean absolute dosage difference / 2 is an allele-sharing distance: zero for
 # identical genotypes and one for opposite homozygotes at every SNP.
@@ -131,10 +115,10 @@ distance.matrix <- matrix(
 )
 n.compared.matrix <- distance.matrix
 for (i in seq_len(n.strains)) {
-  for (j in seq_len(n.strains)) {
+  for (j in i:n.strains) {
     comparable <- !is.na(genotype.matrix[, i]) & !is.na(genotype.matrix[, j])
-    n.compared.matrix[i, j] <- sum(comparable)
-    distance.matrix[i, j] <- mean(
+    n.compared.matrix[i, j] <- n.compared.matrix[j, i] <- sum(comparable)
+    distance.matrix[i, j] <- distance.matrix[j, i] <- mean(
       abs(genotype.matrix[comparable, i] - genotype.matrix[comparable, j]) / 2
     )
   }
@@ -142,11 +126,9 @@ for (i in seq_len(n.strains)) {
 
 # Mean-impute the few missing dosages and perform sample-level PCA.
 pca.matrix <- genotype.matrix
-row.means <- rowMeans(pca.matrix, na.rm = TRUE)
 missing.index <- which(is.na(pca.matrix), arr.ind = TRUE)
-if (nrow(missing.index) > 0L) {
-  pca.matrix[missing.index] <- row.means[missing.index[, 1]]
-}
+if (nrow(missing.index))
+  pca.matrix[missing.index] <- rowMeans(pca.matrix, na.rm = TRUE)[missing.index[, 1]]
 pca.fit <- prcomp(t(pca.matrix), center = TRUE, scale. = FALSE)
 pca.variance <- 100 * pca.fit$sdev^2 / sum(pca.fit$sdev^2)
 df.pca <- as_tibble(pca.fit$x[, 1:3, drop = FALSE], rownames = "strain") %>%
@@ -190,17 +172,19 @@ plot.pca <- ggplot(df.pca, aes(PC1, PC2, label = strain)) +
   theme_bw(base_size = 10) +
   theme(panel.grid.minor = element_blank())
 
-write_tsv(sample.map, file.path(output.dir, "hrdp_ten_library_sample_mapping.tsv"))
-write_tsv(variant.qc, file.path(output.dir, "hrdp_genotype_variant_qc.tsv"))
-write_tsv(df.distance.long, file.path(output.dir, "hrdp_pairwise_snp_distance.tsv"))
-write_tsv(df.pca, file.path(output.dir, "hrdp_genotype_pca_coordinates.tsv"))
-write_tsv(
-  tibble(
+output.tables <- list(
+  hrdp_ten_library_sample_mapping = sample.map,
+  hrdp_genotype_variant_qc = variant.qc,
+  hrdp_pairwise_snp_distance = df.distance.long,
+  hrdp_genotype_pca_coordinates = df.pca,
+  hrdp_genotype_pca_variance = tibble(
     principal_component = paste0("PC", seq_along(pca.variance)),
     variance_explained_percent = pca.variance
-  ),
-  file.path(output.dir, "hrdp_genotype_pca_variance.tsv")
+  )
 )
+walk2(names(output.tables), output.tables, ~ write_tsv(
+  .y, file.path(output.dir, paste0(.x, ".tsv"))
+))
 write.table(
   distance.matrix,
   file.path(output.dir, "hrdp_pairwise_snp_distance_matrix.tsv"),
