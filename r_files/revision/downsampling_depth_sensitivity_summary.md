@@ -30,6 +30,13 @@ valid contacts. This analysis directly evaluates normalization across the
 complete sample set, but the low target causes substantial loss of individual
 calls, particularly at 5 kb.
 
+- Completed libraries: 10/10 (`592BB`, `607`, `74AA`, `A2DB`, `D765A`,
+  `DA08A`, `DA21A`, `DA68A`, `DBA9A`, and `DE8BA`).
+- The 140M target was immediately below the lowest original usable-contact
+  count (141,993,330), allowing all ten libraries to be retained.
+- HiCCUPS calls were restricted to loops shorter than 2 Mb after rerunning at
+  5, 10, and 25 kb.
+
 ### Matched seven-library depth comparison
 
 Only seven libraries had at least 250 million valid contacts. Full-depth,
@@ -49,14 +56,31 @@ not be combined as if they came from one comparison.
 |---|---:|---:|
 | Mean loop calls per library | 5,753.7 | 3,062.2 |
 | Loop-count CV | 0.335 | 0.163 |
+| Loop-count range | 6,017 | 1,360 |
 | Original source depth vs loop count, Spearman rho | 0.794 | -0.115 |
 | Pooled exact call records | 31,021 | 14,414 |
-| Full-depth exact calls recovered | - | 35.25% |
+| Full-depth exact calls recovered | - | 10,936 (35.25%) |
+| Pooled exact Jaccard | - | 0.317 |
 
 These values are valid for the ten-library analysis. The post-downsampling
 correlation uses original source depth as the predictor and asks whether a
 residual association remains after equalization; it does not prove that every
 technical depth effect was removed.
+
+| Resolution | Full-depth calls | 140M calls | Exact shared | Full-depth recovery |
+|---|---:|---:|---:|---:|
+| 5 kb | 6,522 | 879 | 777 | 11.91% |
+| 10 kb | 11,977 | 5,022 | 3,867 | 32.29% |
+| 25 kb | 12,522 | 8,513 | 6,292 | 50.25% |
+| All | 31,021 | 14,414 | 10,936 | 35.25% |
+
+The median sample-level exact recovery was 22.01%; HiCCUPS-radius matching
+increased it to 26.25%. Broad category composition was more stable than exact
+call identity: the largest category-proportion change was 4.66 percentage
+points. Gene-level stability was moderate (6,420 full-depth genes, 4,203 140M
+genes, 3,757 shared genes; presence Jaccard = 0.547; loop-count/rank Spearman
+rho = 0.485). Full-depth calls supported only by above-median-depth libraries
+had 13.65% exact recovery, compared with 57.96% for the remaining calls.
 
 ### Matched seven-library comparison
 

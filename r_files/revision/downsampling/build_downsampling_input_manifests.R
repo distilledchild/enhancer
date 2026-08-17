@@ -1,13 +1,38 @@
 # Build symmetric inventories for the organized 140M and 250M Google Drive inputs.
 
-root <- path.expand(Sys.getenv(
-  "DOWNSAMPLING_COMBINED_ROOT",
-  unset = paste0(
-    "~/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/",
-    "juicer_downsample_q30_140M_250M"
+current_script_path <- function() {
+  file.args <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+  if (length(file.args) == 0L) return(NA_character_)
+  file.path <- gsub("~\\+~", " ", sub("^--file=", "", file.args[[1]]))
+  normalizePath(
+    file.path, winslash = "/", mustWork = FALSE
   )
-))
-if (!dir.exists(root)) stop("Combined downsampling root is unavailable: ", root)
+}
+
+script.path <- current_script_path()
+project.root <- if (is.na(script.path)) {
+  NA_character_
+} else {
+  dirname(dirname(dirname(dirname(script.path))))
+}
+bundled.root <- if (!is.na(project.root) && dir.exists(project.root)) {
+  file.path(project.root, "data", "juicer_downsample_q30_140M_250M")
+} else {
+  NA_character_
+}
+configured.root <- Sys.getenv("DOWNSAMPLING_COMBINED_ROOT", unset = "")
+legacy.root <- paste0(
+  "~/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/",
+  "juicer_downsample_q30_140M_250M"
+)
+root.candidates <- path.expand(c(bundled.root, configured.root, legacy.root))
+root.candidates <- root.candidates[
+  !is.na(root.candidates) & nzchar(root.candidates) & dir.exists(root.candidates)
+]
+if (length(root.candidates) == 0L) {
+  stop("Combined downsampling root is unavailable.")
+}
+root <- normalizePath(root.candidates[[1]], winslash = "/", mustWork = TRUE)
 
 metadata <- data.frame(
   sample = c(

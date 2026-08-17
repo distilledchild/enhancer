@@ -7,8 +7,11 @@
 current_script_path <- function() {
   file.args <- grep("^--file=", commandArgs(FALSE), value = TRUE)
   if (length(file.args) > 0L) {
+    file.path <- gsub(
+      "~\\+~", " ", sub("^--file=", "", file.args[[1]])
+    )
     return(normalizePath(
-      sub("^--file=", "", file.args[[1]]),
+      file.path,
       winslash = "/", mustWork = FALSE
     ))
   }
@@ -56,6 +59,7 @@ resolve_enhancer_r_files_dir <- function() {
 }
 
 r.files.dir <- resolve_enhancer_r_files_dir()
+enhancer.project.dir <- dirname(r.files.dir)
 source(file.path(r.files.dir, "funcs.R"))
 
 library("tidyverse")
@@ -101,6 +105,9 @@ df.sample.metadata <- tribble(
 full.depth.root <- resolve_depth_directory(
   c(
     Sys.getenv("FULL_DEPTH_HICCUPS_ROOT", unset = ""),
+    file.path(
+      enhancer.project.dir, "hic", "2023A", "hic30_w_sb_options"
+    ),
     path.expand("~/dropbox/Gateway_to_Hao/hic/2023A/hic30_w_sb_options"),
     Sys.glob(path.expand(paste0(
       "~/Library/CloudStorage/Dropbox*/K P/Gateway_to_Hao/",
@@ -113,6 +120,9 @@ full.depth.root <- resolve_depth_directory(
 combined.downsample.root <- resolve_depth_directory(
   c(
     Sys.getenv("DOWNSAMPLED_140M_250M_HICCUPS_ROOT", unset = ""),
+    file.path(
+      enhancer.project.dir, "data", "juicer_downsample_q30_140M_250M"
+    ),
     path.expand(paste0(
       "~/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/",
       "juicer_downsample_q30_140M_250M"
@@ -143,8 +153,8 @@ required.cache.files <- c(
 )
 cache.candidates <- unique(path.expand(c(
   Sys.getenv("DOWNSAMPLING_COORD_CACHE_DIR", unset = ""),
-  path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files/revision/cache_data"),
   file.path(revision.dir, "cache_data"),
+  path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files/revision/cache_data"),
   Sys.glob(path.expand(paste0(
     "~/Library/CloudStorage/Dropbox*/K P/Gateway_to_Hao/enhancer/",
     "r_files/revision/cache_data"
@@ -170,8 +180,8 @@ coord.cache.dir <- normalizePath(
 )
 
 default.output.parent <- c(
-  path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
-  r.files.dir
+  r.files.dir,
+  path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files")
 )
 default.output.parent <- default.output.parent[
   dir.exists(default.output.parent)

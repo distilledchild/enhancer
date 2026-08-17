@@ -11,8 +11,11 @@ current_script_path <- function() {
     value = TRUE
   )
   if (length(file.args) > 0L) {
+    file.path <- gsub(
+      "~\\+~", " ", sub("^--file=", "", file.args[[1]])
+    )
     return(normalizePath(
-      sub("^--file=", "", file.args[[1]]),
+      file.path,
       winslash = "/",
       mustWork = FALSE
     ))
@@ -68,6 +71,7 @@ resolve_enhancer_r_files_dir <- function() {
 }
 
 r.files.dir <- resolve_enhancer_r_files_dir()
+enhancer.project.dir <- dirname(r.files.dir)
 source(file.path(r.files.dir, "funcs.R"))
 
 library("tidyverse")
@@ -163,6 +167,9 @@ resolve_downsample_root <- function(candidates) {
 full.depth.root <- resolve_existing_directory(
   c(
     Sys.getenv("FULL_DEPTH_HICCUPS_ROOT", unset = ""),
+    file.path(
+      enhancer.project.dir, "hic", "2023A", "hic30_w_sb_options"
+    ),
     path.expand(
       "~/dropbox/Gateway_to_Hao/hic/2023A/hic30_w_sb_options"
     ),
@@ -184,6 +191,10 @@ full.depth.root <- resolve_existing_directory(
 
 downsample.root <- resolve_downsample_root(c(
   Sys.getenv("DOWNSAMPLED_HICCUPS_ROOT", unset = ""),
+  file.path(
+    enhancer.project.dir,
+    "data", "juicer_downsample_q30_140M_250M", "140M"
+  ),
   path.expand(
     paste0(
       "~/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/",
@@ -233,11 +244,11 @@ coord.cache.dir <- normalizePath(
   mustWork = TRUE
 )
 
-# Write beside the shared r_files directory on other computers, while preferring
-# the user's established short Dropbox path when it is available locally.
+# Write beside the shared r_files directory so copied project bundles remain
+# self-contained on collaborators' computers.
 default.output.parent.candidates <- c(
-  path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
-  r.files.dir
+  r.files.dir,
+  path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files")
 )
 default.output.parent <- default.output.parent.candidates[
   dir.exists(default.output.parent.candidates)
