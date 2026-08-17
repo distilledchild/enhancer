@@ -261,8 +261,6 @@ df.summary <- tibble(
   n_ld_pruned_snps = length(readLines(paste0(prune.prefix, ".prune.in"))),
   minimum_pairwise_ibs_distance = min(plink.distance[upper.tri(plink.distance)]),
   maximum_pairwise_ibs_distance = max(plink.distance[upper.tri(plink.distance)]),
-  pc1_variance_percent = 100 * pca.eigenval[1] / sum(pca.eigenval),
-  pc2_variance_percent = 100 * pca.eigenval[2] / sum(pca.eigenval),
   pruning_parameters = paste(
     "PLINK 2.0 --indep-pairwise 50 5 0.2",
     "--indep-order 1 --bad-ld"
