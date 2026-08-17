@@ -1,0 +1,30 @@
+PLINK v2.0.0-a.7.3 M1 (8 Aug 2026)
+Options in effect:
+  --chr-set 20 no-x no-y no-xy no-mt
+  --extract /Users/pete/Desktop/playground/enhancer/r_files/revision/hrdp_genotype_diversity/results/plink2_primary/hrdp_complete_ld_pruned.prune.in
+  --make-king-table cols=fid,id,nsnp,ibs
+  --out /Users/pete/Desktop/playground/enhancer/r_files/revision/hrdp_genotype_diversity/results/plink2_primary/hrdp_complete_ld_pruned_ibs
+  --pfile /Users/pete/Desktop/playground/enhancer/r_files/revision/hrdp_genotype_diversity/results/plink2_primary/hrdp_complete
+
+Hostname: pete_studio
+Working directory: /Users/pete/Desktop/playground/enhancer
+Start time: Mon Aug 17 16:33:11 2026
+
+Random number seed: 1787002391
+36864 MiB RAM detected; reserving 18432 MiB for main workspace.
+Using up to 14 threads (change this with --threads).
+10 samples (0 females, 10 males; 10 founders) loaded from
+/Users/pete/Desktop/playground/enhancer/r_files/revision/hrdp_genotype_diversity/results/plink2_primary/hrdp_complete.psam.
+22854 variants loaded from
+/Users/pete/Desktop/playground/enhancer/r_files/revision/hrdp_genotype_diversity/results/plink2_primary/hrdp_complete.pvar.
+Note: No phenotype data present.
+--extract: 1509 variants remaining.
+1509 variants remaining after main filters.
+--make-king-table pass 1/1: Scanning for rare variants... done.
+0 variants handled by initial scan (1509 remaining).
+--make-king-table: 1509 variants processed.
+Results written to
+/Users/pete/Desktop/playground/enhancer/r_files/revision/hrdp_genotype_diversity/results/plink2_primary/hrdp_complete_ld_pruned_ibs.kin0
+.
+
+End time: Mon Aug 17 16:33:11 2026

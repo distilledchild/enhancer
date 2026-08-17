@@ -1,2 +1,0 @@
-analysis	reference_build	n_libraries	n_autosomes	n_informative_snps	distance_definition	source_note
-Genome-wide SNP relationships among ten Hi-C libraries	mRatBN7.2/rn7	10	20	24040	Mean absolute diploid alternate-allele dosage difference divided by 2; computed over pairwise nonmissing informative biallelic SNPs.	The supplied HRDP archive was previously filtered and merged with missing-to-reference handling; results describe relationships in this provided panel rather than de novo variant calling.

@@ -5,7 +5,7 @@ sample_id	strain	vcf_sample	mapping_status
 A2DB	LE/Stm	LE_StmMcwi	exact strain-name match
 D765A	BXH6	BXH6_Cub	exact strain-name match
 DA08A	HXB2	HXB2_Ipcv	exact strain-name match
-DA21A	SHR/OlaIpcvxBN/NHsdMcwi	SHR_BN_F1	inferred F1 match; confirm with genotype-data provider
+DA21A	SHR/OlaIpcvxBN/NHsdMcwi	SHR_BN_F1	confirmed sample-to-VCF mapping
 DA68A	HXB31	HXB31_Ipcv	exact strain-name match
 DBA9A	HXB23	HXB23_Ipcv	exact strain-name match
 DE8BA	BN-Lx	BN-Lx_Cub	exact strain-name match

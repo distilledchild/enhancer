@@ -64,6 +64,9 @@ __pycache__/
 # local virtualenv
 r_files/.venv-alphagenome/
 
+# Local native PLINK 2.0 executable for the HRDP genotype analysis
+r_files/revision/hrdp_genotype_diversity/.tools/
+
 # h3_GWAS generated outputs and large analysis artifacts
 r_files/h3_GWAS/**/*.genes.out
 r_files/h3_GWAS/**/*.genes.raw
