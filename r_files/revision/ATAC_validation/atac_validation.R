@@ -20,12 +20,20 @@ current_script_path <- function() {
 
 resolve_enhancer_r_files_dir <- function() {
   script.path <- current_script_path()
-  script.dir <- if (is.na(script.path)) NA_character_ else dirname(script.path)
-  script.candidate <- if (
-    !is.na(script.dir) && basename(script.dir) %in% c("revision", "atac_validation")
-  ) dirname(script.dir) else script.dir
+  start.dirs <- c(
+    if (is.na(script.path)) NA_character_ else dirname(script.path),
+    getwd()
+  )
+  ancestor.dirs <- unique(unlist(lapply(start.dirs, function(path) {
+    if (is.na(path) || !nzchar(path)) return(character())
+    path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    ancestors <- path
+    for (i in seq_len(6L)) ancestors <- c(ancestors, dirname(tail(ancestors, 1L)))
+    ancestors
+  })))
 
   candidates <- unique(c(
+    ancestor.dirs,
     Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
     path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
     path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files"),
@@ -34,9 +42,7 @@ resolve_enhancer_r_files_dir <- function() {
     )),
     Sys.glob(path.expand(
       "~/Library/CloudStorage/Dropbox*/Gateway_to_Hao/enhancer/r_files"
-    )),
-    script.candidate,
-    path.expand("~/Desktop/playground/enhancer/r_files")
+    ))
   ))
   candidates <- candidates[!is.na(candidates) & nzchar(candidates)]
   candidates <- candidates[dir.exists(candidates) & file.exists(file.path(candidates, "funcs.R"))]
@@ -94,12 +100,13 @@ options(scipen = 999)
 ########################
 
 revision.dir <- file.path(r.files.dir, "revision")
-cache.dir <- file.path(revision.dir, "cache_data")
 script.path <- current_script_path()
 script.dir <- if (is.na(script.path)) getwd() else dirname(script.path)
+revision.main.dir <- file.path(revision.dir, "revision_main")
+cache.dir <- file.path(revision.main.dir, "cache_data")
 resubmit.input.dir <- Sys.getenv(
   "RESUBMIT_INPUT_DIR",
-  unset = file.path(revision.dir, "resubmit_outputs")
+  unset = file.path(revision.main.dir, "results")
 )
 output.dir <- Sys.getenv(
   "ATAC_VALIDATION_OUTPUT_DIR",
@@ -131,12 +138,13 @@ epd.promoter.file <- file.path(
 atac.cache.file <- file.path(cache.dir, "gr.atac.rds")
 chrom.sizes.file <- Sys.getenv(
   "RN7_CHROM_SIZES_FILE",
-  unset = file.path(
-    enhancer.project.dir,
-    "data",
-    "tracks",
-    "rn7.chrom.sizes"
-  )
+  unset = c(
+    file.path(revision.main.dir, "inputs", "data", "tracks", "rn7.chrom.sizes"),
+    file.path(enhancer.project.dir, "data", "tracks", "rn7.chrom.sizes")
+  )[file.exists(c(
+    file.path(revision.main.dir, "inputs", "data", "tracks", "rn7.chrom.sizes"),
+    file.path(enhancer.project.dir, "data", "tracks", "rn7.chrom.sizes")
+  ))][1]
 )
 chrom.sizes.file <- path.expand(chrom.sizes.file)
 

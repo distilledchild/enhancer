@@ -128,10 +128,10 @@ moderate (full-depth versus 250M Spearman rho = 0.609 for exact-call counts).
 
 ## Files to audit
 
-- `r_files/downsampling_140M.R`: standalone ten-library 140M analysis.
-- `r_files/downsampling_140M_250M_comparison.R`: matched seven-library
+- `r_files/revision/downsampling/downsampling_140M.R`: standalone ten-library 140M analysis.
+- `r_files/revision/downsampling/downsampling_140M_250M_comparison.R`: matched seven-library
   full-depth/140M/250M comparison.
-- `r_files/downsampling_depth_functions.R`: shared comparison, recovery,
+- `r_files/revision/downsampling/downsampling_depth_functions.R`: shared comparison, recovery,
   provenance, category, and gene-stability functions.
 - `r_files/revision/downsampling/build_downsampling_input_manifests.R`: input
   inventory and provenance manifest generation.
@@ -139,5 +139,5 @@ moderate (full-depth versus 250M Spearman rho = 0.609 for exact-call counts).
   HiCCUPS execution scripts.
 - `r_files/revision/downsampling/250M/`: 250M downsampling, `.hic` creation, and
   HiCCUPS execution scripts.
-- `r_files/downsampling_140M_250M_outputs/`: rebuildable matched-comparison
+- `r_files/revision/downsampling/results/full_140M_250M/`: rebuildable matched-comparison
   output tables.

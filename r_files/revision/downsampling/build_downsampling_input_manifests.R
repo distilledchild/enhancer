@@ -10,22 +10,12 @@ current_script_path <- function() {
 }
 
 script.path <- current_script_path()
-project.root <- if (is.na(script.path)) {
-  NA_character_
-} else {
-  dirname(dirname(dirname(dirname(script.path))))
-}
-bundled.root <- if (!is.na(project.root) && dir.exists(project.root)) {
-  file.path(project.root, "data", "juicer_downsample_q30_140M_250M")
-} else {
-  NA_character_
-}
-configured.root <- Sys.getenv("DOWNSAMPLING_COMBINED_ROOT", unset = "")
-legacy.root <- paste0(
-  "~/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/",
-  "juicer_downsample_q30_140M_250M"
+analysis.dir <- if (is.na(script.path)) getwd() else dirname(script.path)
+bundled.root <- file.path(
+  analysis.dir, "inputs", "juicer_downsample_q30_140M_250M"
 )
-root.candidates <- path.expand(c(bundled.root, configured.root, legacy.root))
+configured.root <- Sys.getenv("DOWNSAMPLING_COMBINED_ROOT", unset = "")
+root.candidates <- path.expand(c(bundled.root, configured.root))
 root.candidates <- root.candidates[
   !is.na(root.candidates) & nzchar(root.candidates) & dir.exists(root.candidates)
 ]

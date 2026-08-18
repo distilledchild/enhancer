@@ -38,19 +38,20 @@ current_script_path <- function() {
 
 resolve_enhancer_r_files_dir <- function() {
   script.path <- current_script_path()
-  script.candidate <- NA_character_
-  if (!is.na(script.path)) {
-    script.dir <- dirname(script.path)
-    script.candidate <- if (
-      basename(script.dir) %in% c("revision", "atac_validation")
-    ) {
-      dirname(script.dir)
-    } else {
-      script.dir
-    }
-  }
+  start.dirs <- c(
+    if (is.na(script.path)) NA_character_ else dirname(script.path),
+    getwd()
+  )
+  ancestor.dirs <- unique(unlist(lapply(start.dirs, function(path) {
+    if (is.na(path) || !nzchar(path)) return(character())
+    path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    ancestors <- path
+    for (i in seq_len(6L)) ancestors <- c(ancestors, dirname(tail(ancestors, 1L)))
+    ancestors
+  })))
 
   candidates <- unique(c(
+    ancestor.dirs,
     Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
     path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
     path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files"),
@@ -59,9 +60,7 @@ resolve_enhancer_r_files_dir <- function() {
     )),
     Sys.glob(path.expand(
       "~/Library/CloudStorage/Dropbox*/Gateway_to_Hao/enhancer/r_files"
-    )),
-    script.candidate,
-    path.expand("~/Desktop/playground/enhancer/r_files")
+    ))
   ))
   candidates <- candidates[
     !is.na(candidates) & nzchar(candidates) & dir.exists(candidates)
@@ -82,6 +81,12 @@ resolve_enhancer_r_files_dir <- function() {
 }
 
 r.files.dir <- resolve_enhancer_r_files_dir()
+script.path <- current_script_path()
+analysis.dir <- if (is.na(script.path)) {
+  file.path(r.files.dir, "revision", "revision_main")
+} else {
+  dirname(script.path)
+}
 enhancer.project.dir <- Sys.getenv(
   "ENHANCER_PROJECT_DIR",
   unset = dirname(r.files.dir)
@@ -114,7 +119,7 @@ options(scipen = 999)
 #
 # This script reads the original coordinate sources, validates their documented
 # conventions, creates normalized analysis objects, and stores those objects in
-# revision/cache_data. The main resubmission script loads this cache instead of
+# revision/revision_main/cache_data. The main script loads this cache instead of
 # rebuilding the coordinate objects on every run.
 ################################################################################
 
@@ -122,22 +127,27 @@ options(scipen = 999)
 # 0. Directories and source files
 ########################
 
-setwd(r.files.dir)
-
 revision.dir <- file.path(r.files.dir, "revision")
-coord.cache.dir <- file.path(revision.dir, "cache_data")
+coord.cache.dir <- file.path(analysis.dir, "cache_data")
 dir.create(coord.cache.dir, recursive = TRUE, showWarnings = FALSE)
 
-dropbox.root <- enhancer.project.dir
-hiccups.loop.root <- Sys.getenv(
-  "HICCUPS_LOOP_ROOT",
-  unset = file.path(
-    gateway.to.hao.dir,
-    "hic",
-    "2023A",
-    "hic30_w_sb_options"
-  )
-)
+bundled.input.dir <- path.expand(Sys.getenv(
+  "RESUBMIT_INPUT_BUNDLE_DIR",
+  unset = file.path(analysis.dir, "inputs")
+))
+
+input.root <- if (dir.exists(file.path(bundled.input.dir, "data"))) {
+  bundled.input.dir
+} else {
+  enhancer.project.dir
+}
+dropbox.root <- input.root
+default.hiccups.loop.root <- if (dir.exists(file.path(bundled.input.dir, "hic"))) {
+  file.path(bundled.input.dir, "hic", "2023A", "hic30_w_sb_options")
+} else {
+  file.path(gateway.to.hao.dir, "hic", "2023A", "hic30_w_sb_options")
+}
+hiccups.loop.root <- Sys.getenv("HICCUPS_LOOP_ROOT", unset = default.hiccups.loop.root)
 hiccups.loop.root <- path.expand(hiccups.loop.root)
 
 source(file.path(r.files.dir, "funcs.R"))
@@ -214,7 +224,13 @@ library.complexity.file <- file.path(
 # it for cache construction or the main pooled-resource analysis.
 genetic.distance.file <- Sys.getenv(
   "HRDP_GENETIC_DISTANCE_FILE",
-  unset = file.path(revision.dir, "hrdp_genetic_distance.tsv")
+  unset = file.path(
+    revision.dir,
+    "hrdp_genotype_diversity",
+    "results",
+    "plink2_primary",
+    "hrdp_plink2_ibs_distance.tsv"
+  )
 )
 
 # Store all source and downstream input paths in one cached provenance table so

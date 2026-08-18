@@ -31,26 +31,37 @@ current_script_path <- function() {
 # Dropbox layouts so collaborators can run the same file after synchronization.
 resolve_enhancer_r_files_dir <- function() {
   script.path <- current_script_path()
+  start.dirs <- c(
+    if (is.na(script.path)) NA_character_ else dirname(script.path),
+    getwd()
+  )
+  ancestor.dirs <- unique(unlist(lapply(start.dirs, function(path) {
+    if (is.na(path) || !nzchar(path)) return(character())
+    path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    paths <- path
+    for (i in seq_len(6L)) {
+      parent <- dirname(tail(paths, 1L))
+      if (identical(parent, tail(paths, 1L))) break
+      paths <- c(paths, parent)
+    }
+    paths
+  })))
   candidates <- unique(c(
     Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
-    if (is.na(script.path)) NA_character_ else dirname(script.path),
+    ancestor.dirs,
     path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
     path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files"),
     Sys.glob(path.expand(
       "~/Library/CloudStorage/Dropbox*/K P/Gateway_to_Hao/enhancer/r_files"
-    )),
-    path.expand("~/Desktop/playground/enhancer/r_files")
+    ))
   ))
   candidates <- candidates[
     !is.na(candidates) & nzchar(candidates) & dir.exists(candidates)
   ]
-  candidates <- candidates[
-    file.exists(file.path(candidates, "funcs.R")) &
-      file.exists(file.path(candidates, "downsampling_depth_functions.R"))
-  ]
+  candidates <- candidates[file.exists(file.path(candidates, "funcs.R"))]
   if (length(candidates) == 0L) {
     stop(
-      "Cannot locate funcs.R and downsampling_depth_functions.R. ",
+      "Cannot locate enhancer/r_files with funcs.R. ",
       "Set ENHANCER_R_FILES_DIR.",
       call. = FALSE
     )
@@ -61,12 +72,18 @@ resolve_enhancer_r_files_dir <- function() {
 r.files.dir <- resolve_enhancer_r_files_dir()
 enhancer.project.dir <- dirname(r.files.dir)
 source(file.path(r.files.dir, "funcs.R"))
+script.path <- current_script_path()
+analysis.dir <- if (is.na(script.path)) {
+  file.path(r.files.dir, "revision", "downsampling")
+} else {
+  dirname(script.path)
+}
 
 library("tidyverse")
 library("GenomicRanges")
 library("GenomeInfoDb")
 
-source(file.path(r.files.dir, "downsampling_depth_functions.R"))
+source(file.path(analysis.dir, "downsampling_depth_functions.R"))
 
 options(tibble.width = Inf, tibble.print_max = Inf, scipen = 999)
 
@@ -85,6 +102,7 @@ options(tibble.width = Inf, tibble.print_max = Inf, scipen = 999)
 ########################
 
 revision.dir <- file.path(r.files.dir, "revision")
+input.dir <- file.path(analysis.dir, "inputs")
 max.loop.distance.bp <- 2000000L
 promoter.window.flank.bp <- 1000L
 atac.minimum.overlap.bp <- 50L
@@ -105,6 +123,7 @@ df.sample.metadata <- tribble(
 full.depth.root <- resolve_depth_directory(
   c(
     Sys.getenv("FULL_DEPTH_HICCUPS_ROOT", unset = ""),
+    file.path(input.dir, "hic", "2023A", "hic30_w_sb_options"),
     file.path(
       enhancer.project.dir, "hic", "2023A", "hic30_w_sb_options"
     ),
@@ -120,13 +139,10 @@ full.depth.root <- resolve_depth_directory(
 combined.downsample.root <- resolve_depth_directory(
   c(
     Sys.getenv("DOWNSAMPLED_140M_250M_HICCUPS_ROOT", unset = ""),
+    file.path(input.dir, "juicer_downsample_q30_140M_250M"),
     file.path(
       enhancer.project.dir, "data", "juicer_downsample_q30_140M_250M"
-    ),
-    path.expand(paste0(
-      "~/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/",
-      "juicer_downsample_q30_140M_250M"
-    ))
+    )
   ),
   "combined 140M/250M HiCCUPS directory"
 )
@@ -153,11 +169,11 @@ required.cache.files <- c(
 )
 cache.candidates <- unique(path.expand(c(
   Sys.getenv("DOWNSAMPLING_COORD_CACHE_DIR", unset = ""),
-  file.path(revision.dir, "cache_data"),
-  path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files/revision/cache_data"),
+  file.path(revision.dir, "revision_main", "cache_data"),
+  path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files/revision/revision_main/cache_data"),
   Sys.glob(path.expand(paste0(
     "~/Library/CloudStorage/Dropbox*/K P/Gateway_to_Hao/enhancer/",
-    "r_files/revision/cache_data"
+    "r_files/revision/revision_main/cache_data"
   )))
 )))
 cache.candidates <- cache.candidates[
@@ -179,16 +195,9 @@ coord.cache.dir <- normalizePath(
   cache.candidates[cache.complete][[1]], winslash = "/", mustWork = TRUE
 )
 
-default.output.parent <- c(
-  r.files.dir,
-  path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files")
-)
-default.output.parent <- default.output.parent[
-  dir.exists(default.output.parent)
-][[1]]
 output.dir <- path.expand(Sys.getenv(
   "DOWNSAMPLING_140M_250M_OUTPUT_DIR",
-  unset = file.path(default.output.parent, "downsampling_140M_250M_outputs")
+  unset = file.path(analysis.dir, "results", "full_140M_250M")
 ))
 dir.create(output.dir, recursive = TRUE, showWarnings = FALSE)
 
