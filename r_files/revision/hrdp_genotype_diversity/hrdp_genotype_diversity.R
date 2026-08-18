@@ -31,18 +31,25 @@ script.dir <- if (length(script.argument)) {
   }
   normalizePath(candidate.dirs[1])
 }
-nearby.archive <- file.path(
+bundled.archive <- file.path(script.dir, "inputs", "hrdp_genotype_by_chr.tgz")
+legacy.nearby.archive <- file.path(
   normalizePath(file.path(script.dir, "../../.."), mustWork = FALSE),
   "genotype_hdrp/hrdp_genotype_by_chr.tgz"
 )
-drive.archive <- path.expand(paste0(
-  "~/Library/CloudStorage/GoogleDrive-wellclouder@gmail.com/My Drive/",
-  "research/enhancer/genotype_hdrp/hrdp_genotype_by_chr.tgz"
-))
-archive.file <- Sys.getenv(
-  "HRDP_GENOTYPE_ARCHIVE",
-  unset = if (file.exists(nearby.archive)) nearby.archive else drive.archive
+archive.candidates <- c(
+  Sys.getenv("HRDP_GENOTYPE_ARCHIVE", unset = ""),
+  bundled.archive,
+  legacy.nearby.archive
 )
+existing.archives <- archive.candidates[file.exists(archive.candidates)]
+if (!length(existing.archives)) {
+  stop(
+    "Missing genotype archive. Place hrdp_genotype_by_chr.tgz in inputs/ ",
+    "or set HRDP_GENOTYPE_ARCHIVE.",
+    call. = FALSE
+  )
+}
+archive.file <- existing.archives[1]
 local.plink2 <- file.path(script.dir, ".tools/plink2/bin/plink2")
 plink2.bin <- Sys.getenv(
   "PLINK2_BIN",

@@ -9,9 +9,9 @@ Options in effect:
 
 Hostname: pete_studio
 Working directory: /Users/pete/Desktop/playground/enhancer
-Start time: Mon Aug 17 16:33:11 2026
+Start time: Mon Aug 17 16:44:08 2026
 
-Random number seed: 1787002391
+Random number seed: 1787003048
 36864 MiB RAM detected; reserving 18432 MiB for main workspace.
 Using up to 14 threads (change this with --threads).
 10 samples (0 females, 10 males; 10 founders) loaded from
@@ -27,4 +27,4 @@ and
 /Users/pete/Desktop/playground/enhancer/r_files/revision/hrdp_genotype_diversity/results/plink2_primary/hrdp_complete_ld_pruned.prune.out
 .
 
-End time: Mon Aug 17 16:33:11 2026
+End time: Mon Aug 17 16:44:08 2026
