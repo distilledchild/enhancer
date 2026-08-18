@@ -18,6 +18,48 @@ str_split_first <- function(string, pattern) {
   str_split(string, pattern, simplify = TRUE)[, 1]
 }
 
+# Save one ggplot/patchwork object as publication-ready PDF and PNG files.
+saving_plot_dual <- function(
+  plot_obj,
+  filename_base,
+  output_dir = "./figures",
+  width_in = 11,
+  height_in = 8.5,
+  scale_x = 1,
+  scale_y = 1,
+  dpi = 300,
+  bg = "white"
+) {
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+  final.width <- width_in * scale_x
+  final.height <- height_in * scale_y
+
+  ggplot2::ggsave(
+    file.path(output_dir, paste0(filename_base, ".pdf")),
+    plot = plot_obj,
+    device = "pdf",
+    width = final.width,
+    height = final.height,
+    units = "in",
+    bg = bg
+  )
+  ggplot2::ggsave(
+    file.path(output_dir, paste0(filename_base, ".png")),
+    plot = plot_obj,
+    device = "png",
+    width = final.width,
+    height = final.height,
+    units = "in",
+    dpi = dpi,
+    bg = bg
+  )
+
+  invisible(file.path(
+    output_dir,
+    paste0(filename_base, c(".pdf", ".png"))
+  ))
+}
+
 # file_list <- function(step, file_ext) {
 #   # file.dir.5 <- path(step)
 #   fs::dir_ls(path(step), regexp = str_c("\\.", file_ext, "$")
@@ -3856,8 +3898,8 @@ summarise_mcnemar <- function(df, resolution.label) {
   )
 }
 
-# Read a long strain-pair genetic-distance table, accept one of three supported
-# distance-column names, canonicalise pair order, and retain one finite value
+# Read a long strain-pair genetic-distance table, accept a supported
+# distance-column name, canonicalise pair order, and retain one finite value
 # per unordered strain pair.
 read_genetic_distance_long <- function(file) {
   df.distance <- readr::read_tsv(file, show_col_types = FALSE)
@@ -3869,14 +3911,19 @@ read_genetic_distance_long <- function(file) {
   )
 
   distance.column <- intersect(
-    c("genetic_distance", "ibs_distance", "distance"),
+    c(
+      "genetic_distance",
+      "plink2_ibs_distance",
+      "ibs_distance",
+      "distance"
+    ),
     colnames(df.distance)
   )
 
   if (length(distance.column) == 0) {
     stop(
       "The genetic-distance table must contain genetic_distance, ",
-      "ibs_distance, or distance.",
+      "plink2_ibs_distance, ibs_distance, or distance.",
       call. = FALSE
     )
   }

@@ -38,19 +38,20 @@ current_script_path <- function() {
 
 resolve_enhancer_r_files_dir <- function() {
   script.path <- current_script_path()
-  script.candidate <- NA_character_
-  if (!is.na(script.path)) {
-    script.dir <- dirname(script.path)
-    script.candidate <- if (
-      basename(script.dir) %in% c("revision", "atac_validation")
-    ) {
-      dirname(script.dir)
-    } else {
-      script.dir
-    }
-  }
+  start.dirs <- c(
+    if (is.na(script.path)) NA_character_ else dirname(script.path),
+    getwd()
+  )
+  ancestor.dirs <- unique(unlist(lapply(start.dirs, function(path) {
+    if (is.na(path) || !nzchar(path)) return(character())
+    path <- normalizePath(path, winslash = "/", mustWork = FALSE)
+    ancestors <- path
+    for (i in seq_len(6L)) ancestors <- c(ancestors, dirname(tail(ancestors, 1L)))
+    ancestors
+  })))
 
   candidates <- unique(c(
+    ancestor.dirs,
     Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
     path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
     path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files"),
@@ -59,9 +60,7 @@ resolve_enhancer_r_files_dir <- function() {
     )),
     Sys.glob(path.expand(
       "~/Library/CloudStorage/Dropbox*/Gateway_to_Hao/enhancer/r_files"
-    )),
-    script.candidate,
-    path.expand("~/Desktop/playground/enhancer/r_files")
+    ))
   ))
   candidates <- candidates[
     !is.na(candidates) & nzchar(candidates) & dir.exists(candidates)
@@ -82,6 +81,12 @@ resolve_enhancer_r_files_dir <- function() {
 }
 
 r.files.dir <- resolve_enhancer_r_files_dir()
+script.path <- current_script_path()
+analysis.dir <- if (is.na(script.path)) {
+  file.path(r.files.dir, "revision", "revision_main")
+} else {
+  dirname(script.path)
+}
 enhancer.project.dir <- Sys.getenv(
   "ENHANCER_PROJECT_DIR",
   unset = dirname(r.files.dir)
@@ -132,21 +137,23 @@ options(scipen = 999)
 # 0. Directories and files
 ########################
 
-setwd(r.files.dir)
-
 revision.dir <- file.path(r.files.dir, "revision")
 output.dir <- Sys.getenv(
   "RESUBMIT_OUTPUT_DIR",
-  unset = file.path(revision.dir, "resubmit_outputs")
+  unset = file.path(analysis.dir, "results")
 )
 dir.create(output.dir, recursive = TRUE, showWarnings = FALSE)
 
 # Coordinate preprocessing is isolated from the downstream analysis and cached.
 coord.prep.script <- file.path(
-  revision.dir,
-  "promoter_enhancer_interaction_resubmit_01_coord_prep.R"
+  analysis.dir,
+  "promoter_enhancer_interaction_resubmit_coord_prep.R"
 )
-coord.cache.dir <- file.path(revision.dir, "cache_data")
+coord.cache.dir <- file.path(analysis.dir, "cache_data")
+bundled.input.dir <- path.expand(Sys.getenv(
+  "RESUBMIT_INPUT_BUNDLE_DIR",
+  unset = file.path(analysis.dir, "inputs")
+))
 
 # Require the coordinate-preparation script before using its cached outputs.
 if (!file.exists(coord.prep.script)) {
@@ -217,17 +224,18 @@ load_coordinate_cache_objects(
 # Rebase cached absolute paths onto the current user's shared Dropbox tree.
 # Coordinate objects remain reusable across computers, while provenance and
 # any downstream file reads point to the inputs on the machine running now.
-hiccups.loop.root <- Sys.getenv(
-  "HICCUPS_LOOP_ROOT",
-  unset = file.path(
-    gateway.to.hao.dir,
-    "hic",
-    "2023A",
-    "hic30_w_sb_options"
-  )
-)
+default.hiccups.loop.root <- if (dir.exists(file.path(bundled.input.dir, "hic"))) {
+  file.path(bundled.input.dir, "hic", "2023A", "hic30_w_sb_options")
+} else {
+  file.path(gateway.to.hao.dir, "hic", "2023A", "hic30_w_sb_options")
+}
+hiccups.loop.root <- Sys.getenv("HICCUPS_LOOP_ROOT", unset = default.hiccups.loop.root)
 hiccups.loop.root <- path.expand(hiccups.loop.root)
-data.dir <- file.path(enhancer.project.dir, "data")
+data.dir <- if (dir.exists(file.path(bundled.input.dir, "data"))) {
+  file.path(bundled.input.dir, "data")
+} else {
+  file.path(enhancer.project.dir, "data")
+}
 
 df.analysis.input.files <- df.analysis.input.files %>%
   mutate(
@@ -284,7 +292,13 @@ df.analysis.input.files <- df.analysis.input.files %>%
       ),
       input_name == "genetic_distance" ~ Sys.getenv(
         "HRDP_GENETIC_DISTANCE_FILE",
-        unset = file.path(revision.dir, "hrdp_genetic_distance.tsv")
+        unset = file.path(
+          revision.dir,
+          "hrdp_genotype_diversity",
+          "results",
+          "plink2_primary",
+          "hrdp_plink2_ibs_distance.tsv"
+        )
       ),
       TRUE ~ input_path
     )
@@ -4069,16 +4083,18 @@ df.gene.rank.sensitivity.correlation <- bind_rows(
 )
 
 ################################################################################
-# 12-2. Revised Figure 5b-c positional-density analysis
+# 12-2. Revised Figure 5a-c positional-density analysis
 #
 # This rebuild follows the original Figure 5 transformation in
 # enhancer_promoter_interaction.R and
 # enhancer_promoter_interaction_for_submission.R: one loop length is added on
 # both sides, and the two anchor midpoints map to relative positions 0 and 1.
-# Panel b now uses strand-aware Ensembl transcript TSS coordinates rather than
-# start-codon intervals. Panel c uses the coordinate-normalized EPD rn7 promoter
-# annotation reconstructed in Step 1. Identical genomic sites are counted once
-# so transcript or annotation duplication does not change density weighting.
+# Panel a reports predicted CTCF motif intervals as structural sequence
+# annotation. Panel b uses strand-aware Ensembl transcript TSS coordinates
+# rather than start-codon intervals. Panel c uses the coordinate-normalized EPD
+# rn7 promoter annotation reconstructed in Step 1. Identical genomic sites are
+# counted once so transcript or annotation duplication does not change density
+# weighting.
 ################################################################################
 
 figure5.resolution.colors <- c(
@@ -4122,6 +4138,79 @@ gr.figure5.loop.window <- GRanges(
     end = df.figure5.loop.window$expanded_end
   )
 )
+
+# Map predicted CTCF motif intervals to expanded loop windows chromosome by
+# chromosome. Relative positions are aggregated into narrow bins for plotting,
+# avoiding materialization of tens of millions of overlap rows in memory.
+figure5.ctcf.chromosomes <- intersect(
+  unique(as.character(seqnames(gr.ctcf.motif))),
+  unique(df.figure5.loop.window$chr)
+)
+figure5.ctcf.chromosome.results <- map(
+  figure5.ctcf.chromosomes,
+  function(chr.i) {
+    motif.index <- which(as.character(seqnames(gr.ctcf.motif)) == chr.i)
+    loop.index <- which(df.figure5.loop.window$chr == chr.i)
+    hit.i <- findOverlaps(
+      gr.ctcf.motif[motif.index],
+      gr.figure5.loop.window[loop.index],
+      type = "any",
+      select = "all"
+    )
+    if (length(hit.i) == 0L) {
+      return(list(density = tibble(), summary = tibble()))
+    }
+
+    motif.index.hit <- motif.index[queryHits(hit.i)]
+    loop.index.hit <- loop.index[subjectHits(hit.i)]
+    relative.position <- (
+      (
+        start(gr.ctcf.motif)[motif.index.hit] +
+          end(gr.ctcf.motif)[motif.index.hit]
+      ) / 2 - df.figure5.loop.window$anchor1_midpoint[loop.index.hit]
+    ) / df.figure5.loop.window$anchor_midpoint_distance[loop.index.hit]
+    keep <- dplyr::between(relative.position, -1, 2)
+
+    density.i <- tibble(
+      resolution = df.figure5.loop.window$resolution[loop.index.hit[keep]],
+      relative_position = relative.position[keep]
+    ) %>%
+      mutate(relative_position = round(relative_position / 0.0025) * 0.0025) %>%
+      count(resolution, relative_position, name = "n_overlap")
+
+    summary.i <- tibble(
+      resolution = df.figure5.loop.window$resolution[loop.index.hit[keep]],
+      feature_index = motif.index.hit[keep],
+      loop_id = df.figure5.loop.window$loop_id[loop.index.hit[keep]]
+    ) %>%
+      group_by(resolution) %>%
+      summarise(
+        feature_type = "predicted_CTCF_motif_interval",
+        n_loop_feature_overlaps = n(),
+        n_unique_features = n_distinct(feature_index),
+        n_unique_loops = n_distinct(loop_id),
+        .groups = "drop"
+      )
+    list(density = density.i, summary = summary.i)
+  }
+)
+df.figure5.ctcf.relative.position <- map_dfr(
+  figure5.ctcf.chromosome.results,
+  "density"
+) %>%
+  group_by(resolution, relative_position) %>%
+  summarise(n_overlap = sum(n_overlap), .groups = "drop")
+df.figure5.ctcf.feature.summary <- map_dfr(
+  figure5.ctcf.chromosome.results,
+  "summary"
+) %>%
+  group_by(feature_type, resolution) %>%
+  summarise(
+    n_loop_feature_overlaps = sum(n_loop_feature_overlaps),
+    n_unique_features = sum(n_unique_features),
+    n_unique_loops = sum(n_unique_loops),
+    .groups = "drop"
+  )
 
 # Collapse transcripts sharing the same strand-aware TSS into one genomic TSS
 # site while preserving transcript and gene multiplicity as descriptive fields.
@@ -4244,27 +4333,36 @@ df.figure5.promoter.relative.position <- tibble(
 # Summarize the number of unique features and loop-feature overlaps contributing
 # to each resolution-specific density curve.
 df.figure5.revised.feature.summary <- bind_rows(
-  df.figure5.true.tss.relative.position,
-  df.figure5.promoter.relative.position
-) %>%
-  group_by(feature_type, resolution) %>%
-  summarise(
-    n_loop_feature_overlaps = n(),
-    n_unique_features = n_distinct(feature_id),
-    n_unique_loops = n_distinct(loop_id),
-    .groups = "drop"
+  df.figure5.ctcf.feature.summary,
+  bind_rows(
+    df.figure5.true.tss.relative.position,
+    df.figure5.promoter.relative.position
+  ) %>%
+    group_by(feature_type, resolution) %>%
+    summarise(
+      n_loop_feature_overlaps = n(),
+      n_unique_features = n_distinct(feature_id),
+      n_unique_loops = n_distinct(loop_id),
+      .groups = "drop"
+    )
   )
 
 # Reuse the original resolution colours and density geometry for both revised
 # panels while showing the two loop anchors explicitly at x = 0 and x = 1.
 create.figure5.revised.density.plot <- function(
   df.relative.position,
-  panel.tag
+  panel.tag,
+  panel.title
 ) {
+  if (!"n_overlap" %in% colnames(df.relative.position)) {
+    df.relative.position <- df.relative.position %>%
+      mutate(n_overlap = 1)
+  }
   ggplot(
     df.relative.position,
     aes(
       x = relative_position,
+      weight = n_overlap,
       color = resolution,
       fill = resolution
     )
@@ -4287,6 +4385,7 @@ create.figure5.revised.density.plot <- function(
     scale_x_continuous(breaks = c(-1, 0, 1, 2)) +
     labs(
       tag = panel.tag,
+      title = panel.title,
       x = "Relative Position to Loop",
       y = "Density",
       color = "Resolution",
@@ -4296,6 +4395,7 @@ create.figure5.revised.density.plot <- function(
     theme(
       plot.tag = element_text(face = "bold"),
       plot.tag.position = c(0.02, 0.98),
+      plot.title = element_text(size = 9, face = "bold", hjust = 0.5),
       legend.position = "bottom",
       legend.title = element_text(size = 8),
       legend.text = element_text(size = 8),
@@ -4303,15 +4403,23 @@ create.figure5.revised.density.plot <- function(
     )
 }
 
+plot.figure5a.ctcf.density <- create.figure5.revised.density.plot(
+  df.figure5.ctcf.relative.position,
+  panel.tag = "a",
+  panel.title = "Predicted CTCF motif intervals"
+)
 plot.figure5b.true.tss.density <- create.figure5.revised.density.plot(
   df.figure5.true.tss.relative.position,
-  panel.tag = "b"
+  panel.tag = "b",
+  panel.title = "Strand-aware Ensembl TSSs"
 )
 plot.figure5c.promoter.density <- create.figure5.revised.density.plot(
   df.figure5.promoter.relative.position,
-  panel.tag = "c"
+  panel.tag = "c",
+  panel.title = "EPD promoters"
 )
-plot.figure5bc.revised.density <- patchwork::wrap_plots(
+plot.figure5abc.revised.density <- patchwork::wrap_plots(
+  plot.figure5a.ctcf.density,
   plot.figure5b.true.tss.density,
   plot.figure5c.promoter.density,
   nrow = 1,
@@ -4319,26 +4427,14 @@ plot.figure5bc.revised.density <- patchwork::wrap_plots(
 ) &
   theme(legend.position = "bottom")
 
-# Save only the final combined b-c panel in vector PDF and 300-dpi PNG formats.
-figure5.output.files <- c(
-  "figure5bc_revised_density_by_resolution.pdf",
-  "figure5bc_revised_density_by_resolution.png"
-)
-ggsave(
-  file.path(output.dir, figure5.output.files[[1]]),
-  plot.figure5bc.revised.density,
-  width = 7,
-  height = 3.2,
-  device = "pdf"
-)
-ggsave(
-  file.path(output.dir, figure5.output.files[[2]]),
-  plot.figure5bc.revised.density,
-  width = 7,
-  height = 3.2,
-  dpi = 300,
-  bg = "white"
-)
+# Save the final a-c panel in vector PDF and 300-dpi PNG formats.
+figure5.output.files <- basename(saving_plot_dual(
+  plot.figure5abc.revised.density,
+  filename_base = "figure5abc_revised_density_by_resolution",
+  output_dir = output.dir,
+  width_in = 10.5,
+  height_in = 3.3
+))
 
 ################################################################################
 # 12-3. Legacy comparison is intentionally excluded from production
@@ -4819,6 +4915,397 @@ df.revised.assignment.pipeline.status <- tribble(
   "Section 12", TRUE
 )
 
+################################################################################
+# 15-1. Revised manuscript figure suite
+#
+# These figures replace legacy plots with summaries derived from the revised
+# coordinate-normalized, evidence-layered analysis. Library support, predicted
+# CTCF motifs, ATAC overlap, and GO enrichment are described without treating
+# them as strain specificity, experimental CTCF occupancy, enhancer validation,
+# or validation of individual regulatory contacts.
+################################################################################
+
+resolution.colors <- c(
+  "5K" = "#4D9ACB",
+  "10K" = "#2878B5",
+  "25K" = "#173B7A"
+)
+category.colors <- c(
+  "putative_regulatory_direct_promoter_TSS_opposite_nonTSS_ATAC" = "#008F7A",
+  "promoter_promoter_compatible_both_direct_anchors" = "#6F4BA8",
+  "single_direct_promoter_TSS_without_opposite_nonTSS_ATAC" = "#D99500",
+  "no_direct_promoter_TSS" = "#6B7280"
+)
+category.labels <- c(
+  "putative_regulatory_direct_promoter_TSS_opposite_nonTSS_ATAC" =
+    "Promoter/TSS + opposite\nTSS-excluded ATAC",
+  "promoter_promoter_compatible_both_direct_anchors" =
+    "Promoter/TSS annotations\nat both anchors",
+  "single_direct_promoter_TSS_without_opposite_nonTSS_ATAC" =
+    "Single promoter/TSS;\nno opposite ATAC support",
+  "no_direct_promoter_TSS" = "No direct\npromoter/TSS"
+)
+
+theme.revised.figure <- theme_bw(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", size = 11),
+    plot.subtitle = element_text(size = 9, color = "grey30"),
+    axis.title = element_text(size = 9),
+    axis.text = element_text(size = 8),
+    legend.title = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold")
+  )
+
+# Figure 1: show the usable contact depth and resolution-specific loop-call
+# yield for every library, plus their descriptive full-depth relationship.
+df.figure1.library.depth <- df.depth.qc.by.strain %>%
+  filter(resolution == "ALL") %>%
+  distinct(strain, sample, hic_contacts_millions, n_loops) %>%
+  arrange(hic_contacts_millions) %>%
+  mutate(strain = factor(strain, levels = strain))
+df.figure1.loop.yield <- df.strain.loop.count.by.resolution %>%
+  filter(resolution != "ALL") %>%
+  mutate(
+    strain = factor(strain, levels = levels(df.figure1.library.depth$strain)),
+    resolution = factor(resolution, levels = names(resolution.colors))
+  )
+
+plot.figure1a.library.depth <- ggplot(
+  df.figure1.library.depth,
+  aes(strain, hic_contacts_millions)
+) +
+  geom_col(fill = "#3B6B8C", width = 0.72) +
+  coord_flip() +
+  labs(
+    tag = "a",
+    title = "Usable Hi-C contacts",
+    x = NULL,
+    y = "Valid MAPQ >=30 contacts (millions)"
+  ) +
+  theme.revised.figure
+
+plot.figure1b.loop.yield <- ggplot(
+  df.figure1.loop.yield,
+  aes(strain, n_loops, fill = resolution)
+) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.72) +
+  scale_fill_manual(values = resolution.colors, drop = FALSE) +
+  coord_flip() +
+  labs(
+    tag = "b",
+    title = "HiCCUPS calls by resolution",
+    x = NULL,
+    y = "Number of exact calls",
+    fill = "Resolution"
+  ) +
+  theme.revised.figure
+
+plot.figure1c.depth.loop <- ggplot(
+  df.figure1.library.depth,
+  aes(hic_contacts_millions, n_loops)
+) +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE,
+              color = "grey55", linewidth = 0.6) +
+  geom_point(color = "#B23A48", size = 2.5) +
+  geom_text(aes(label = sample), nudge_y = 170, size = 2.7,
+            check_overlap = TRUE) +
+  labs(
+    tag = "c",
+    title = "Full-depth depth-call relationship",
+    subtitle = "Descriptive sequencing-depth QC",
+    x = "Valid MAPQ >=30 contacts (millions)",
+    y = "Exact calls"
+  ) +
+  theme.revised.figure
+
+plot.figure1.revised <- patchwork::wrap_plots(
+  plot.figure1a.library.depth,
+  plot.figure1b.loop.yield,
+  plot.figure1c.depth.loop,
+  nrow = 1,
+  widths = c(0.9, 1.15, 1)
+)
+figure1.output.files <- basename(saving_plot_dual(
+  plot.figure1.revised,
+  "figure1_revised_library_depth_and_loop_yield",
+  output.dir,
+  width_in = 13,
+  height_in = 4.8
+))
+
+# Figure 2: summarize exact, resolution-specific pooled calls by chromosome.
+df.figure2.chromosome.resolution <- df.loop.universe %>%
+  count(chr1, resolution, name = "n_loops") %>%
+  mutate(
+    chromosome_label = str_remove(chr1, "^chr"),
+    chromosome_order = case_when(
+      chromosome_label == "X" ~ 100,
+      chromosome_label == "Y" ~ 101,
+      chromosome_label %in% c("M", "MT") ~ 102,
+      TRUE ~ readr::parse_number(chromosome_label)
+    )
+  ) %>%
+  arrange(chromosome_order) %>%
+  mutate(
+    chromosome_label = factor(
+      chromosome_label,
+      levels = unique(chromosome_label)
+    ),
+    resolution = factor(resolution, levels = names(resolution.colors))
+  )
+
+plot.figure2.revised <- ggplot(
+  df.figure2.chromosome.resolution,
+  aes(chromosome_label, n_loops, fill = resolution)
+) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.72) +
+  scale_fill_manual(values = resolution.colors, drop = FALSE) +
+  labs(
+    title = "Exact pooled HiCCUPS calls by chromosome and resolution",
+    subtitle = "Resolution-specific call records shorter than 2 Mb",
+    x = "Chromosome",
+    y = "Number of exact calls",
+    fill = "Resolution"
+  ) +
+  theme.revised.figure +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+figure2.output.files <- basename(saving_plot_dual(
+  plot.figure2.revised,
+  "figure2_revised_pooled_calls_by_chromosome_resolution",
+  output.dir,
+  width_in = 10,
+  height_in = 5.2
+))
+
+# Figure 3: report library support and pairwise exact-call similarity without
+# interpreting single-library records as strain-specific biological loops.
+df.figure3.library.support <- df.loop.sharing.distribution.by.strain %>%
+  filter(resolution == "ALL")
+df.figure3.pairwise.jaccard <- df.pairwise.loop.overlap.by.strain %>%
+  filter(resolution == "ALL") %>%
+  mutate(
+    strain1 = factor(strain1, levels = strain.levels),
+    strain2 = factor(strain2, levels = rev(strain.levels))
+  )
+
+plot.figure3a.library.support <- ggplot(
+  df.figure3.library.support,
+  aes(factor(n_strains_detected), n_loops)
+) +
+  geom_col(fill = "#4472A6", width = 0.72) +
+  scale_y_log10(labels = scales::comma) +
+  labs(
+    tag = "a",
+    title = "Exact-call library support",
+    subtitle = "One Hi-C library per sampled strain",
+    x = "Number of supporting libraries",
+    y = "Number of exact calls (log10 scale)"
+  ) +
+  theme.revised.figure
+
+plot.figure3b.pairwise.jaccard <- ggplot(
+  df.figure3.pairwise.jaccard,
+  aes(strain1, strain2, fill = jaccard_similarity)
+) +
+  geom_tile(color = "white", linewidth = 0.25) +
+  scale_fill_gradient(
+    low = "#F2F2F2",
+    high = "#1F5A91",
+    limits = c(0, 1),
+    na.value = "white"
+  ) +
+  coord_fixed() +
+  labs(
+    tag = "b",
+    title = "Pairwise exact-call similarity",
+    x = NULL,
+    y = NULL,
+    fill = "Jaccard"
+  ) +
+  theme.revised.figure +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+    axis.text.y = element_text(size = 7)
+  )
+
+plot.figure3.revised <- patchwork::wrap_plots(
+  plot.figure3a.library.support,
+  plot.figure3b.pairwise.jaccard,
+  nrow = 1,
+  widths = c(0.85, 1.2)
+)
+figure3.output.files <- basename(saving_plot_dual(
+  plot.figure3.revised,
+  "figure3_revised_library_support_and_pairwise_overlap",
+  output.dir,
+  width_in = 11,
+  height_in = 5.2
+))
+
+# Figure 4: display mutually exclusive promoter/TSS and ATAC evidence classes.
+df.figure4.category.summary <- df.revised.loop.category.summary %>%
+  mutate(
+    category_label = recode(revised_major_category, !!!category.labels),
+    category_label = forcats::fct_reorder(category_label, n_loops),
+    count_label = str_c(scales::comma(n_loops), " (", pct_pooled_loops, "%)")
+  )
+df.figure4.category.by.resolution <-
+  df.revised.loop.category.by.resolution %>%
+  mutate(
+    category_label = recode(revised_major_category, !!!category.labels),
+    resolution = factor(resolution, levels = names(resolution.colors))
+  )
+
+plot.figure4a.category.summary <- ggplot(
+  df.figure4.category.summary,
+  aes(category_label, n_loops, fill = revised_major_category)
+) +
+  geom_col(width = 0.72, show.legend = FALSE) +
+  geom_text(aes(label = count_label), hjust = -0.08, size = 3) +
+  scale_fill_manual(values = category.colors) +
+  scale_y_continuous(
+    labels = scales::comma,
+    expand = expansion(mult = c(0, 0.2))
+  ) +
+  coord_flip() +
+  labs(
+    tag = "a",
+    title = "Evidence-layered loop-call categories",
+    x = NULL,
+    y = "Number of exact calls"
+  ) +
+  theme.revised.figure
+
+plot.figure4b.category.resolution <- ggplot(
+  df.figure4.category.by.resolution,
+  aes(resolution, pct_within_resolution / 100,
+      fill = revised_major_category)
+) +
+  geom_col(width = 0.68) +
+  scale_fill_manual(
+    values = category.colors,
+    labels = category.labels
+  ) +
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    tag = "b",
+    title = "Category composition by resolution",
+    x = "Resolution",
+    y = "Fraction of exact calls",
+    fill = "Evidence category"
+  ) +
+  theme.revised.figure +
+  theme(legend.position = "bottom")
+
+plot.figure4.revised <- patchwork::wrap_plots(
+  plot.figure4a.category.summary,
+  plot.figure4b.category.resolution,
+  nrow = 1,
+  widths = c(1.1, 1),
+  guides = "collect"
+) & theme(legend.position = "bottom")
+figure4.output.files <- basename(saving_plot_dual(
+  plot.figure4.revised,
+  "figure4_revised_loop_evidence_categories",
+  output.dir,
+  width_in = 12,
+  height_in = 5.8
+))
+
+# Figure 6: retain GO Biological Process enrichment only as exploratory
+# functional context for the revised putative-regulatory gene set.
+figure6.output.files <- character()
+if (nrow(df.revised.go.result) > 0L) {
+  df.figure6.go <- df.revised.go.result %>%
+    filter(gene_set == "revised_putative_all", !is.na(p.adjust)) %>%
+    arrange(p.adjust, desc(FoldEnrichment)) %>%
+    slice_head(n = 15L) %>%
+    mutate(
+      Description = str_wrap(Description, width = 42),
+      Description = factor(Description, levels = rev(Description)),
+      minus_log10_adjusted_p = -log10(pmax(p.adjust, .Machine$double.xmin))
+    )
+
+  plot.figure6.revised <- ggplot(
+    df.figure6.go,
+    aes(minus_log10_adjusted_p, Description)
+  ) +
+    geom_point(aes(size = Count, color = FoldEnrichment), alpha = 0.85) +
+    scale_color_gradient(low = "#2A9D8F", high = "#B23A48") +
+    labs(
+      title = "Exploratory GO Biological Process enrichment",
+      subtitle = "Interpretive functional context; not validation of individual loop calls",
+      x = expression(-log[10](adjusted~italic(P))),
+      y = NULL,
+      size = "Genes",
+      color = "Fold enrichment"
+    ) +
+    theme.revised.figure +
+    theme(legend.position = "right")
+  figure6.output.files <- basename(saving_plot_dual(
+    plot.figure6.revised,
+    "figure6_revised_exploratory_GO_BP",
+    output.dir,
+    width_in = 9.5,
+    height_in = 6.5
+  ))
+}
+
+# Supplementary Figure S1: expose resolution-specific exact-call Jaccard
+# similarity as technical sensitivity information.
+df.figureS1.pairwise.jaccard <- df.pairwise.loop.overlap.by.strain %>%
+  filter(resolution != "ALL") %>%
+  mutate(
+    resolution = factor(resolution, levels = names(resolution.colors)),
+    strain1 = factor(strain1, levels = strain.levels),
+    strain2 = factor(strain2, levels = rev(strain.levels))
+  )
+plot.figureS1.revised <- ggplot(
+  df.figureS1.pairwise.jaccard,
+  aes(strain1, strain2, fill = jaccard_similarity)
+) +
+  geom_tile(color = "white", linewidth = 0.2) +
+  facet_wrap(~resolution, nrow = 1) +
+  scale_fill_gradient(
+    low = "#F2F2F2",
+    high = "#1F5A91",
+    limits = c(0, 1),
+    na.value = "white"
+  ) +
+  coord_fixed() +
+  labs(
+    title = "Pairwise exact-call similarity by resolution",
+    subtitle = "Technical comparison among one-library-per-strain datasets",
+    x = NULL,
+    y = NULL,
+    fill = "Jaccard"
+  ) +
+  theme.revised.figure +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 6)
+  )
+figureS1.output.files <- basename(saving_plot_dual(
+  plot.figureS1.revised,
+  "figureS1_revised_pairwise_exact_call_jaccard_by_resolution",
+  output.dir,
+  width_in = 12,
+  height_in = 4.8
+))
+
+revised.figure.output.files <- c(
+  figure1.output.files,
+  figure2.output.files,
+  figure3.output.files,
+  figure4.output.files,
+  figure5.output.files,
+  figure6.output.files,
+  figureS1.output.files
+)
+
 # Compute reproducible SHA-256 checksums for source inputs and analysis scripts.
 sha256_file <- function(path) {
   if (!file.exists(path)) return(NA_character_)
@@ -4839,10 +5326,10 @@ analysis.script.files <- tibble(
     "atac_matched_null_script"
   ),
   input_path = c(
-    file.path(revision.dir, "promoter_enhancer_interaction_resubmit.R"),
+    file.path(analysis.dir, "promoter_enhancer_interaction_resubmit.R"),
     coord.prep.script,
     file.path(r.files.dir, "funcs.R"),
-    file.path(r.files.dir, "atac_validation", "atac_validation.R")
+    file.path(revision.dir, "ATAC_validation", "atac_validation.R")
   ),
   input_group = "analysis_code",
   required = TRUE
@@ -4948,6 +5435,10 @@ revised.output.table.registry <- tribble(
     "df.gene.rank.sensitivity.correlation",
   "figure5_revised_feature_summary_by_resolution.tsv",
     "df.figure5.revised.feature.summary",
+  "loop_sharing_distribution_by_library.tsv",
+    "df.loop.sharing.distribution.by.strain",
+  "pairwise_loop_overlap_by_library.tsv",
+    "df.pairwise.loop.overlap.by.strain",
   "hrdp_sample_strain_key.tsv", "df.sample.strain.key",
   "depth_qc_by_strain.tsv", "df.depth.qc.by.strain",
   "depth_qc_summary.tsv", "df.depth.qc.summary",
@@ -5017,7 +5508,7 @@ writeLines(
 
 generated.output.files <- c(
   names(output.tables),
-  figure5.output.files,
+  revised.figure.output.files,
   available.atac.matched.null.output.files,
   "resubmit_session_info.txt"
 )
