@@ -5,16 +5,16 @@ matched full-depth/140M/250M depth-sensitivity analyses. Raw Juicer
 `merged_nodups.txt` contact files are not included because they are retained on
 ISAAC and are required only to regenerate the downsampled contact sets.
 
-## R code
+## Run from this directory
 
-- `r_files/downsampling_140M.R`: standalone all-ten-library full-depth/140M
+- `downsampling_140M.R`: standalone all-ten-library full-depth/140M
   validation.
-- `r_files/downsampling_140M_250M_comparison.R`: matched seven-library
+- `downsampling_140M_250M_comparison.R`: matched seven-library
   full-depth/140M/250M comparison.
-- `r_files/downsampling_depth_functions.R`: shared validation functions.
-- `r_files/funcs.R`: shared HiCCUPS parsing, pooling, and approximate-locus
+- `downsampling_depth_functions.R`: shared validation functions.
+- `../../../funcs.R`: shared HiCCUPS parsing, pooling, and approximate-locus
   functions.
-- `r_files/revision/downsampling/build_downsampling_input_manifests.R`: input
+- `build_downsampling_input_manifests.R`: input
   inventory and provenance checks.
 
 The `r_files/revision/downsampling/140M/` and `250M/` directories retain the
@@ -26,14 +26,14 @@ HPC downsampling, `.hic` creation, and Colab HiCCUPS execution scripts.
 
 For each of the ten libraries:
 
-`hic/2023A/hic30_w_sb_options/<sample>/hiccups_5k10k25k/merged_loops.bedpe`
+`inputs/hic/2023A/hic30_w_sb_options/<sample>/hiccups_5k10k25k/merged_loops.bedpe`
 
 ### Downsampled calls and provenance
 
 The following tree is copied without changing sample or result-directory
 names:
 
-`data/juicer_downsample_q30_140M_250M/`
+`inputs/juicer_downsample_q30_140M_250M/`
 
 - `140M/`: all ten libraries.
 - `250M/`: the seven libraries with at least 250M source contacts.
@@ -44,7 +44,7 @@ names:
 
 ### Coordinate-normalized annotations
 
-`r_files/revision/cache_data/`
+`../revision_main/cache_data/`
 
 - `df.ensembl.transcript.coordinate.normalized.rds`
 - `df.promoter.annotation.coordinate.normalized.rds`
@@ -52,18 +52,18 @@ names:
 
 ## Default outputs
 
-- `r_files/downsampling_140M_outputs/`
-- `r_files/downsampling_140M_250M_outputs/`
+- `results/full_140M/`
+- `results/full_140M_250M/`
 
-These output directories are rebuildable and are not synchronized by the Git
-post-commit hook.
+These output directories are rebuildable and are synchronized by the Git
+post-commit hook. Large source files under `inputs/` are staged separately and
+are protected from deletion by the hook.
 
 ## Post-commit synchronization
 
-The repository post-commit hook synchronizes the R files, this README, the
-input-manifest builder, and the 140M/250M shell scripts to this Google Drive
-bundle. The large validation inputs are copied separately and are not copied
-again after every commit.
+The repository post-commit hook synchronizes this code and its rebuildable
+results to the matching Google Drive directory. The large files under
+`inputs/` are staged once and protected from deletion by the hook.
 
 ## Scope
 

@@ -11,6 +11,9 @@ calculation, and PCA. Since only ten samples are analyzed, LD pruning and PCA
 use PLINK 2.0's `--bad-ld` and `--bad-freqs` small-sample overrides.
 `--indep-order 1` fixes the pruning order for reproducibility.
 
+The required archive is stored at `inputs/hrdp_genotype_by_chr.tgz`. Set
+`HRDP_GENOTYPE_ARCHIVE` only when using a copy at another location.
+
 Open `hrdp_genotype_diversity.R` and execute it from top to bottom. Set the R
 working directory to either the `enhancer` repository root or this analysis
 directory before running the file. The complete script can also be run with:

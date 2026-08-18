@@ -4,8 +4,8 @@ research_notes.md
 results/
 !r_files/revision/hrdp_genotype_diversity/results/
 !r_files/revision/hrdp_genotype_diversity/results/**
-!r_files/atac_validation/results/
-!r_files/atac_validation/results/**
+!r_files/revision/ATAC_validation/results/
+!r_files/revision/ATAC_validation/results/**
 
 # external/local raw data symlink
 /data
@@ -14,7 +14,15 @@ results/
 *-kr.*
 
 # Rebuildable coordinate-preparation cache for the resubmission analysis
-r_files/revision/cache_data/
+r_files/revision/revision_main/cache_data/
+
+# Large shared input bundles are staged in Google Drive, not Git.
+r_files/revision/revision_main/inputs/*
+!r_files/revision/revision_main/inputs/README.md
+r_files/revision/downsampling/inputs/*
+!r_files/revision/downsampling/inputs/README.md
+r_files/revision/hrdp_genotype_diversity/inputs/*
+!r_files/revision/hrdp_genotype_diversity/inputs/README.md
 
 # Rebuildable resubmission outputs; retain only compact release summaries and
 # provenance records in Git. Large resources and permutation-level tables are
@@ -50,6 +58,8 @@ r_files/revision/legacy_reanalysis_outputs/
 r_files/atac_validation/atac_validation_cache/
 r_files/atac_validation/atac_validation.html
 r_files/atac_validation/*.csv
+r_files/revision/ATAC_validation/legacy_report/*
+!r_files/revision/ATAC_validation/legacy_report/atac_validation_legacy.Rmd
 
 # Rebuildable matched full-depth/140M/250M sensitivity outputs
 r_files/downsampling_140M_250M_outputs/
