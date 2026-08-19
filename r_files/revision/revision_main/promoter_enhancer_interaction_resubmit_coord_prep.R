@@ -1,104 +1,11 @@
 # lintr: disable
 
-# Resolve the shared project from this script's location, an explicit
-# environment variable, or common local/Dropbox layouts on macOS and Windows.
-current_script_path <- function() {
-  file.args <- grep(
-    "^--file=",
-    commandArgs(trailingOnly = FALSE),
-    value = TRUE
-  )
-  if (length(file.args) > 0L) {
-    script.arg <- sub("^--file=", "", file.args[[1]])
-    script.arg <- gsub("~+~", " ", script.arg, fixed = TRUE)
-    return(normalizePath(
-      script.arg,
-      winslash = "/",
-      mustWork = FALSE
-    ))
-  }
+getwd()
+setwd("./enhancer") # Please set root directory: enhancer
 
-  frame.files <- vapply(
-    sys.frames(),
-    function(frame) {
-      if (is.null(frame$ofile)) NA_character_ else as.character(frame$ofile)
-    },
-    character(1)
-  )
-  frame.files <- frame.files[!is.na(frame.files) & nzchar(frame.files)]
-  if (length(frame.files) > 0L) {
-    return(normalizePath(
-      tail(frame.files, 1L),
-      winslash = "/",
-      mustWork = FALSE
-    ))
-  }
-  NA_character_
-}
-
-resolve_enhancer_r_files_dir <- function() {
-  script.path <- current_script_path()
-  start.dirs <- c(
-    if (is.na(script.path)) NA_character_ else dirname(script.path),
-    getwd()
-  )
-  ancestor.dirs <- unique(unlist(lapply(start.dirs, function(path) {
-    if (is.na(path) || !nzchar(path)) return(character())
-    path <- normalizePath(path, winslash = "/", mustWork = FALSE)
-    ancestors <- path
-    for (i in seq_len(6L)) ancestors <- c(ancestors, dirname(tail(ancestors, 1L)))
-    ancestors
-  })))
-
-  candidates <- unique(c(
-    ancestor.dirs,
-    Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
-    path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
-    path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files"),
-    Sys.glob(path.expand(
-      "~/Library/CloudStorage/Dropbox*/K P/Gateway_to_Hao/enhancer/r_files"
-    )),
-    Sys.glob(path.expand(
-      "~/Library/CloudStorage/Dropbox*/Gateway_to_Hao/enhancer/r_files"
-    ))
-  ))
-  candidates <- candidates[
-    !is.na(candidates) & nzchar(candidates) & dir.exists(candidates)
-  ]
-  candidates <- candidates[
-    file.exists(file.path(candidates, "funcs.R"))
-  ]
-  if (length(candidates) == 0L) {
-    stop(
-      paste0(
-        "Cannot locate enhancer/r_files with funcs.R. Run this script from ",
-        "the shared Dropbox project or set ENHANCER_R_FILES_DIR."
-      ),
-      call. = FALSE
-    )
-  }
-  normalizePath(candidates[[1]], winslash = "/", mustWork = TRUE)
-}
-
-r.files.dir <- resolve_enhancer_r_files_dir()
-script.path <- current_script_path()
-analysis.dir <- if (is.na(script.path)) {
-  file.path(r.files.dir, "revision", "revision_main")
-} else {
-  dirname(script.path)
-}
-enhancer.project.dir <- Sys.getenv(
-  "ENHANCER_PROJECT_DIR",
-  unset = dirname(r.files.dir)
-)
-enhancer.project.dir <- normalizePath(
-  path.expand(enhancer.project.dir),
-  winslash = "/",
-  mustWork = TRUE
-)
-gateway.to.hao.dir <- dirname(enhancer.project.dir)
-
-message("Using shared enhancer project: ", enhancer.project.dir)
+funcs.file <- "./funcs_enhancer.R"
+source(funcs.file)
+list2env(resolve_enhancer_analysis_paths(funcs.file), envir = environment())
 
 library("tidyverse")
 library("GenomicRanges")
@@ -127,30 +34,18 @@ options(scipen = 999)
 # 0. Directories and source files
 ########################
 
-revision.dir <- file.path(r.files.dir, "revision")
-coord.cache.dir <- file.path(analysis.dir, "cache_data")
 dir.create(coord.cache.dir, recursive = TRUE, showWarnings = FALSE)
 
-bundled.input.dir <- path.expand(Sys.getenv(
-  "RESUBMIT_INPUT_BUNDLE_DIR",
-  unset = file.path(analysis.dir, "inputs")
-))
-
-input.root <- if (dir.exists(file.path(bundled.input.dir, "data"))) {
-  bundled.input.dir
-} else {
-  enhancer.project.dir
+# Inputs are read from revision_main/inputs in the shared Google Drive tree.
+if (!dir.exists(data.dir) || !dir.exists(hiccups.loop.root)) {
+  stop(
+    paste0(
+      "The Google Drive input bundle is incomplete. Expected data under: ",
+      input.root
+    ),
+    call. = FALSE
+  )
 }
-dropbox.root <- input.root
-default.hiccups.loop.root <- if (dir.exists(file.path(bundled.input.dir, "hic"))) {
-  file.path(bundled.input.dir, "hic", "2023A", "hic30_w_sb_options")
-} else {
-  file.path(gateway.to.hao.dir, "hic", "2023A", "hic30_w_sb_options")
-}
-hiccups.loop.root <- Sys.getenv("HICCUPS_LOOP_ROOT", unset = default.hiccups.loop.root)
-hiccups.loop.root <- path.expand(hiccups.loop.root)
-
-source(file.path(r.files.dir, "funcs.R"))
 
 # Record the upstream Juicer and HiCCUPS provenance associated with the loops.
 df.hic.source.provenance <- tibble(
@@ -186,38 +81,46 @@ loop.file.metadata <- tribble(
       "merged_loops.bedpe"
     )
   )
+########################################
+# input file paths
+# ctcf: fimo.4.tsv
+# atac: Duttke2022_snATAC_peaks_rn7.narrowPeak
+# ensembl: Rattus_norvegicus.mRatBN7.2.113.gtf
+# epd:Rn_EPDnew_001_rn6.bed, promoter_coordinate.txt, rn6ToRn7.over.chain, promoter_ensembl.txt
+# library complexity: library_complexity.tsv
+########################################
 
 ctcf.motif.file <- file.path(
-  dropbox.root,
-  "data/ctcf/submission/E4/fimo.4.tsv"
+  data.dir,
+  "ctcf/submission/E4/fimo.4.tsv"
 )
 atac.peak.file <- file.path(
-  dropbox.root,
-  "data/Duttke2022_snATAC_peaks_rn7.narrowPeak"
+  data.dir,
+  "Duttke2022_snATAC_peaks_rn7.narrowPeak"
 )
 ensembl.gtf.file <- file.path(
-  dropbox.root,
-  "data/Rattus_norvegicus.mRatBN7.2.113.gtf"
+  data.dir,
+  "Rattus_norvegicus.mRatBN7.2.113.gtf"
 )
 epd.rn6.bed.file <- file.path(
-  dropbox.root,
-  "data/epdnew/001/Rn_EPDnew_001_rn6.bed"
+  data.dir,
+  "epdnew/001/Rn_EPDnew_001_rn6.bed"
 )
 epd.coordinate.file <- file.path(
-  dropbox.root,
-  "data/epdnew/001/db/promoter_coordinate.txt"
+  data.dir,
+  "epdnew/001/db/promoter_coordinate.txt"
 )
 epd.rn6.to.rn7.chain.file <- file.path(
-  dropbox.root,
-  "data/epdnew/rn6ToRn7.over.chain"
+  data.dir,
+  "epdnew/rn6ToRn7.over.chain"
 )
 epd.promoter.mapping.file <- file.path(
-  dropbox.root,
-  "data/epdnew/001/db/promoter_ensembl.txt"
+  data.dir,
+  "epdnew/001/db/promoter_ensembl.txt"
 )
 library.complexity.file <- file.path(
-  dropbox.root,
-  "data/library_complexity_592BB.tsv"
+  data.dir,
+  "library_complexity.tsv"
 )
 
 # Keep the optional true genetic-distance input configurable without requiring
@@ -270,8 +173,14 @@ if (length(missing.files) > 0L) {
   stop(
     "Missing required input file(s):\n",
     paste(missing.files, collapse = "\n"),
-    "\nMake required Dropbox files available offline before rebuilding the cache.",
+    "\nMake the required Google Drive files available offline before rebuilding the cache.",
     call. = FALSE
+  )
+} else {
+  message(
+    "All required input files verified (",
+    length(required.files),
+    " files present)."
   )
 }
 
@@ -288,35 +197,45 @@ if (length(missing.files) > 0L) {
 ########################
 
 df.sample.loop.raw <- read_hiccups_loop_files(loop.file.metadata)
+df.sample.loop.raw %>% head(4)
 
-df.sample.loop.coordinate.normalized <- normalize_hiccups_loop_coordinates(
+# 1. converting coordinate system of HiCCUPS loop anchors from 0-based and half-open to 1-based and end-inclusive.
+# 2. filtering out loops whose length is longer than 2 Mb.
+df.sample.loop.1based <- normalize_hiccups_loop_coordinates(
   df.sample.loop.raw,
   max.loop.distance = 2000000L
 )
+df.sample.loop.1based %>% count(passes_lt2mb)
+#   passes_lt2mb     n
+# 1 FALSE         1463
+# 2 TRUE         57537
+df.sample.loop.1based %>% head()
 
-list.loop.resource <- build_pooled_hiccups_loop_resource(
-  df.sample.loop.coordinate.normalized
-)
+# three columns: n_supporting_libraries n_supporting_strains supporting_samples
+list.loop.resource <- build_pooled_hiccups_loop_resource(df.sample.loop.1based)
+names(list.loop.resource)
+purrr::map(list.loop.resource, dim)
+head(list.loop.resource$universe)
+
 df.loop.pooled.support.summary <- list.loop.resource$support
-df.loop.distinct.coordinate.normalized <- list.loop.resource$distinct
+df.loop.distinct <- list.loop.resource$distinct
 df.loop.universe <- list.loop.resource$universe
 
-# These counts were verified from the current original merged_loops.bedpe files
-# on 2026-07-22; the older copied inputs contained 58,992/31,773/31,019.
+df.loop.pooled.support.summary %>% head(2)
+df.loop.distinct %>% head(2)
+df.loop.universe %>% head(2)
+
+# These counts were verified from the current original merged_loops.bedpe files on 2026-07-22 (from sb option processing)
+# the older copied inputs contained 58,992/31,773/31,019.
 df.loop.source.count.check <- check_hiccups_loop_counts(
-  df.sample.loop.coordinate.normalized =
-    df.sample.loop.coordinate.normalized,
-  df.loop.distinct.coordinate.normalized =
-    df.loop.distinct.coordinate.normalized,
+  df.sample.loop.1based = df.sample.loop.1based,
+  df.loop.distinct = df.loop.distinct,
   df.loop.universe = df.loop.universe,
   expected.n = c(59000L, 31778L, 31021L)
 )
 
 message("Original sample-level HiCCUPS rows: ", nrow(df.sample.loop.raw))
-message(
-  "All distinct HiCCUPS loops: ",
-  n_distinct(df.loop.distinct.coordinate.normalized$loop_id)
-)
+message("All distinct HiCCUPS loops: ", n_distinct(df.loop.distinct$loop_id))
 message("Pooled loop resource (<2 Mb): ", nrow(df.loop.universe))
 
 ########################
@@ -358,8 +277,8 @@ print(df.ctcf.fimo.summary)
 
 df.ensembl.transcript.coordinate.normalized <-
   read_ensembl_gtf_transcripts(
-  ensembl.gtf.file
-)
+    ensembl.gtf.file
+  )
 
 ########################
 # 1-4. EPD promoter coordinates
@@ -370,11 +289,11 @@ df.ensembl.transcript.coordinate.normalized <-
 
 df.promoter.annotation.coordinate.normalized <-
   read_epd_rn6_liftover_promoters(
-  bed.file = epd.rn6.bed.file,
-  chain.file = epd.rn6.to.rn7.chain.file,
-  coordinate.file = epd.coordinate.file,
-  mapping.file = epd.promoter.mapping.file
-)
+    bed.file = epd.rn6.bed.file,
+    chain.file = epd.rn6.to.rn7.chain.file,
+    coordinate.file = epd.coordinate.file,
+    mapping.file = epd.promoter.mapping.file
+  )
 
 # Verify the production EPD reconstruction directly from the original rn6
 # source and liftover result without requiring a copied legacy rn7 annotation.
@@ -420,17 +339,17 @@ df.coordinate.system.audit <- tribble(
   "HiCCUPS BEDPE format; normalized widths equal 5K/10K/25K bins",
   "rn7, chr-prefixed, 1-based inclusive",
   "start + 1; end unchanged",
-  "df.sample.loop.coordinate.normalized",
-  nrow(df.sample.loop.coordinate.normalized),
+  "df.sample.loop.1based",
+  nrow(df.sample.loop.1based),
   "passed",
   "Pooled distinct HiCCUPS loop resource",
-  "derived from df.sample.loop.coordinate.normalized",
+  "derived from df.sample.loop.1based",
   "Derived from normalized source intervals",
   "Distinct genomic BEDPE interval and resolution across 10 libraries",
   "rn7, chr-prefixed, 1-based inclusive",
   "deduplicate by stable loop_id; no coordinate shift",
-  "df.loop.distinct.coordinate.normalized",
-  nrow(df.loop.distinct.coordinate.normalized),
+  "df.loop.distinct",
+  nrow(df.loop.distinct),
   "passed",
   "CTCF FIMO motifs",
   ctcf.motif.file,

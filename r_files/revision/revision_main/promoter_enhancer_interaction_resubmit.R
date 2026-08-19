@@ -1,104 +1,8 @@
 # lintr: disable
 
-# Resolve the shared project from this script's location, an explicit
-# environment variable, or common local/Dropbox layouts on macOS and Windows.
-current_script_path <- function() {
-  file.args <- grep(
-    "^--file=",
-    commandArgs(trailingOnly = FALSE),
-    value = TRUE
-  )
-  if (length(file.args) > 0L) {
-    script.arg <- sub("^--file=", "", file.args[[1]])
-    script.arg <- gsub("~+~", " ", script.arg, fixed = TRUE)
-    return(normalizePath(
-      script.arg,
-      winslash = "/",
-      mustWork = FALSE
-    ))
-  }
-
-  frame.files <- vapply(
-    sys.frames(),
-    function(frame) {
-      if (is.null(frame$ofile)) NA_character_ else as.character(frame$ofile)
-    },
-    character(1)
-  )
-  frame.files <- frame.files[!is.na(frame.files) & nzchar(frame.files)]
-  if (length(frame.files) > 0L) {
-    return(normalizePath(
-      tail(frame.files, 1L),
-      winslash = "/",
-      mustWork = FALSE
-    ))
-  }
-  NA_character_
-}
-
-resolve_enhancer_r_files_dir <- function() {
-  script.path <- current_script_path()
-  start.dirs <- c(
-    if (is.na(script.path)) NA_character_ else dirname(script.path),
-    getwd()
-  )
-  ancestor.dirs <- unique(unlist(lapply(start.dirs, function(path) {
-    if (is.na(path) || !nzchar(path)) return(character())
-    path <- normalizePath(path, winslash = "/", mustWork = FALSE)
-    ancestors <- path
-    for (i in seq_len(6L)) ancestors <- c(ancestors, dirname(tail(ancestors, 1L)))
-    ancestors
-  })))
-
-  candidates <- unique(c(
-    ancestor.dirs,
-    Sys.getenv("ENHANCER_R_FILES_DIR", unset = ""),
-    path.expand("~/dropbox/Gateway_to_Hao/enhancer/r_files"),
-    path.expand("~/Dropbox/Gateway_to_Hao/enhancer/r_files"),
-    Sys.glob(path.expand(
-      "~/Library/CloudStorage/Dropbox*/K P/Gateway_to_Hao/enhancer/r_files"
-    )),
-    Sys.glob(path.expand(
-      "~/Library/CloudStorage/Dropbox*/Gateway_to_Hao/enhancer/r_files"
-    ))
-  ))
-  candidates <- candidates[
-    !is.na(candidates) & nzchar(candidates) & dir.exists(candidates)
-  ]
-  candidates <- candidates[
-    file.exists(file.path(candidates, "funcs.R"))
-  ]
-  if (length(candidates) == 0L) {
-    stop(
-      paste0(
-        "Cannot locate enhancer/r_files with funcs.R. Run this script from ",
-        "the shared Dropbox project or set ENHANCER_R_FILES_DIR."
-      ),
-      call. = FALSE
-    )
-  }
-  normalizePath(candidates[[1]], winslash = "/", mustWork = TRUE)
-}
-
-r.files.dir <- resolve_enhancer_r_files_dir()
-script.path <- current_script_path()
-analysis.dir <- if (is.na(script.path)) {
-  file.path(r.files.dir, "revision", "revision_main")
-} else {
-  dirname(script.path)
-}
-enhancer.project.dir <- Sys.getenv(
-  "ENHANCER_PROJECT_DIR",
-  unset = dirname(r.files.dir)
-)
-enhancer.project.dir <- normalizePath(
-  path.expand(enhancer.project.dir),
-  winslash = "/",
-  mustWork = TRUE
-)
-gateway.to.hao.dir <- dirname(enhancer.project.dir)
-
-message("Using shared enhancer project: ", enhancer.project.dir)
+funcs.file <- "../../../funcs_enhancer.R"
+source(funcs.file)
+list2env(resolve_enhancer_analysis_paths(funcs.file), envir = environment())
 
 library("tidyverse")
 library("GenomicRanges")
@@ -137,11 +41,6 @@ options(scipen = 999)
 # 0. Directories and files
 ########################
 
-revision.dir <- file.path(r.files.dir, "revision")
-output.dir <- Sys.getenv(
-  "RESUBMIT_OUTPUT_DIR",
-  unset = file.path(analysis.dir, "results")
-)
 dir.create(output.dir, recursive = TRUE, showWarnings = FALSE)
 
 # Coordinate preprocessing is isolated from the downstream analysis and cached.
@@ -149,11 +48,6 @@ coord.prep.script <- file.path(
   analysis.dir,
   "promoter_enhancer_interaction_resubmit_coord_prep.R"
 )
-coord.cache.dir <- file.path(analysis.dir, "cache_data")
-bundled.input.dir <- path.expand(Sys.getenv(
-  "RESUBMIT_INPUT_BUNDLE_DIR",
-  unset = file.path(analysis.dir, "inputs")
-))
 
 # Require the coordinate-preparation script before using its cached outputs.
 if (!file.exists(coord.prep.script)) {
@@ -163,14 +57,6 @@ if (!file.exists(coord.prep.script)) {
     call. = FALSE
   )
 }
-
-########################
-# 0-1. Shared resubmission functions
-########################
-
-# Resubmission-specific helpers are defined under the resubmission section
-# at the end of funcs.R. Source them once before starting the analysis.
-source(file.path(r.files.dir, "funcs.R"))
 
 ################################################################################
 # 1. Load coordinate-normalized cache
@@ -221,20 +107,17 @@ load_coordinate_cache_objects(
   envir = environment()
 )
 
-# Rebase cached absolute paths onto the current user's shared Dropbox tree.
+# Rebase cached absolute paths onto the current user's shared Google Drive tree.
 # Coordinate objects remain reusable across computers, while provenance and
 # any downstream file reads point to the inputs on the machine running now.
-default.hiccups.loop.root <- if (dir.exists(file.path(bundled.input.dir, "hic"))) {
-  file.path(bundled.input.dir, "hic", "2023A", "hic30_w_sb_options")
-} else {
-  file.path(gateway.to.hao.dir, "hic", "2023A", "hic30_w_sb_options")
-}
-hiccups.loop.root <- Sys.getenv("HICCUPS_LOOP_ROOT", unset = default.hiccups.loop.root)
-hiccups.loop.root <- path.expand(hiccups.loop.root)
-data.dir <- if (dir.exists(file.path(bundled.input.dir, "data"))) {
-  file.path(bundled.input.dir, "data")
-} else {
-  file.path(enhancer.project.dir, "data")
+if (!dir.exists(data.dir) || !dir.exists(hiccups.loop.root)) {
+  stop(
+    paste0(
+      "The Google Drive input bundle is incomplete. Expected data under: ",
+      input.root
+    ),
+    call. = FALSE
+  )
 }
 
 df.analysis.input.files <- df.analysis.input.files %>%
@@ -288,7 +171,7 @@ df.analysis.input.files <- df.analysis.input.files %>%
       ),
       input_name == "library_complexity" ~ file.path(
         data.dir,
-        "library_complexity_592BB.tsv"
+        "library_complexity.tsv"
       ),
       input_name == "genetic_distance" ~ Sys.getenv(
         "HRDP_GENETIC_DISTANCE_FILE",
@@ -304,7 +187,7 @@ df.analysis.input.files <- df.analysis.input.files %>%
     )
   )
 
-# Fail early with a useful Dropbox/offline-files message on another computer.
+# Fail early with a useful Google Drive offline-files message.
 missing.required.input.files <- df.analysis.input.files %>%
   filter(required, !file.exists(input_path)) %>%
   pull(input_path)
@@ -312,9 +195,11 @@ if (length(missing.required.input.files) > 0L) {
   stop(
     "Missing required shared input file(s):\n",
     paste(missing.required.input.files, collapse = "\n"),
-    "\nMake these Dropbox files available offline before running the analysis.",
+    "\nMake these Google Drive files available offline before running the analysis.",
     call. = FALSE
   )
+} else {
+  message("All required shared input files verified.")
 }
 
 # Recover downstream input paths from the rebased input provenance table.
@@ -356,6 +241,8 @@ if (length(missing.analysis.files) > 0L) {
     paste(missing.analysis.files, collapse = "\n"),
     call. = FALSE
   )
+} else {
+  message("All required downstream analysis files verified.")
 }
 
 message(
@@ -2560,14 +2447,14 @@ df.dual.promoter.atac.directional.classification <-
   mutate(
     n_accessible_promoter_anchors =
       as.integer(promoter_window_atac_ge50_anchor1) +
-      as.integer(promoter_window_atac_ge50_anchor2),
+        as.integer(promoter_window_atac_ge50_anchor2),
     n_supported_regulatory_directions =
       as.integer(
         supports_anchor1_promoter_to_anchor2_regulatory
       ) +
-      as.integer(
-        supports_anchor2_promoter_to_anchor1_regulatory
-      ),
+        as.integer(
+          supports_anchor2_promoter_to_anchor1_regulatory
+        ),
     dual_promoter_directional_category = case_when(
       n_supported_regulatory_directions == 1L &
         n_accessible_promoter_anchors == 1L ~
@@ -3800,7 +3687,7 @@ revised.resource.tables <- list(
 
 # Preserve every source-library HiCCUPS quality field for provenance and QC.
 df.hiccups.sample.loop.quality <-
-  df.sample.loop.coordinate.normalized %>%
+  df.sample.loop.1based %>%
   dplyr::select(
     sample,
     strain,
@@ -4345,7 +4232,7 @@ df.figure5.revised.feature.summary <- bind_rows(
       n_unique_loops = n_distinct(loop_id),
       .groups = "drop"
     )
-  )
+)
 
 # Reuse the original resolution colours and density geometry for both revised
 # panels while showing the two loop anchors explicitly at x = 0 and x = 1.
@@ -4451,7 +4338,7 @@ figure5.output.files <- basename(saving_plot_dual(
 # strain has one Hi-C library and loop recovery is depth-sensitive.
 ################################################################################
 
-df.sample.loop.presence <- df.sample.loop.coordinate.normalized %>%
+df.sample.loop.presence <- df.sample.loop.1based %>%
   filter(passes_lt2mb) %>%
   distinct(loop_id, resolution, sample, strain)
 
@@ -4931,10 +4818,10 @@ resolution.colors <- c(
   "25K" = "#173B7A"
 )
 category.colors <- c(
-  "putative_regulatory_direct_promoter_TSS_opposite_nonTSS_ATAC" = "#008F7A",
-  "promoter_promoter_compatible_both_direct_anchors" = "#6F4BA8",
-  "single_direct_promoter_TSS_without_opposite_nonTSS_ATAC" = "#D99500",
-  "no_direct_promoter_TSS" = "#6B7280"
+  "putative_regulatory_direct_promoter_TSS_opposite_nonTSS_ATAC" = "#00BA38",
+  "promoter_promoter_compatible_both_direct_anchors" = "#C77CFF",
+  "single_direct_promoter_TSS_without_opposite_nonTSS_ATAC" = "#619CFF",
+  "no_direct_promoter_TSS" = "#F8766D"
 )
 category.labels <- c(
   "putative_regulatory_direct_promoter_TSS_opposite_nonTSS_ATAC" =
@@ -4948,8 +4835,8 @@ category.labels <- c(
 
 theme.revised.figure <- theme_bw(base_size = 10) +
   theme(
-    plot.title = element_text(face = "bold", size = 11),
-    plot.subtitle = element_text(size = 9, color = "grey30"),
+    plot.title = element_text(face = "bold", size = 11, hjust = 0.5),
+    plot.subtitle = element_text(size = 9, color = "grey30", hjust = 0.5),
     axis.title = element_text(size = 9),
     axis.text = element_text(size = 8),
     legend.title = element_text(size = 8),
@@ -4958,7 +4845,7 @@ theme.revised.figure <- theme_bw(base_size = 10) +
     strip.text = element_text(face = "bold")
   )
 
-# Figure 1: show the usable contact depth and resolution-specific loop-call
+# Figure 1: show the valid contact depth and resolution-specific loop-call
 # yield for every library, plus their descriptive full-depth relationship.
 df.figure1.library.depth <- df.depth.qc.by.strain %>%
   filter(resolution == "ALL") %>%
@@ -4980,7 +4867,7 @@ plot.figure1a.library.depth <- ggplot(
   coord_flip() +
   labs(
     tag = "a",
-    title = "Usable Hi-C contacts",
+    title = "Valid Hi-C contacts",
     x = NULL,
     y = "Valid MAPQ >=30 contacts (millions)"
   ) +
@@ -5006,11 +4893,15 @@ plot.figure1c.depth.loop <- ggplot(
   df.figure1.library.depth,
   aes(hic_contacts_millions, n_loops)
 ) +
-  geom_smooth(method = "lm", formula = y ~ x, se = FALSE,
-              color = "grey55", linewidth = 0.6) +
+  geom_smooth(
+    method = "lm", formula = y ~ x, se = FALSE,
+    color = "grey55", linewidth = 0.6
+  ) +
   geom_point(color = "#B23A48", size = 2.5) +
-  geom_text(aes(label = sample), nudge_y = 170, size = 2.7,
-            check_overlap = TRUE) +
+  geom_text(aes(label = sample),
+    nudge_y = 170, size = 2.7,
+    check_overlap = TRUE
+  ) +
   labs(
     tag = "c",
     title = "Full-depth depth-call relationship",
@@ -5020,19 +4911,32 @@ plot.figure1c.depth.loop <- ggplot(
   ) +
   theme.revised.figure
 
-plot.figure1.revised <- patchwork::wrap_plots(
-  plot.figure1a.library.depth,
-  plot.figure1b.loop.yield,
-  plot.figure1c.depth.loop,
+# Figure 1 presentation outputs: pair contact depth with its call-yield
+# relationship, and retain the resolution-specific call panel separately.
+plot.figure1.depth.relationship <- patchwork::wrap_plots(
+  plot.figure1a.library.depth + labs(tag = "a"),
+  plot.figure1c.depth.loop + labs(tag = "b"),
   nrow = 1,
-  widths = c(0.9, 1.15, 1)
+  widths = c(1, 1)
 )
-figure1.output.files <- basename(saving_plot_dual(
-  plot.figure1.revised,
-  "figure1_revised_library_depth_and_loop_yield",
-  output.dir,
-  width_in = 13,
-  height_in = 4.8
+plot.figure1.calls.by.resolution <-
+  plot.figure1b.loop.yield + labs(tag = NULL)
+
+figure1.output.files <- basename(c(
+  saving_plot_dual(
+    plot.figure1.depth.relationship,
+    "figure1_revised_contact_depth_and_call_relationship",
+    output.dir,
+    width_in = 9,
+    height_in = 4.8
+  ),
+  saving_plot_dual(
+    plot.figure1.calls.by.resolution,
+    "figure1_revised_hiccups_calls_by_resolution",
+    output.dir,
+    width_in = 6.5,
+    height_in = 4.8
+  )
 ))
 
 # Figure 2: summarize exact, resolution-specific pooled calls by chromosome.
@@ -5181,7 +5085,8 @@ plot.figure4a.category.summary <- ggplot(
 plot.figure4b.category.resolution <- ggplot(
   df.figure4.category.by.resolution,
   aes(resolution, pct_within_resolution / 100,
-      fill = revised_major_category)
+    fill = revised_major_category
+  )
 ) +
   geom_col(width = 0.68) +
   scale_fill_manual(
@@ -5238,7 +5143,7 @@ if (nrow(df.revised.go.result) > 0L) {
     labs(
       title = "Exploratory GO Biological Process enrichment",
       subtitle = "Interpretive functional context; not validation of individual loop calls",
-      x = expression(-log[10](adjusted~italic(P))),
+      x = expression(-log[10](adjusted ~ italic(P))),
       y = NULL,
       size = "Genes",
       color = "Fold enrichment"
@@ -5308,7 +5213,9 @@ revised.figure.output.files <- c(
 
 # Compute reproducible SHA-256 checksums for source inputs and analysis scripts.
 sha256_file <- function(path) {
-  if (!file.exists(path)) return(NA_character_)
+  if (!file.exists(path)) {
+    return(NA_character_)
+  }
   if (!requireNamespace("digest", quietly = TRUE)) {
     stop(
       "The cross-platform 'digest' package is required for SHA-256 checksums.",
@@ -5400,50 +5307,50 @@ revised.output.table.registry <- tribble(
   "hiccups_quality_field_definitions.tsv", "df.hiccups.quality.field.definition",
   "true_tss_generation_summary.tsv", "df.true.tss.summary",
   "promoter_tss_anchor_evidence_definition_summary.tsv",
-    "df.promoter.tss.anchor.evidence.definition.summary",
+  "df.promoter.tss.anchor.evidence.definition.summary",
   "direct_promoter_tss_summary.tsv", "df.direct.promoter.tss.summary",
   "dual_promoter_atac_directional_category_definitions.tsv",
-    "df.dual.promoter.atac.directional.category.definition",
+  "df.dual.promoter.atac.directional.category.definition",
   "dual_promoter_atac_directional_summary.tsv",
-    "df.dual.promoter.atac.directional.summary",
+  "df.dual.promoter.atac.directional.summary",
   "revised_atac_support_by_resolution.tsv",
-    "df.revised.atac.support.by.resolution",
+  "df.revised.atac.support.by.resolution",
   "revised_atac_paired_anchor_mcnemar.tsv",
-    "df.revised.atac.paired.anchor.mcnemar",
+  "df.revised.atac.paired.anchor.mcnemar",
   "revised_atac_analysis_definition.tsv", "df.revised.atac.analysis.definition",
   "transcript_position_summary.tsv", "df.transcript.position.summary",
   "transcript_position_definitions.tsv", "df.transcript.position.definition",
   "revised_assignment_pipeline_status.tsv",
-    "df.revised.assignment.pipeline.status",
+  "df.revised.assignment.pipeline.status",
   "revised_loop_category_definitions.tsv",
-    "df.revised.loop.category.definition",
+  "df.revised.loop.category.definition",
   "revised_loop_category_summary.tsv", "df.revised.loop.category.summary",
   "revised_loop_category_by_resolution.tsv",
-    "df.revised.loop.category.by.resolution",
+  "df.revised.loop.category.by.resolution",
   "revised_go_input_summary.tsv", "df.revised.go.input.summary",
   "revised_go_significance_summary.tsv",
-    "df.revised.go.significance.summary",
+  "df.revised.go.significance.summary",
   "revised_downstream_analysis_definitions.tsv",
-    "df.revised.downstream.analysis.definition",
+  "df.revised.downstream.analysis.definition",
   "approximate_loop_locus_map.tsv", "df.approximate.loop.locus.map",
   "approximate_loop_locus_summary.tsv", "df.approximate.loop.locus.summary",
   "approximate_loop_locus_method.tsv", "df.approximate.loop.locus.method",
   "approximate_loop_locus_threshold_sensitivity.tsv",
-    "df.approximate.loop.locus.threshold.sensitivity",
+  "df.approximate.loop.locus.threshold.sensitivity",
   "gene_rank_sensitivity_detail.tsv", "df.gene.rank.sensitivity.detail",
   "gene_rank_sensitivity_correlations.tsv",
-    "df.gene.rank.sensitivity.correlation",
+  "df.gene.rank.sensitivity.correlation",
   "figure5_revised_feature_summary_by_resolution.tsv",
-    "df.figure5.revised.feature.summary",
+  "df.figure5.revised.feature.summary",
   "loop_sharing_distribution_by_library.tsv",
-    "df.loop.sharing.distribution.by.strain",
+  "df.loop.sharing.distribution.by.strain",
   "pairwise_loop_overlap_by_library.tsv",
-    "df.pairwise.loop.overlap.by.strain",
+  "df.pairwise.loop.overlap.by.strain",
   "hrdp_sample_strain_key.tsv", "df.sample.strain.key",
   "depth_qc_by_strain.tsv", "df.depth.qc.by.strain",
   "depth_qc_summary.tsv", "df.depth.qc.summary",
   "depth_loop_correlation_by_resolution.tsv",
-    "df.depth.loop.correlation.by.resolution",
+  "df.depth.loop.correlation.by.resolution",
   "depth_analysis_interpretation.tsv", "df.depth.analysis.interpretation"
 )
 

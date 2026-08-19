@@ -360,7 +360,7 @@ df.legacy.revised.category.crosswalk <-
 ################################################################################
 
 n.all.distinct <- n_distinct(
-  df.loop.distinct.coordinate.normalized$loop_id
+  df.loop.distinct$loop_id
 )
 n.lt2mb <- nrow(df.loop.universe)
 n.ctcf.any.both <- count_true(df.loop.evidence$ctcf_both_anchors_any)

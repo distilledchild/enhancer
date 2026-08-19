@@ -41,21 +41,28 @@ current_script_path <- function() {
 
 # Resolve the shared Google Drive project and all revision-main directories.
 resolve_enhancer_analysis_paths <- function(
-  funcs.file,
+  funcs.file = "funcs_enhancer.R",
   analysis.relative.path = file.path("revision", "revision_main")
 ) {
   funcs.file <- normalizePath(
     path.expand(funcs.file),
     winslash = "/",
-    mustWork = TRUE
+    mustWork = FALSE
   )
+
+  # Check if funcs.file is in root (funcs_enhancer.R) or in r_files/ (funcs.R)
+  detected.project.dir <- if (basename(dirname(funcs.file)) == "r_files") {
+    dirname(dirname(funcs.file))
+  } else {
+    dirname(funcs.file)
+  }
 
   explicit.project.dir <- Sys.getenv("ENHANCER_PROJECT_DIR", unset = "")
   explicit.r.files.dir <- Sys.getenv("ENHANCER_R_FILES_DIR", unset = "")
   project.candidates <- unique(c(
     explicit.project.dir,
     if (nzchar(explicit.r.files.dir)) dirname(explicit.r.files.dir) else "",
-    dirname(dirname(funcs.file)),
+    detected.project.dir,
     Sys.glob(path.expand(
       "~/Library/CloudStorage/GoogleDrive-*/My Drive/research/enhancer"
     )),
@@ -64,7 +71,9 @@ resolve_enhancer_analysis_paths <- function(
   ))
   project.candidates <- project.candidates[
     nzchar(project.candidates) &
-      file.exists(file.path(project.candidates, "r_files", "funcs.R"))
+      (file.exists(file.path(project.candidates, "funcs_enhancer.R")) |
+       file.exists(file.path(project.candidates, "r_files", "funcs.R")) |
+       file.exists(file.path(project.candidates, "r_files")))
   ]
   if (length(project.candidates) == 0L) {
     stop(
@@ -90,10 +99,25 @@ resolve_enhancer_analysis_paths <- function(
     "RESUBMIT_ANALYSIS_DIR",
     unset = file.path(r.files.dir, analysis.relative.path)
   ))
-  input.root <- path.expand(Sys.getenv(
-    "RESUBMIT_INPUT_BUNDLE_DIR",
-    unset = file.path(analysis.dir, "inputs")
+  # Resolve complete input root (with data/ and hic/ directories)
+  input.candidates <- unique(c(
+    path.expand(Sys.getenv("RESUBMIT_INPUT_BUNDLE_DIR", unset = "")),
+    file.path(analysis.dir, "inputs"),
+    Sys.glob(path.expand(
+      "~/Library/CloudStorage/GoogleDrive-*/My Drive/research/enhancer/r_files/revision/revision_main/inputs"
+    )),
+    path.expand("~/Google Drive/My Drive/research/enhancer/r_files/revision/revision_main/inputs")
   ))
+  valid.input.candidates <- input.candidates[
+    nzchar(input.candidates) &
+      dir.exists(file.path(input.candidates, "data")) &
+      dir.exists(file.path(input.candidates, "hic"))
+  ]
+  input.root <- if (length(valid.input.candidates) > 0L) {
+    valid.input.candidates[[1]]
+  } else {
+    file.path(analysis.dir, "inputs")
+  }
 
   list(
     script.path = current_script_path(),
