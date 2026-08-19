@@ -437,7 +437,7 @@ summarise_recurrent_core_stability <- function(
 build_depth_regulatory_context <- function(
   df.transcript,
   df.promoter,
-  gr.atac,
+  gr.atac.rn7.1based,
   promoter.flank.bp = 1000L
 ) {
   df.true.tss <- build_true_tss_annotation(df.transcript)
@@ -458,7 +458,7 @@ build_depth_regulatory_context <- function(
     )
   ) %>%
     reduce(ignore.strand = TRUE)
-  gr.atac.union <- reduce(gr.atac, ignore.strand = TRUE)
+  gr.atac.union <- reduce(gr.atac.rn7.1based, ignore.strand = TRUE)
   common.seqlevels <- intersect(seqlevels(gr.atac.union), seqlevels(gr.tss.exclusion))
   gr.atac.common <- keepSeqlevels(
     gr.atac.union, common.seqlevels, pruning.mode = "coarse"

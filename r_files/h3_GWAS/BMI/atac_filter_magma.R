@@ -98,8 +98,8 @@ gr.enhancer <- GRanges(
 ####################################################
 path.narrowpeak.atac <- "/Users/pete/Library/CloudStorage/Dropbox-UTHSCGGI/K P/Gateway_to_Hao/enhancer/data/Duttke2022_snATAC_peaks_rn7.narrowPeak"
 df.atac <- read_tsv(path.narrowpeak.atac, col_names = c("chr", "start", "end", "name", "score", "strand", "fc", "neglog10p", "neglog10q", "summit"), show_col_types=FALSE)
-gr.atac <- GRanges(df.atac$chr, IRanges(df.atac$start + 1, df.atac$end))
-gr.atac_union <- GenomicRanges::reduce(gr.atac)
+gr.atac.rn7.1based <- GRanges(df.atac$chr, IRanges(df.atac$start + 1, df.atac$end))
+gr.atac_union <- GenomicRanges::reduce(gr.atac.rn7.1based)
 
 ####################################################
 # 5. Overlapping with ATAC peaks

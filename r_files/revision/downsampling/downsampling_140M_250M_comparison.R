@@ -163,9 +163,9 @@ downsample.250m.root <- resolve_depth_directory(
 )
 
 required.cache.files <- c(
-  transcript = "df.ensembl.transcript.coordinate.normalized.rds",
-  promoter = "df.promoter.annotation.coordinate.normalized.rds",
-  atac = "gr.atac.rds"
+  transcript = "df.transcript.ensembl.rn7.1based.rds",
+  promoter = "df.promoter.epd.rn7.1based.rds",
+  atac = "gr.atac.rn7.1based.rds"
 )
 cache.candidates <- unique(path.expand(c(
   Sys.getenv("DOWNSAMPLING_COORD_CACHE_DIR", unset = ""),
@@ -696,9 +696,9 @@ if (any(!file.exists(required.cache.paths))) {
 
 df.transcript <- readRDS(required.cache.paths[["transcript"]])
 df.promoter <- readRDS(required.cache.paths[["promoter"]])
-gr.atac <- readRDS(required.cache.paths[["atac"]])
+gr.atac.rn7.1based <- readRDS(required.cache.paths[["atac"]])
 regulatory.context <- build_depth_regulatory_context(
-  df.transcript, df.promoter, gr.atac, promoter.window.flank.bp
+  df.transcript, df.promoter, gr.atac.rn7.1based, promoter.window.flank.bp
 )
 
 message("Annotating regulatory evidence at all three depths...")

@@ -264,7 +264,7 @@ message(
 ################################################################################
 
 df.true.tss.transcript <- build_true_tss_annotation(
-  df.ensembl.transcript.coordinate.normalized
+  df.transcript.ensembl.rn7.1based
 )
 
 gr.true.tss <- create_true_tss_granges(df.true.tss.transcript)
@@ -272,7 +272,7 @@ gr.true.tss <- create_true_tss_granges(df.true.tss.transcript)
 # Verify that TSS conversion preserves one record and range per transcript.
 assert_analysis_condition(
   nrow(df.true.tss.transcript) ==
-    nrow(df.ensembl.transcript.coordinate.normalized) &&
+    nrow(df.transcript.ensembl.rn7.1based) &&
     length(gr.true.tss) == nrow(df.true.tss.transcript),
   "True TSS generation did not preserve every Ensembl transcript."
 )
@@ -294,7 +294,7 @@ df.true.tss.summary <- tibble(
     "EPD_promoter_TSS_records"
   ),
   n = c(
-    nrow(df.ensembl.transcript.coordinate.normalized),
+    nrow(df.transcript.ensembl.rn7.1based),
     nrow(df.true.tss.transcript),
     n_distinct(df.true.tss.transcript$gene_id),
     n_distinct(
@@ -328,7 +328,7 @@ df.true.tss.summary <- tibble(
         df.true.tss.transcript$true_tss_start ==
           df.true.tss.transcript$transcript_end
     ),
-    nrow(df.promoter.annotation.coordinate.normalized)
+    nrow(df.promoter.epd.rn7.1based)
   )
 )
 
@@ -357,7 +357,7 @@ gr.loop.anchor.by.side <- create_loop_anchor_granges_by_side(
 )
 # +/- 40bp from the center of promoters, 12,524, rn6 to rn7, connecting the promoteres with ensemble genes using promoter_enhancer.txt
 gr.epd.promoter <- create_epd_promoter_granges(
-  df.promoter.annotation.coordinate.normalized
+  df.promoter.epd.rn7.1based
 )
 
 # Build the strict exact-coordinate promoter/TSS tier once for both Ensembl
@@ -367,7 +367,7 @@ strict.direct.tier <- build_direct_promoter_tss_tier(
   gr.true.tss.annotation = gr.true.tss,
   gr.epd.annotation = gr.epd.promoter,
   df.true.tss = df.true.tss.transcript,
-  df.epd.promoter = df.promoter.annotation.coordinate.normalized,
+  df.epd.promoter = df.promoter.epd.rn7.1based,
   df.loop.universe = df.loop.universe,
   evidence.definition = "strict"
 )
@@ -406,7 +406,7 @@ df.strict.direct.promoter.tss.summary <-
 # Build the primary tier from +/-1-kb TSS windows for both annotation sources.
 promoter.window.flank.bp <- 1000L
 gr.epd.tss <- create_epd_tss_granges(
-  df.promoter.annotation.coordinate.normalized
+  df.promoter.epd.rn7.1based
 )
 gr.true.tss.promoter.window.1kb <- expand_tss_to_promoter_windows(
   gr.true.tss,
@@ -422,7 +422,7 @@ primary.direct.tier <- build_direct_promoter_tss_tier(
   gr.true.tss.annotation = gr.true.tss.promoter.window.1kb,
   gr.epd.annotation = gr.epd.tss.promoter.window.1kb,
   df.true.tss = df.true.tss.transcript,
-  df.epd.promoter = df.promoter.annotation.coordinate.normalized,
+  df.epd.promoter = df.promoter.epd.rn7.1based,
   df.loop.universe = df.loop.universe,
   evidence.definition = "primary_1kb",
   promoter.window.flank.bp = promoter.window.flank.bp
@@ -1956,7 +1956,7 @@ df.known.tss.source.record <- bind_rows(
       tss_start = true_tss_start,
       tss_end = true_tss_end
     ),
-  df.promoter.annotation.coordinate.normalized %>%
+  df.promoter.epd.rn7.1based %>%
     transmute(
       tss_source = "EPDnew_TSS",
       tss_source_id = promoter_annotation_id,
@@ -2009,7 +2009,7 @@ gr.known.tss.exclusion <- GRanges(
 # Reduce ATAC peaks before measuring covered bases so overlapping peaks are not
 # counted twice. Subtract the true-TSS exclusion union from this reduced signal.
 gr.atac.union.revised <- GenomicRanges::reduce(
-  gr.atac,
+  gr.atac.rn7.1based,
   ignore.strand = TRUE
 )
 common.seqlevels.revised.atac.tss <- intersect(
@@ -2055,11 +2055,11 @@ df.revised.atac.exclusion.summary <- tibble(
     "ATAC_bp_removed_by_true_TSS_exclusion"
   ),
   n = c(
-    length(gr.atac),
+    length(gr.atac.rn7.1based),
     length(gr.atac.union.revised.common),
     sum(width(gr.atac.union.revised.common)),
     nrow(df.true.tss.transcript),
-    nrow(df.promoter.annotation.coordinate.normalized),
+    nrow(df.promoter.epd.rn7.1based),
     nrow(df.known.tss.point),
     length(gr.known.tss.exclusion),
     sum(width(gr.known.tss.exclusion)),
@@ -4157,7 +4157,7 @@ df.figure5.true.tss.relative.position <- tibble(
 # Retain each coordinate-normalized EPD interval once and use its interval
 # midpoint, matching the promoter-position definition in the original analysis.
 df.figure5.promoter.site <-
-  df.promoter.annotation.coordinate.normalized %>%
+  df.promoter.epd.rn7.1based %>%
   distinct(
     chr,
     promoter_start,

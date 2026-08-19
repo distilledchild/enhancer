@@ -53,8 +53,8 @@ df.enhancer <- bind_rows(
 
 gr.enhancer <- GRanges(seqnames = df.enhancer$chr, ranges = IRanges(df.enhancer$start + 1, df.enhancer$end))
 df.atac <- read_tsv(path.narrowpeak.atac, col_names = c("chr", "start", "end", "name", "score", "strand", "fc", "neglog10p", "neglog10q", "summit"), show_col_types=FALSE)
-gr.atac <- GRanges(df.atac$chr, IRanges(df.atac$start + 1, df.atac$end))
-gr.atac_union <- GenomicRanges::reduce(gr.atac)
+gr.atac.rn7.1based <- GRanges(df.atac$chr, IRanges(df.atac$start + 1, df.atac$end))
+gr.atac_union <- GenomicRanges::reduce(gr.atac.rn7.1based)
 
 enhancer_hits <- countOverlaps(gr.enhancer, gr.atac_union, minoverlap = 50) > 0
 df.atac_valid <- df.enhancer[enhancer_hits, ]

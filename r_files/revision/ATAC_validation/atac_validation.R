@@ -129,13 +129,13 @@ direct.assignment.file <- file.path(
 )
 ensembl.transcript.file <- file.path(
   cache.dir,
-  "df.ensembl.transcript.coordinate.normalized.rds"
+  "df.transcript.ensembl.rn7.1based.rds"
 )
 epd.promoter.file <- file.path(
   cache.dir,
-  "df.promoter.annotation.coordinate.normalized.rds"
+  "df.promoter.epd.rn7.1based.rds"
 )
-atac.cache.file <- file.path(cache.dir, "gr.atac.rds")
+atac.cache.file <- file.path(cache.dir, "gr.atac.rn7.1based.rds")
 chrom.sizes.file <- Sys.getenv(
   "RN7_CHROM_SIZES_FILE",
   unset = c(
@@ -574,7 +574,7 @@ stopifnot(
 
 df.ensembl.transcript <- readRDS(ensembl.transcript.file)
 df.epd.promoter <- readRDS(epd.promoter.file)
-gr.atac <- readRDS(atac.cache.file)
+gr.atac.rn7.1based <- readRDS(atac.cache.file)
 
 # Build one-base strand-aware Ensembl TSS and lifted EPD TSS positions.
 df.known.tss <- bind_rows(
@@ -598,7 +598,7 @@ gr.known.tss.exclusion <- GRanges(
 ) %>%
   reduce(ignore.strand = TRUE)
 
-gr.atac.union <- reduce(gr.atac, ignore.strand = TRUE)
+gr.atac.union <- reduce(gr.atac.rn7.1based, ignore.strand = TRUE)
 common.seqlevels <- Reduce(
   intersect,
   list(

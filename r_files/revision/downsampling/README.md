@@ -46,9 +46,9 @@ names:
 
 `../revision_main/cache_data/`
 
-- `df.ensembl.transcript.coordinate.normalized.rds`
-- `df.promoter.annotation.coordinate.normalized.rds`
-- `gr.atac.rds`
+- `df.transcript.ensembl.rn7.1based.rds`
+- `df.promoter.epd.rn7.1based.rds`
+- `gr.atac.rn7.1based.rds`
 
 ## Default outputs
 

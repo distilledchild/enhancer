@@ -506,9 +506,9 @@ coordinate_cache_object_names <- function() {
     "df.loop.source.count.check",
     "gr.ctcf.motif",
     "df.ctcf.fimo.summary",
-    "df.ensembl.transcript.coordinate.normalized",
-    "df.promoter.annotation.coordinate.normalized",
-    "gr.atac",
+    "df.transcript.ensembl.rn7.1based",
+    "df.promoter.epd.rn7.1based",
+    "gr.atac.rn7.1based",
     "df.coordinate.system.audit"
   )
 }

@@ -224,9 +224,9 @@ downsample.root <- resolve_downsample_root(c(
 ))
 
 required.cache.files <- c(
-  "df.ensembl.transcript.coordinate.normalized.rds",
-  "df.promoter.annotation.coordinate.normalized.rds",
-  "gr.atac.rds"
+  "df.transcript.ensembl.rn7.1based.rds",
+  "df.promoter.epd.rn7.1based.rds",
+  "gr.atac.rn7.1based.rds"
 )
 coord.cache.candidates <- unique(path.expand(c(
   Sys.getenv("DOWNSAMPLING_COORD_CACHE_DIR", unset = ""),
@@ -524,7 +524,7 @@ build_depth_loop_resource <- function(file.metadata, condition) {
 build_regulatory_feature_context <- function(
   df.transcript,
   df.promoter,
-  gr.atac.input,
+  gr.atac.rn7.1based.input,
   promoter.flank.bp = 1000L
 ) {
   df.true.tss <- build_true_tss_annotation(df.transcript)
@@ -550,7 +550,7 @@ build_regulatory_feature_context <- function(
   ) %>%
     reduce(ignore.strand = TRUE)
 
-  gr.atac.union <- reduce(gr.atac.input, ignore.strand = TRUE)
+  gr.atac.union <- reduce(gr.atac.rn7.1based.input, ignore.strand = TRUE)
   common.seqlevels <- intersect(seqlevels(gr.atac.union), seqlevels(gr.tss.exclusion))
   gr.atac.common <- keepSeqlevels(
     gr.atac.union,
@@ -1153,9 +1153,9 @@ df.pooled.exact.recovery <- df.pooled.loop.membership %>%
 ################################################################################
 
 required.feature.objects <- c(
-  "df.ensembl.transcript.coordinate.normalized",
-  "df.promoter.annotation.coordinate.normalized",
-  "gr.atac"
+  "df.transcript.ensembl.rn7.1based",
+  "df.promoter.epd.rn7.1based",
+  "gr.atac.rn7.1based"
 )
 feature.paths <- coordinate_cache_paths(
   coord.cache.dir,
@@ -1170,18 +1170,18 @@ if (length(missing.feature.paths) > 0L) {
   )
 }
 
-df.ensembl.transcript.coordinate.normalized <- readRDS(
-  feature.paths[["df.ensembl.transcript.coordinate.normalized"]]
+df.transcript.ensembl.rn7.1based <- readRDS(
+  feature.paths[["df.transcript.ensembl.rn7.1based"]]
 )
-df.promoter.annotation.coordinate.normalized <- readRDS(
-  feature.paths[["df.promoter.annotation.coordinate.normalized"]]
+df.promoter.epd.rn7.1based <- readRDS(
+  feature.paths[["df.promoter.epd.rn7.1based"]]
 )
-gr.atac <- readRDS(feature.paths[["gr.atac"]])
+gr.atac.rn7.1based <- readRDS(feature.paths[["gr.atac.rn7.1based"]])
 
 feature.context <- build_regulatory_feature_context(
-  df.ensembl.transcript.coordinate.normalized,
-  df.promoter.annotation.coordinate.normalized,
-  gr.atac,
+  df.transcript.ensembl.rn7.1based,
+  df.promoter.epd.rn7.1based,
+  gr.atac.rn7.1based,
   promoter.flank.bp = promoter.window.flank.bp
 )
 
@@ -1190,14 +1190,14 @@ full.annotation <- annotate_loop_resource(
   full.resource$universe,
   "full_depth",
   feature.context,
-  df.promoter.annotation.coordinate.normalized
+  df.promoter.epd.rn7.1based
 )
 message("Annotating 140M downsampled pooled calls.")
 downsample.annotation <- annotate_loop_resource(
   downsample.resource$universe,
   "downsample_140M",
   feature.context,
-  df.promoter.annotation.coordinate.normalized
+  df.promoter.epd.rn7.1based
 )
 
 df.category.count <- bind_rows(

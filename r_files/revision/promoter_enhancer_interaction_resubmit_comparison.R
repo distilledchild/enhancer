@@ -44,7 +44,7 @@ df.promoter.tss.evidence <- df.promoter.tss.candidate %>%
 ################################################################################
 
 # Use the normalized ATAC object prepared in Section 1-5.
-gr.atac.union <- GenomicRanges::reduce(gr.atac)
+gr.atac.union <- GenomicRanges::reduce(gr.atac.rn7.1based)
 
 gr.promoter.anchor <- create_anchor_granges(
   df.promoter.tss.candidate,
@@ -102,7 +102,7 @@ common.seqlevels.atac.tss <- intersect(
   seqlevels(gr.legacy.start.codon.region)
 )
 
-gr.atac.for.tss <- keepSeqlevels(
+gr.atac.rn7.1based.for.tss <- keepSeqlevels(
   gr.atac.union,
   common.seqlevels.atac.tss,
   pruning.mode = "coarse"
@@ -114,7 +114,7 @@ gr.legacy.start.codon.region.for.atac <- keepSeqlevels(
 )
 
 gr.atac.non.tss <- GenomicRanges::setdiff(
-  gr.atac.for.tss,
+  gr.atac.rn7.1based.for.tss,
   gr.legacy.start.codon.region.for.atac,
   ignore.strand = TRUE
 )
