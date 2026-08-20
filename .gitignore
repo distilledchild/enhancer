@@ -15,6 +15,7 @@ results/
 
 # Rebuildable coordinate-preparation cache for the resubmission analysis
 r_files/revision/revision_main/cache_data/
+r_files/revision/revision_main/README.md
 
 # Large shared input bundles are staged in Google Drive, not Git.
 r_files/revision/revision_main/inputs/*
