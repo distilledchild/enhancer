@@ -1,5 +1,7 @@
 # lintr: disable
-setwd("./enhancer")
+if (basename(getwd()) != "enhancer" && dir.exists("enhancer")) {
+  setwd("./enhancer")
+}
 getwd()
 funcs.file <- "./funcs_enhancer.R"
 source(funcs.file)
@@ -20,7 +22,7 @@ options(tibble.width = Inf, tibble.print_max = Inf, tibble.max_extra_cols = Inf,
 # transcript isoforms overlap an anchor.
 df.revised.loop.gene.resource <- df.direct.gene.assignment.position.flags %>%
   left_join(
-    df.revised.loop.evidence %>%
+    df.loop.evidence %>%
       dplyr::select(
         loop_id, resolution, chr1, start1, end1, chr2, start2, end2, loop_distance, n_direct_anchor_sides,
         revised_putative_regulatory_support, revised_promoter_promoter_compatible, revised_single_promoter_without_opposite_atac,
@@ -52,49 +54,79 @@ assert_analysis_condition(
 
 # Require every revised putative-regulatory loop to retain a direct gene.
 assert_analysis_condition(
-  n_distinct(df.revised.loop.gene.resource$loop_id[df.revised.loop.gene.resource$revised_putative_regulatory_support]) == sum(df.revised.loop.evidence$revised_putative_regulatory_support),
+  n_distinct(df.revised.loop.gene.resource$loop_id[df.revised.loop.gene.resource$revised_putative_regulatory_support]) == sum(df.loop.evidence$revised_putative_regulatory_support),
   "Not every revised putative-regulatory loop has a direct gene assignment."
 )
 
-# Build a separate secondary inward <=10-kb loop-gene resource. It is exported
-# and countable but is not merged into the primary direct GO input.
-df.revised.secondary.loop.gene.resource <- df.proximal.gene.assignment.position.flags %>%
-  filter(is_secondary_inward_proximal_candidate_10kb) %>%
-  left_join(
-    df.revised.loop.evidence %>%
-      dplyr::select(
-        loop_id,
-        resolution,
-        chr1,
-        start1,
-        end1,
-        chr2,
-        start2,
-        end2,
-        loop_distance,
-        revised_major_category,
-        revised_detailed_category,
-        predicted_ctcf_motif_interval_count_anchor1,
-        predicted_ctcf_motif_interval_count_anchor2,
-        predicted_ctcf_motif_annotation_class,
-        candidate_anchor_non_tss_atac_ge50
-      ),
-    by = c("loop_id", "resolution")
-  ) %>%
-  mutate(
-    ensembl_gene_id = gene_id,
-    gene_symbol = gene_name,
-    revised_gene_assignment_role = "secondary_inward_proximal_10kb_promoter_TSS_candidate"
-  ) %>%
-  arrange(loop_id, anchor_side, ensembl_gene_id)
-
-# Verify that secondary inward loop-gene assignments remain complete and unique.
-assert_analysis_condition(
-  nrow(df.revised.secondary.loop.gene.resource) ==
-    nrow(df.secondary.inward.proximal.gene.assignment) &&
-    !anyDuplicated(df.revised.secondary.loop.gene.resource$assignment_id),
-  "Revised secondary inward loop-gene resource lost unique assignments."
+# Build a separate secondary inward <=10-kb loop-gene resource if available from 01_2_.
+df.revised.secondary.loop.gene.resource <- tibble(
+  assignment_id = character(),
+  loop_id = character(),
+  resolution = character(),
+  anchor_side = character(),
+  opposite_anchor_side = character(),
+  ensembl_gene_id = character(),
+  gene_symbol = character(),
+  revised_gene_assignment_role = character()
 )
+
+if (exists("df.proximal.gene.assignment.position.flags") && exists("df.secondary.inward.proximal.gene.assignment")) {
+  df.revised.secondary.loop.gene.resource <- df.proximal.gene.assignment.position.flags %>%
+    filter(is_secondary_inward_proximal_candidate_10kb) %>%
+    left_join(
+      df.loop.evidence %>%
+        dplyr::select(
+          loop_id,
+          resolution,
+          chr1,
+          start1,
+          end1,
+          chr2,
+          start2,
+          end2,
+          loop_distance,
+          revised_major_category,
+          revised_detailed_category,
+          predicted_ctcf_motif_interval_count_anchor1,
+          predicted_ctcf_motif_interval_count_anchor2,
+          predicted_ctcf_motif_annotation_class,
+          candidate_anchor_non_tss_atac_ge50
+        ),
+      by = c("loop_id", "resolution")
+    ) %>%
+    mutate(
+      ensembl_gene_id = gene_id,
+      gene_symbol = gene_name,
+      revised_gene_assignment_role = "secondary_inward_proximal_10kb_promoter_TSS_candidate"
+    ) %>%
+    arrange(loop_id, anchor_side, ensembl_gene_id)
+
+  assert_analysis_condition(
+    nrow(df.revised.secondary.loop.gene.resource) ==
+      nrow(df.secondary.inward.proximal.gene.assignment) &&
+      !anyDuplicated(df.revised.secondary.loop.gene.resource$assignment_id),
+    "Revised secondary inward loop-gene resource lost unique assignments."
+  )
+}
+
+df.dual.primary.rep.input <- if (exists("df.dual.primary.representative.gene.assignment")) {
+  df.dual.primary.representative.gene.assignment %>%
+    transmute(
+      gene_set = "revised_dual_promoter_representative_anchor_sensitivity",
+      loop_id,
+      resolution,
+      ensembl_gene_id = gene_id,
+      gene_symbol = gene_name
+    )
+} else {
+  tibble(
+    gene_set = character(),
+    loop_id = character(),
+    resolution = character(),
+    ensembl_gene_id = character(),
+    gene_symbol = character()
+  )
+}
 
 # Generate explicit loop-gene memberships. Counting is performed after exact
 # loop/gene deduplication, so multiple annotation sources and promoter-promoter
@@ -134,17 +166,7 @@ df.revised.gene.loop.membership <- bind_rows(
       ensembl_gene_id,
       gene_symbol
     ),
-  df.dual.primary.representative.gene.assignment %>%
-    transmute(
-      gene_set = paste0(
-        "revised_dual_promoter_representative_anchor_",
-        "sensitivity"
-      ),
-      loop_id,
-      resolution,
-      ensembl_gene_id = gene_id,
-      gene_symbol = gene_name
-    )
+  df.dual.primary.rep.input
 ) %>%
   filter(!is.na(ensembl_gene_id)) %>%
   distinct(gene_set, loop_id, ensembl_gene_id, .keep_all = TRUE) %>%
@@ -156,7 +178,7 @@ df.revised.gene.count.by.set <- summarise_revised_gene_loop_counts(df.revised.ge
 # objects. All pooled loops are already <2 Mb; genes with at least two distinct
 # loops are exported as ready-to-paste Ensembl-ID inputs for g:Profiler.
 df.approach2.loop.gene.input <- df.revised.gene.loop.membership %>%
-  left_join(df.loop.universe %>% dplyr::select(loop_id, loop_distance), by = "loop_id") %>%
+  left_join(df.loop.distinct.2mb %>% dplyr::select(loop_id, loop_distance), by = "loop_id") %>%
   transmute(gene_set, gene_id = ensembl_gene_id, gene_symbol, loop.id = loop_id, distance = loop_distance) %>%
   distinct(gene_set, gene_id, loop.id, .keep_all = TRUE)
 
@@ -292,14 +314,18 @@ df.revised.downstream.analysis.definition <- tribble(
 )
 
 revised.resource.tables <- list(
-  revised_pooled_loop_annotation_resource = df.revised.loop.evidence,
+  revised_pooled_loop_annotation_resource = df.loop.evidence,
   revised_direct_loop_gene_assignments = df.revised.loop.gene.resource,
   revised_secondary_inward_10kb_loop_gene_assignments = df.revised.secondary.loop.gene.resource,
-  revised_secondary_inward_10kb_loops = df.secondary.inward.proximal.loop.summary %>% filter(has_any_secondary_inward_proximal_10kb),
-  revised_putative_regulatory_loops = df.revised.loop.evidence %>% filter(revised_putative_regulatory_support),
-  revised_promoter_promoter_compatible_loops = df.revised.loop.evidence %>% filter(revised_promoter_promoter_compatible),
-  revised_single_promoter_without_opposite_atac_loops = df.revised.loop.evidence %>% filter(revised_single_promoter_without_opposite_atac),
-  revised_no_direct_promoter_tss_loops = df.revised.loop.evidence %>% filter(revised_no_direct_promoter_tss)
+  revised_secondary_inward_10kb_loops = if (exists("df.secondary.inward.proximal.loop.summary")) {
+    df.secondary.inward.proximal.loop.summary %>% filter(has_any_secondary_inward_proximal_10kb)
+  } else {
+    tibble()
+  },
+  revised_putative_regulatory_loops = df.loop.evidence %>% filter(revised_putative_regulatory_support),
+  revised_promoter_promoter_compatible_loops = df.loop.evidence %>% filter(revised_promoter_promoter_compatible),
+  revised_single_promoter_without_opposite_atac_loops = df.loop.evidence %>% filter(revised_single_promoter_without_opposite_atac),
+  revised_no_direct_promoter_tss_loops = df.loop.evidence %>% filter(revised_no_direct_promoter_tss)
 )
 
 ################################################################################
@@ -340,7 +366,7 @@ df.hiccups.quality.field.definition <- tribble(
 
 # Construct an all-resolution canonical-locus sensitivity without changing the
 # exact pooled HiCCUPS call IDs or their source-library provenance.
-approximate.loop.locus.analysis <- build_approximate_loop_loci(df.loop.universe)
+approximate.loop.locus.analysis <- build_approximate_loop_loci(df.loop.distinct.2mb)
 df.approximate.loop.locus.edge <- approximate.loop.locus.analysis$edge
 df.approximate.loop.locus.map <- approximate.loop.locus.analysis$map
 df.approximate.loop.locus.summary <- approximate.loop.locus.analysis$summary
@@ -349,7 +375,7 @@ df.approximate.loop.locus.method <- approximate.loop.locus.analysis$method
 # Repeat canonicalization with half-sized distance tolerances to quantify how
 # strongly the locus count depends on the HiCCUPS-derived midpoint thresholds.
 strict.approximate.loop.locus.analysis <- build_approximate_loop_loci(
-  df.loop.universe,
+  df.loop.distinct.2mb,
   merge.distance.bp = c("5K" = 10000L, "10K" = 10000L, "25K" = 25000L)
 )
 df.approximate.loop.locus.threshold.sensitivity <- bind_rows(
@@ -360,7 +386,7 @@ rm(strict.approximate.loop.locus.analysis)
 
 # Select the primary main-set loop-gene membership based on all retained TSS and
 # EPD evidence, then derive a stricter Ensembl-canonical-TSS-only sensitivity.
-main.putative.loop.ids <- df.revised.loop.evidence %>%
+main.putative.loop.ids <- df.loop.evidence %>%
   filter(revised_putative_regulatory_support) %>%
   pull(loop_id)
 
@@ -369,11 +395,11 @@ df.main.all.annotation.gene.loop.membership <- df.revised.gene.loop.membership %
   dplyr::select(loop_id, resolution, ensembl_gene_id, gene_symbol) %>%
   distinct(loop_id, ensembl_gene_id, .keep_all = TRUE)
 
-df.main.putative.promoter.anchor <- df.revised.atac.unambiguous.orientation %>%
+df.main.putative.promoter.anchor <- df.atac.unambiguous.orientation %>%
   filter(loop_id %in% main.putative.loop.ids) %>%
   transmute(loop_id, anchor_side = promoter_anchor_side)
 
-df.canonical.tss.main.loop.gene.membership <- df.primary.direct.true.tss.anchor.overlap %>%
+df.canonical.tss.main.loop.gene.membership <- df.direct.true.tss.anchor.overlap %>%
   filter(coalesce(is_ensembl_canonical, FALSE)) %>%
   inner_join(df.main.putative.promoter.anchor, by = c("loop_id", "anchor_side")) %>%
   transmute(loop_id, resolution, ensembl_gene_id = gene_id, gene_symbol = gene_name, transcript_id, transcript_id_versioned, true_tss_id = str_remove(annotation_id, ":TSS_pm1kb$")) %>%
@@ -400,7 +426,7 @@ revised.go.gene.sets$revised_putative_canonical_TSS_only <- df.canonical.tss.mai
   ) %>%
   arrange(desc(n), gene_symbol, ensembl_gene_id)
 
-revised.go.canonical.universe <- df.primary.direct.true.tss.anchor.overlap %>%
+revised.go.canonical.universe <- df.direct.true.tss.anchor.overlap %>%
   filter(coalesce(is_ensembl_canonical, FALSE), !is.na(gene_id)) %>%
   distinct(gene_id) %>%
   pull(gene_id)
@@ -506,7 +532,7 @@ figure5.resolution.colors <- c(
 
 # Define the expanded loop window and retain the unrounded anchor midpoints for
 # an exact relative-position transformation: anchor1 = 0 and anchor2 = 1.
-df.figure5.loop.window <- df.loop.universe %>%
+df.figure5.loop.window <- df.loop.distinct.2mb %>%
   transmute(
     loop_id,
     chr = chr1,

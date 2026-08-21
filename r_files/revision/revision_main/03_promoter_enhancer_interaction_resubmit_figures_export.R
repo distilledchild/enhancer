@@ -1,5 +1,7 @@
 # lintr: disable
-setwd("./enhancer")
+if (basename(getwd()) != "enhancer" && dir.exists("enhancer")) {
+  setwd("./enhancer")
+}
 getwd()
 funcs.file <- "./funcs_enhancer.R"
 source(funcs.file)
@@ -51,7 +53,7 @@ df.strain.loop.presence.matrix <- df.sample.loop.presence.pairwise %>%
   distinct(loop_id, resolution, strain) %>%
   mutate(present = 1L) %>%
   pivot_wider(names_from = strain, values_from = present, values_fill = 0) %>%
-  left_join(df.loop.universe %>% dplyr::select(loop_id, chr1, start1, end1, chr2, start2, end2, loop_distance), by = "loop_id") %>%
+  left_join(df.loop.distinct.2mb %>% dplyr::select(loop_id, chr1, start1, end1, chr2, start2, end2, loop_distance), by = "loop_id") %>%
   relocate(chr1, start1, end1, chr2, start2, end2, loop_distance, .after = resolution) %>%
   arrange(resolution, chr1, start1, end1, chr2, start2, end2)
 
@@ -418,7 +420,7 @@ figure1.output.files <- basename(c(
 ))
 
 # Figure 2: summarize exact, resolution-specific pooled calls by chromosome.
-df.figure2.chromosome.resolution <- df.loop.universe %>%
+df.figure2.chromosome.resolution <- df.loop.distinct.2mb %>%
   count(chr1, resolution, name = "n_loops") %>%
   mutate(
     chromosome_label = str_remove(chr1, "^chr"),
@@ -862,7 +864,7 @@ readr::write_tsv(df.output.manifest, file.path(output.dir, "resubmit_output_mani
 ################################################################################
 
 message("\nWrote outputs to: ", output.dir)
-message("Pooled loop resource (<2 Mb): ", nrow(df.loop.universe))
+message("Pooled loop resource (<2 Mb): ", nrow(df.loop.distinct.2mb))
 message("Revised direct promoter/TSS-supported loops: ", sum(df.direct.promoter.tss.loop.summary$has_any_direct_promoter_tss))
 message("Revised direct loop-anchor-gene assignments: ", nrow(df.direct.promoter.tss.gene.assignment))
 message("Revised proximal promoter/TSS-supported loops (1-200 kb): ", sum(df.proximal.promoter.tss.loop.summary$has_any_proximal_promoter_tss))

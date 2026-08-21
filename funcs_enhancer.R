@@ -526,7 +526,7 @@ coordinate_cache_object_names <- function() {
     "df.sample.loop.1based",
     "df.loop.pooled.support.summary",
     "df.loop.distinct",
-    "df.loop.universe",
+    "df.loop.distinct.2mb",
     "df.loop.source.count.check",
     "gr.ctcf.motif",
     "df.ctcf.fimo.summary",
@@ -1260,17 +1260,18 @@ build_pooled_hiccups_loop_resource <- function(
     left_join(df.loop.pooled.support.summary, by = "loop_id") %>%
     arrange(chr1, start1, end1, chr2, start2, end2)
 
-  df.loop.universe <- df.loop.distinct %>%
+  df.loop.distinct.2mb <- df.loop.distinct %>%
     filter(passes_lt2mb)
 
-  if (nrow(df.loop.universe) != n_distinct(df.loop.universe$loop_id)) {
+  if (nrow(df.loop.distinct.2mb) != n_distinct(df.loop.distinct.2mb$loop_id)) {
     stop("The pooled loop resource contains duplicate loop IDs.", call. = FALSE)
   }
 
   list(
     support = df.loop.pooled.support.summary,
     distinct = df.loop.distinct,
-    universe = df.loop.universe
+    distinct_2mb = df.loop.distinct.2mb,
+    universe = df.loop.distinct.2mb
   )
 }
 
@@ -1774,7 +1775,7 @@ summarise_gene_count_spearman <- function(
 check_hiccups_loop_counts <- function(
   df.sample.loop.1based,
   df.loop.distinct,
-  df.loop.universe,
+  df.loop.distinct.2mb,
   expected.n
 ) {
   expected.n <- as_integer_coordinate(expected.n, "Expected HiCCUPS counts")
@@ -1791,7 +1792,7 @@ check_hiccups_loop_counts <- function(
     observed_n = c(
       nrow(df.sample.loop.1based),
       nrow(df.loop.distinct),
-      nrow(df.loop.universe)
+      nrow(df.loop.distinct.2mb)
     ),
     expected_n = expected.n
   ) %>%
@@ -2687,7 +2688,7 @@ build_direct_promoter_tss_tier <- function(
   gr.epd.annotation,
   df.true.tss,
   df.epd.promoter,
-  df.loop.universe,
+  df.loop.distinct.2mb,
   evidence.definition = c("strict", "primary_1kb"),
   promoter.window.flank.bp = NA_integer_
 ) {
@@ -2881,7 +2882,7 @@ build_direct_promoter_tss_tier <- function(
     combined_overlap = df.evidence,
     summary = summarise_direct_promoter_tss_evidence(
       df.evidence,
-      df.loop.universe
+      df.loop.distinct.2mb
     )
   )
 }
@@ -2892,7 +2893,7 @@ build_direct_promoter_tss_tier <- function(
 # same loop-anchor-gene assignment.
 summarise_direct_promoter_tss_evidence <- function(
   df.evidence,
-  df.loop.universe
+  df.loop.distinct.2mb
 ) {
   check_required_columns(
     df.evidence,
@@ -2904,7 +2905,7 @@ summarise_direct_promoter_tss_evidence <- function(
     "Direct promoter/TSS evidence table"
   )
   check_required_columns(
-    df.loop.universe,
+    df.loop.distinct.2mb,
     c(
       "loop_id", "resolution", "chr1", "start1", "end1",
       "chr2", "start2", "end2"
@@ -2945,7 +2946,7 @@ summarise_direct_promoter_tss_evidence <- function(
     ) %>%
     arrange(loop_id, anchor_side, gene_id)
 
-  df.anchor.index <- build_loop_anchor_index(df.loop.universe)
+  df.anchor.index <- build_loop_anchor_index(df.loop.distinct.2mb)
 
   df.anchor.count <- df.evidence %>%
     group_by(loop_id, resolution, anchor_side, opposite_anchor_side) %>%
@@ -2993,7 +2994,7 @@ summarise_direct_promoter_tss_evidence <- function(
 
   assert_analysis_row_count(
     df.anchor.summary,
-    2L * nrow(df.loop.universe),
+    2L * nrow(df.loop.distinct.2mb),
     "Direct-overlap summary did not retain both anchors of every loop."
   )
 
@@ -3023,7 +3024,7 @@ summarise_direct_promoter_tss_evidence <- function(
       .groups = "drop"
     )
 
-  df.loop.summary <- df.loop.universe %>%
+  df.loop.summary <- df.loop.distinct.2mb %>%
     left_join(df.anchor.wide, by = "loop_id") %>%
     left_join(df.loop.gene.count, by = "loop_id") %>%
     mutate(
@@ -3052,7 +3053,7 @@ summarise_direct_promoter_tss_evidence <- function(
     )
 
   assert_analysis_condition(
-    nrow(df.loop.summary) == nrow(df.loop.universe) &&
+    nrow(df.loop.summary) == nrow(df.loop.distinct.2mb) &&
       !any(is.na(df.loop.summary$n_direct_anchor_sides)),
     "Direct-overlap loop summary did not preserve the pooled universe."
   )
@@ -3069,7 +3070,7 @@ summarise_direct_promoter_tss_evidence <- function(
       "loops_without_direct_promoter_or_TSS"
     ),
     n = c(
-      nrow(df.loop.universe),
+      nrow(df.loop.distinct.2mb),
       sum(df.evidence$annotation_class == "true_TSS"),
       sum(df.evidence$annotation_class == "EPD_promoter"),
       nrow(df.gene.assignment),
@@ -4358,19 +4359,25 @@ run_go_enrichment <- function(df.gene, universe.ensembl, set.name, out.dir) {
 }
 
 # Stop with a descriptive message unless one scalar analysis invariant is true.
-assert_analysis_condition <- function(condition, message) {
+# Optionally prints a success message if condition evaluates to TRUE.
+assert_analysis_condition <- function(condition, message, success.message = NULL) {
   if (length(condition) != 1L || is.na(condition) || !isTRUE(condition)) {
     stop(message, call. = FALSE)
+  }
+
+  if (!is.null(success.message) && nzchar(success.message)) {
+    message(success.message)
   }
 
   invisible(TRUE)
 }
 
 # Require an analysis table to contain exactly the expected number of rows.
-assert_analysis_row_count <- function(df, expected, message) {
+assert_analysis_row_count <- function(df, expected, message, success.message = NULL) {
   assert_analysis_condition(
     nrow(df) == as.integer(expected),
-    message
+    message = message,
+    success.message = success.message
   )
 }
 

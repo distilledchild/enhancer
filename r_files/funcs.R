@@ -4334,19 +4334,25 @@ run_go_enrichment <- function(df.gene, universe.ensembl, set.name, out.dir) {
 }
 
 # Stop with a descriptive message unless one scalar analysis invariant is true.
-assert_analysis_condition <- function(condition, message) {
+# Optionally prints a success message if condition evaluates to TRUE.
+assert_analysis_condition <- function(condition, message, success.message = NULL) {
   if (length(condition) != 1L || is.na(condition) || !isTRUE(condition)) {
     stop(message, call. = FALSE)
+  }
+
+  if (!is.null(success.message) && nzchar(success.message)) {
+    message(success.message)
   }
 
   invisible(TRUE)
 }
 
 # Require an analysis table to contain exactly the expected number of rows.
-assert_analysis_row_count <- function(df, expected, message) {
+assert_analysis_row_count <- function(df, expected, message, success.message = NULL) {
   assert_analysis_condition(
     nrow(df) == as.integer(expected),
-    message
+    message = message,
+    success.message = success.message
   )
 }
 

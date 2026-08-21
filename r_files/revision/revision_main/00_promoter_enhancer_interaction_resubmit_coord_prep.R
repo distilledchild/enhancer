@@ -218,28 +218,28 @@ df.sample.loop.1based %>% head()
 list.loop.resource <- build_pooled_hiccups_loop_resource(df.sample.loop.1based)
 names(list.loop.resource)
 purrr::map(list.loop.resource, dim)
-head(list.loop.resource$universe)
+head(list.loop.resource$distinct_2mb)
 
 df.loop.pooled.support.summary <- list.loop.resource$support
 df.loop.distinct <- list.loop.resource$distinct
-df.loop.universe <- list.loop.resource$universe
+df.loop.distinct.2mb <- list.loop.resource$distinct_2mb
 
 df.loop.pooled.support.summary %>% head(2)
 df.loop.distinct %>% head(2)
-df.loop.universe %>% head(2)
+df.loop.distinct.2mb %>% head(2)
 
 # These counts were verified from the current original merged_loops.bedpe files on 2026-07-22 (from sb option processing)
 # the older copied inputs contained 58,992/31,773/31,019.
 df.loop.source.count.check <- check_hiccups_loop_counts(
   df.sample.loop.1based = df.sample.loop.1based,
   df.loop.distinct = df.loop.distinct,
-  df.loop.universe = df.loop.universe,
+  df.loop.distinct.2mb = df.loop.distinct.2mb,
   expected.n = c(59000L, 31778L, 31021L)
 )
 
 message("Original sample-level HiCCUPS rows: ", nrow(df.sample.loop.raw))
 message("All distinct HiCCUPS loops: ", n_distinct(df.loop.distinct$loop_id))
-message("Pooled loop resource (<2 Mb): ", nrow(df.loop.universe))
+message("Pooled loop resource (<2 Mb): ", nrow(df.loop.distinct.2mb))
 
 ########################
 # 1-2. CTCF FIMO motif coordinates
@@ -248,28 +248,28 @@ message("Pooled loop resource (<2 Mb): ", nrow(df.loop.universe))
 # Conversion: NO coordinate shift; validate and deduplicate intervals.
 ########################
 
-# gr.ctcf.motif <- read_ctcf_fimo(ctcf.motif.file)
-# df.ctcf.fimo.summary <- S4Vectors::metadata(
-#   gr.ctcf.motif
-# )$fimo_summary
+gr.ctcf.motif <- read_ctcf_fimo(ctcf.motif.file)
+df.ctcf.fimo.summary <- S4Vectors::metadata(
+  gr.ctcf.motif
+)$fimo_summary
 
-# # Verify that full FIMO provenance and representative statistical fields remain
-# # attached after exact-coordinate interval consolidation.
-# required.ctcf.metadata.columns <- c(
-#   "best_motif_id", "best_score", "best_p_value", "best_q_value",
-#   "n_fimo_predictions", "n_distinct_motif_ids"
-# )
-# if (
-#   is.null(df.ctcf.fimo.summary) ||
-#     !all(required.ctcf.metadata.columns %in% names(mcols(gr.ctcf.motif)))
-# ) {
-#   stop(
-#     "CTCF cache preparation did not preserve FIMO motif/statistical metadata.",
-#     call. = FALSE
-#   )
-# }
-# message("Full CTCF FIMO cache summary:")
-# print(df.ctcf.fimo.summary)
+# Verify that full FIMO provenance and representative statistical fields remain
+# attached after exact-coordinate interval consolidation.
+required.ctcf.metadata.columns <- c(
+  "best_motif_id", "best_score", "best_p_value", "best_q_value",
+  "n_fimo_predictions", "n_distinct_motif_ids"
+)
+if (
+  is.null(df.ctcf.fimo.summary) ||
+    !all(required.ctcf.metadata.columns %in% names(mcols(gr.ctcf.motif)))
+) {
+  stop(
+    "CTCF cache preparation did not preserve FIMO motif/statistical metadata.",
+    call. = FALSE
+  )
+}
+message("Full CTCF FIMO cache summary:")
+print(df.ctcf.fimo.summary)
 
 # PASS!!
 
