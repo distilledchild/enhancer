@@ -131,11 +131,11 @@ df.anchor.level <- bind_rows(
       ctcf_count = ctcf_anchor1,
       has_promoter = has_any_direct_promoter_tss & (n_direct_anchor_sides == 2L | !is.na(direct_anchor_assignment_class)),
       anchor_role = case_when(
-        str_detect(sub_category, "^❶") ~ "Promoter\nAnchor (❶)",
-        str_detect(sub_category, "^❷") ~ "Promoter\nAnchor (❷)",
-        str_detect(sub_category, "^❸") ~ "Dual-Promoter\nAnchor (❸)",
-        str_detect(sub_category, "^❹") ~ "Dual-Promoter\nAnchor (❹)",
-        TRUE ~ "Structural\nAnchor (❺)"
+        str_detect(sub_category, "^❶") ~ "Category 1 Loop:\nPromoter Anchor (❶)",
+        str_detect(sub_category, "^❷") ~ "Category 2 Loop:\nPromoter Anchor (❷)",
+        str_detect(sub_category, "^❸") ~ "Category 1 Loop:\nDual-Promoter Anchor (❸)",
+        str_detect(sub_category, "^❹") ~ "Category 2 Loop:\nDual-Promoter Anchor (❹)",
+        TRUE ~ "Category 3 Loop:\nStructural Anchor (❺)"
       )
     ),
   df.ctcf.master %>%
@@ -148,11 +148,11 @@ df.anchor.level <- bind_rows(
       ctcf_count = ctcf_anchor2,
       has_promoter = has_any_direct_promoter_tss & (n_direct_anchor_sides == 2L),
       anchor_role = case_when(
-        str_detect(sub_category, "^❶") ~ "Distal ATAC\nAnchor (❶)",
-        str_detect(sub_category, "^❷") ~ "Opposite Anchor\nw/o ATAC (❷)",
-        str_detect(sub_category, "^❸") ~ "Dual-Promoter\nAnchor (❸)",
-        str_detect(sub_category, "^❹") ~ "Dual-Promoter\nAnchor (❹)",
-        TRUE ~ "Structural\nAnchor (❺)"
+        str_detect(sub_category, "^❶") ~ "Category 1 Loop:\nDistal ATAC Anchor (❶)",
+        str_detect(sub_category, "^❷") ~ "Category 2 Loop:\nOpposite Anchor w/o ATAC (❷)",
+        str_detect(sub_category, "^❸") ~ "Category 1 Loop:\nDual-Promoter Anchor (❸)",
+        str_detect(sub_category, "^❹") ~ "Category 2 Loop:\nDual-Promoter Anchor (❹)",
+        TRUE ~ "Category 3 Loop:\nStructural Anchor (❺)"
       )
     )
 )
@@ -304,28 +304,28 @@ p_panel_c <- ggplot(df.ctcf.master, aes(x = sub_category, y = total_ctcf, fill =
 # Panel D: Anchor-Level CTCF Motif Count by Anchor Functional Role
 # ------------------------------------------------------------------------------
 df.anchor.level.clean <- df.anchor.level %>%
-  filter(!anchor_role %in% c("Opposite Anchor\nw/o ATAC (❷)")) %>%
+  filter(!str_detect(anchor_role, "Opposite Anchor")) %>%
   mutate(
     anchor_role = factor(
       anchor_role,
       levels = c(
-        "Promoter\nAnchor (❶)",
-        "Distal ATAC\nAnchor (❶)",
-        "Promoter\nAnchor (❷)",
-        "Dual-Promoter\nAnchor (❸)",
-        "Dual-Promoter\nAnchor (❹)",
-        "Structural\nAnchor (❺)"
+        "Category 1 Loop:\nPromoter Anchor (❶)",
+        "Category 1 Loop:\nDistal ATAC Anchor (❶)",
+        "Category 2 Loop:\nPromoter Anchor (❷)",
+        "Category 1 Loop:\nDual-Promoter Anchor (❸)",
+        "Category 2 Loop:\nDual-Promoter Anchor (❹)",
+        "Category 3 Loop:\nStructural Anchor (❺)"
       )
     )
   )
 
 role_colors <- c(
-  "Promoter\nAnchor (❶)"      = "#16A34A",
-  "Distal ATAC\nAnchor (❶)"  = "#22C55E",
-  "Promoter\nAnchor (❷)"      = "#EA580C",
-  "Dual-Promoter\nAnchor (❸)" = "#15803D",
-  "Dual-Promoter\nAnchor (❹)" = "#C2410C",
-  "Structural\nAnchor (❺)"    = "#E11D48"
+  "Category 1 Loop:\nPromoter Anchor (❶)"      = "#16A34A",
+  "Category 1 Loop:\nDistal ATAC Anchor (❶)"  = "#22C55E",
+  "Category 2 Loop:\nPromoter Anchor (❷)"      = "#EA580C",
+  "Category 1 Loop:\nDual-Promoter Anchor (❸)" = "#15803D",
+  "Category 2 Loop:\nDual-Promoter Anchor (❹)" = "#C2410C",
+  "Category 3 Loop:\nStructural Anchor (❺)"    = "#E11D48"
 )
 
 p_panel_d <- ggplot(df.anchor.level.clean, aes(x = anchor_role, y = ctcf_count, fill = anchor_role)) +
@@ -345,7 +345,9 @@ p_panel_d <- ggplot(df.anchor.level.clean, aes(x = anchor_role, y = ctcf_count, 
     y = "Predicted CTCF Motifs per Single Anchor (log1p scale)"
   ) +
   theme_publication() +
-  theme(axis.text.x = element_text(size = rel(0.85), face = "bold"))
+  theme(
+    axis.text.x = element_text(angle = 25, hjust = 1, vjust = 1, size = rel(0.72), face = "bold", lineheight = 1.05)
+  )
 
 # ------------------------------------------------------------------------------
 # Assemble Multi-Panel Figure & Save (2x2 Grid)
