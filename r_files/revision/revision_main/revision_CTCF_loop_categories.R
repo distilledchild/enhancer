@@ -311,9 +311,9 @@ df.anchor.level.clean <- df.anchor.level %>%
       levels = c(
         "Promoter\nAnchor (❶)",
         "Distal ATAC\nAnchor (❶)",
+        "Promoter\nAnchor (❷)",
         "Dual-Promoter\nAnchor (❸)",
         "Dual-Promoter\nAnchor (❹)",
-        "Promoter\nAnchor (❷)",
         "Structural\nAnchor (❺)"
       )
     )
@@ -322,9 +322,9 @@ df.anchor.level.clean <- df.anchor.level %>%
 role_colors <- c(
   "Promoter\nAnchor (❶)"      = "#16A34A",
   "Distal ATAC\nAnchor (❶)"  = "#22C55E",
+  "Promoter\nAnchor (❷)"      = "#EA580C",
   "Dual-Promoter\nAnchor (❸)" = "#15803D",
   "Dual-Promoter\nAnchor (❹)" = "#C2410C",
-  "Promoter\nAnchor (❷)"      = "#EA580C",
   "Structural\nAnchor (❺)"    = "#E11D48"
 )
 
