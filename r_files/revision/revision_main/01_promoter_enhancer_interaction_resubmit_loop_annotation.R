@@ -14,6 +14,9 @@ library("RIdeogram")
 library("rsvg")
 library("magick")
 library("cowplot")
+library("circlize")
+library("igraph")
+library("ggraph")
 
 options(tibble.width = Inf, tibble.print_max = Inf, tibble.max_extra_cols = Inf, scipen = 999)
 
@@ -1319,14 +1322,16 @@ parse_juicer_sb_qc <- function(sample_code, strain_name, root_dir) {
     }
     stop("Missing required QC file: ", qc_file, call. = FALSE)
   }
-  
+
   get_val <- function(key) {
     l <- lines[str_detect(lines, fixed(paste0(key, ":")))]
-    if (length(l) == 0) return(NA_real_)
+    if (length(l) == 0) {
+      return(NA_real_)
+    }
     val_str <- str_extract(l[1], "(?<=:)[0-9, ]+")
     as.numeric(gsub("[ ,]", "", val_str))
   }
-  
+
   tibble(
     Strain = strain_name,
     sample = sample_code,
@@ -2103,6 +2108,7 @@ figure5.ctcf.chromosome.results <- map(
     keep <- dplyr::between(relative.position, -1, 2)
 
     tibble(
+      chr = chr.i,
       resolution = df.figure5.loop.window$resolution[loop.index.hit[keep]],
       relative_position = relative.position[keep]
     )
@@ -2129,6 +2135,7 @@ df.figure5.true.tss.relative.position <- tibble(
 ) %>%
   transmute(
     loop_id = df.figure5.loop.window$loop_id[loop_index],
+    chr = df.figure5.loop.window$chr[loop_index],
     resolution = df.figure5.loop.window$resolution[loop_index],
     feature_position = df.figure5.true.tss.site$feature_position[feature_index],
     anchor1_midpoint = df.figure5.loop.window$anchor1_midpoint[loop_index],
@@ -2158,6 +2165,7 @@ df.figure5.promoter.relative.position <- tibble(
 ) %>%
   transmute(
     loop_id = df.figure5.loop.window$loop_id[loop_index],
+    chr = df.figure5.loop.window$chr[loop_index],
     resolution = df.figure5.loop.window$resolution[loop_index],
     feature_position = df.figure5.promoter.site$feature_position[feature_index],
     anchor1_midpoint = df.figure5.loop.window$anchor1_midpoint[loop_index],
@@ -2265,3 +2273,1067 @@ ggsave(
 message("Figure 5 density plots successfully saved to:")
 message("  - PNG: ", figure5.png.path)
 message("  - PDF: ", figure5.pdf.path)
+
+# ==============================================================================
+# 10-6. Figure 8: Circos plots of putative regulatory loops (genome-wide and chr1)
+# ==============================================================================
+
+# Extract the 10,469 putative regulatory loops
+df.putative.regulatory.loops <- df.loop.evidence %>%
+  filter(revised_putative_regulatory_support)
+
+message(
+  "Preparing Circos plots for ",
+  nrow(df.putative.regulatory.loops),
+  " putative regulatory loops..."
+)
+
+# Format loop anchors and midpoint positions
+df.circos.input.putative <- df.putative.regulatory.loops %>%
+  mutate(
+    x12 = (start1 + end1) / 2,
+    y12 = (start2 + end2) / 2,
+    distance = abs(y12 - x12),
+    midx = x12,
+    midy = y12,
+    resolution = factor(resolution, levels = c("5K", "10K", "25K")),
+    chr1_clean = factor(str_remove(chr1, "^chr"), levels = c(as.character(1:20), "X", "Y")),
+    chr2_clean = factor(str_remove(chr2, "^chr"), levels = c(as.character(1:20), "X", "Y"))
+  )
+
+# Circos resolution colors
+circos_resolution_colors <- c(
+  "5K" = "#f8766d",
+  "10K" = "#629bfe",
+  "25K" = "#32ba36"
+)
+
+# Local rn7 chromosome lengths for offline ideogram initialization
+chromosome_lengths_circos <- c(
+  "chr1" = 260522016, "chr2" = 249053267, "chr3" = 169034231, "chr4" = 182687754,
+  "chr5" = 166875058, "chr6" = 140994061, "chr7" = 135012528, "chr8" = 123900184,
+  "chr9" = 114175309, "chr10" = 107211142, "chr11" = 86241447, "chr12" = 46669029,
+  "chr13" = 106807694, "chr14" = 104886043, "chr15" = 101769107, "chr16" = 84729064,
+  "chr17" = 86533673, "chr18" = 83828827, "chr19" = 57337602, "chr20" = 54435887,
+  "chrX" = 152453651, "chrY" = 18315841
+)
+
+df_cytoband_rn7 <- data.frame(
+  chr = names(chromosome_lengths_circos),
+  start = 0L,
+  end = as.integer(chromosome_lengths_circos),
+  name = names(chromosome_lengths_circos),
+  gieStain = "gpos50",
+  stringsAsFactors = FALSE
+)
+
+# Circos link rendering helper
+draw_circos_links_putative <- function(df_links) {
+  if (nrow(df_links) == 0) return(invisible(NULL))
+  for (i in seq_len(nrow(df_links))) {
+    circos.genomicLink(
+      region1 = df_links[i, c("chr1", "midx", "midx")],
+      region2 = df_links[i, c("chr2", "midy", "midy")],
+      col = circos_resolution_colors[as.character(df_links$resolution[i])]
+    )
+  }
+}
+
+# Genome-wide circos diagram
+plot_circos_all_chromosomes_putative <- function(df_links, cytoband_df) {
+  circos.clear()
+  circos.initializeWithIdeogram(cytoband = cytoband_df, plotType = c("ideogram", "labels"))
+  draw_circos_links_putative(df_links)
+  circos.clear()
+}
+
+# Chromosome-specific circos diagram
+plot_circos_for_chromosome_putative <- function(df_links, cytoband_df, chr_target = "chr1") {
+  df_filtered <- subset(df_links, chr1 == chr_target | chr2 == chr_target)
+  if (nrow(df_filtered) > 0) {
+    chromosomes_to_display <- unique(c(as.character(df_filtered$chr1), as.character(df_filtered$chr2)))
+    original_par <- par(no.readonly = TRUE)
+    on.exit(par(original_par), add = TRUE)
+
+    par(mar = c(2.2, 2.2, 0.8, 3.6), xpd = NA)
+    circos.clear()
+    circos.par(
+      gap.degree = 25,
+      canvas.xlim = c(-0.78, 0.9),
+      canvas.ylim = c(-0.82, 0.86),
+      points.overflow.warning = FALSE
+    )
+    circos.initializeWithIdeogram(
+      cytoband = cytoband_df,
+      chromosome.index = chromosomes_to_display,
+      plotType = c("ideogram", "labels")
+    )
+    draw_circos_links_putative(df_filtered)
+    circos.clear()
+  }
+}
+
+# Render individual PNG panels
+figure8_panel_a_png <- file.path(results.dir, "revision_figure8_panel_a_circos_all_chr.png")
+figure8_panel_b_png <- file.path(results.dir, "revision_figure8_panel_b_circos_chr1.png")
+
+png(filename = figure8_panel_a_png, width = 2400, height = 1800, res = 300, bg = "white")
+par(mar = c(1.2, 1.2, 1.2, 1.2), xpd = NA)
+plot_circos_all_chromosomes_putative(df.circos.input.putative, df_cytoband_rn7)
+dev.off()
+
+png(filename = figure8_panel_b_png, width = 2400, height = 1800, res = 300, bg = "white")
+par(mar = c(1.2, 1.2, 1.2, 1.2))
+plot_circos_for_chromosome_putative(df.circos.input.putative, df_cytoband_rn7, chr_target = "chr1")
+dev.off()
+
+# Combine panels with annotations and legend into Figure 8
+plot_fig8_a <- ggdraw() +
+  draw_image(figure8_panel_a_png, scale = 1.1) +
+  draw_label("a", x = 0.02, y = 0.88, hjust = 0, vjust = 1, fontface = "bold", size = 16)
+
+plot_fig8_b <- ggdraw() +
+  draw_image(figure8_panel_b_png, scale = 0.9345) +
+  draw_label("b", x = 0.02, y = 0.88, hjust = 0, vjust = 1, fontface = "bold", size = 16)
+
+legend_df_fig8 <- tibble(
+  resolution = factor(names(circos_resolution_colors), levels = names(circos_resolution_colors)),
+  x = 1,
+  y = 1
+)
+
+legend_plot_fig8 <- ggplot(legend_df_fig8, aes(x = x, y = y, fill = resolution)) +
+  geom_point(shape = 22, size = 2.7, stroke = 0.24) +
+  scale_fill_manual(values = circos_resolution_colors) +
+  guides(
+    fill = guide_legend(
+      title = "Resolution",
+      title.position = "top",
+      ncol = 1,
+      byrow = TRUE
+    )
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "vertical",
+    legend.title = element_text(size = 7.2, face = "plain"),
+    legend.text = element_text(size = 6.6),
+    legend.key.height = grid::unit(0.108, "in"),
+    legend.key.width = grid::unit(0.108, "in"),
+    legend.spacing.x = grid::unit(0.048, "in"),
+    legend.spacing.y = grid::unit(0.012, "in"),
+    legend.margin = margin(0, 0, 0, 0),
+    legend.box.margin = margin(0, 0, 0, 0)
+  )
+
+legend_grob_fig8 <- get_legend(legend_plot_fig8)
+
+base_panels_fig8 <- plot_grid(plot_fig8_a, plot_fig8_b, nrow = 1, rel_widths = c(1, 1))
+
+combined_plot_fig8 <- ggdraw() +
+  draw_plot(base_panels_fig8, x = 0, y = 0.12, width = 1, height = 0.88) +
+  draw_grob(legend_grob_fig8, x = 0.468, y = 0.228, width = 0.06, height = 0.132) +
+  draw_label("All chromosomes", x = 0.24, y = 0.25, fontface = "bold", size = 10) +
+  draw_label("Chromosome 1", x = 0.76, y = 0.25, fontface = "bold", size = 10)
+
+figure8.png.path <- file.path(results.dir, "revision_figure8_circos_putative_regulatory_loops.png")
+figure8.pdf.path <- file.path(results.dir, "revision_figure8_circos_putative_regulatory_loops.pdf")
+
+ggsave(
+  filename = figure8.png.path,
+  plot = combined_plot_fig8,
+  width = 8,
+  height = 4.5,
+  dpi = 300
+)
+
+ggsave(
+  filename = figure8.pdf.path,
+  plot = combined_plot_fig8,
+  width = 8,
+  height = 4.5,
+  device = "pdf"
+)
+
+message("Figure 8 Circos plots successfully saved to:")
+message("  - PNG: ", figure8.png.path)
+message("  - PDF: ", figure8.pdf.path)
+
+################################################################################
+# 11. Supplementary
+################################################################################
+# 11-1. Table S1: Number of loops by sample and detection resolution
+
+strain_display_mapping <- c(
+  "BN-Lx" = "BN-Lx/Cub",
+  "BXH6" = "BXH6/Cub",
+  "F344/Stm" = "F344/Stm",
+  "HXB10" = "HXB10/Ipcv",
+  "HXB2" = "HXB2/Ipcv",
+  "HXB23" = "HXB23/Ipcv",
+  "HXB31" = "HXB31/Ipcv",
+  "LE/Stm" = "LE/Stm",
+  "SHR/OlaIpcv" = "SHR/OlaIpcv",
+  "SHR/OlaIpcvxBN/NHsdMcwi" = "SHR/OlaIpcv X BN/NHsdMcwi F1"
+)
+
+df.table.s1.loops.by.sample.resolution <- df.sample.loop.1based %>%
+  mutate(
+    Strain = recode(strain, !!!strain_display_mapping)
+  ) %>%
+  group_by(Strain, resolution) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  pivot_wider(names_from = resolution, values_from = n, values_fill = 0L) %>%
+  relocate(`5K`, `10K`, `25K`, .after = Strain) %>%
+  mutate(Total = `5K` + `10K` + `25K`) %>%
+  arrange(Strain)
+
+# Table S1 with overall total summary row
+df.table.s1.with_total_row <- bind_rows(
+  df.table.s1.loops.by.sample.resolution,
+  tibble(
+    Strain = "Total",
+    `5K` = sum(df.table.s1.loops.by.sample.resolution$`5K`),
+    `10K` = sum(df.table.s1.loops.by.sample.resolution$`10K`),
+    `25K` = sum(df.table.s1.loops.by.sample.resolution$`25K`),
+    Total = sum(df.table.s1.loops.by.sample.resolution$Total)
+  )
+)
+
+print(df.table.s1.with_total_row)
+
+# Save Table S1 to results directory
+table.s1.tsv.path <- file.path(results.dir, "table_s1_number_of_loops_by_sample_and_resolution.tsv")
+table.s1.csv.path <- file.path(results.dir, "table_s1_number_of_loops_by_sample_and_resolution.csv")
+
+write_tsv(df.table.s1.loops.by.sample.resolution, table.s1.tsv.path)
+write_csv(df.table.s1.loops.by.sample.resolution, table.s1.csv.path)
+
+message("Table S1 successfully saved to:")
+message("  - TSV: ", table.s1.tsv.path)
+message("  - CSV: ", table.s1.csv.path)
+
+# ==============================================================================
+# 11-2. Figure S1: Pearson correlation between number of loops and Hi-C QC metrics
+# ==============================================================================
+
+loop_qc_correlation_columns <- c(
+  "Chimeric_Paired",
+  "Chimeric_Ambiguous",
+  "Normal_Paired",
+  "Sequenced_RP",
+  "Alignable_Normal_N_Chimeric",
+  "Inter-chromosomal",
+  "Long_Range_20Kb",
+  "Short_Range_20Kb",
+  "Number_of_Loops",
+  "Below_MAPQ_Threshold",
+  "Intra-chromosomal",
+  "Unique_Reads",
+  "Hi-C_Contacts",
+  "Optical_Duplicates",
+  "Unmapped",
+  "PCR_Duplicates"
+)
+
+strain_to_qc_map <- c(
+  "BN-Lx/Cub" = "BN-Lx",
+  "BXH6/Cub" = "BXH6",
+  "F344/Stm" = "F344/Stm",
+  "HXB10/Ipcv" = "HXB10",
+  "HXB2/Ipcv" = "HXB2",
+  "HXB23/Ipcv" = "HXB23",
+  "HXB31/Ipcv" = "HXB31",
+  "LE/Stm" = "LE/Stm",
+  "SHR/OlaIpcv" = "SHR/OlaIpcv",
+  "SHR/OlaIpcv X BN/NHsdMcwi F1" = "SHR/OlaIpcvxBN/NHsdMcwi",
+  "SHR/OlaIpcv x BN/NHsdMcwi F1" = "SHR/OlaIpcvxBN/NHsdMcwi",
+  "SHR/OlaIpcvxBN/NHsdMcwi" = "SHR/OlaIpcvxBN/NHsdMcwi",
+  "BN-Lx" = "BN-Lx",
+  "BXH6" = "BXH6",
+  "HXB10" = "HXB10",
+  "HXB2" = "HXB2",
+  "HXB23" = "HXB23",
+  "HXB31" = "HXB31"
+)
+
+loop_counts_by_sample_figS1 <- df.sample.loop.1based %>%
+  mutate(Strain_qc = recode(strain, !!!strain_to_qc_map)) %>%
+  count(Strain_qc, name = "Number_of_Loops")
+
+merged_df_figS1 <- loop_counts_by_sample_figS1 %>%
+  inner_join(df.figure1.qc, by = c("Strain_qc" = "Strain"))
+
+loop_qc_correlation_input <- merged_df_figS1 %>%
+  dplyr::select(all_of(loop_qc_correlation_columns)) %>%
+  mutate(across(everything(), as.numeric))
+
+loop_qc_correlation_matrix <- cor(
+  loop_qc_correlation_input,
+  use = "pairwise.complete.obs",
+  method = "pearson"
+)
+
+loop_qc_correlation_long <- as_tibble(loop_qc_correlation_matrix, rownames = "Var1") %>%
+  pivot_longer(cols = -Var1, names_to = "Var2", values_to = "value") %>%
+  mutate(
+    Var1 = factor(Var1, levels = loop_qc_correlation_columns),
+    Var2 = factor(Var2, levels = loop_qc_correlation_columns),
+    label = sub("\\.?0+$", "", sprintf("%.2f", value))
+  )
+
+plot.figureS1.heatmap <- ggplot(loop_qc_correlation_long, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "white", linewidth = 0.15) +
+  geom_text(aes(label = label), size = 2.2, color = "black") +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    limits = c(-1, 1),
+    name = "Pearson\nCorrelation"
+  ) +
+  labs(
+    title = "Correlation between number of loops and Hi-C QC metrics",
+    x = "Var2",
+    y = "Var1"
+  ) +
+  coord_fixed() +
+  theme_minimal(base_size = 9) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 10, face = "plain"),
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 7),
+    axis.text.y = element_text(size = 7),
+    panel.grid = element_blank(),
+    legend.title = element_text(size = 8),
+    legend.text = element_text(size = 7)
+  )
+
+figureS1.png.path <- file.path(results.dir, "revision_figureS1_loop_qc_correlation_heatmap.png")
+figureS1.pdf.path <- file.path(results.dir, "revision_figureS1_loop_qc_correlation_heatmap.pdf")
+
+ggsave(
+  filename = figureS1.png.path,
+  plot = plot.figureS1.heatmap,
+  width = 7.5,
+  height = 7.0,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  filename = figureS1.pdf.path,
+  plot = plot.figureS1.heatmap,
+  width = 7.5,
+  height = 7.0,
+  device = "pdf",
+  bg = "white"
+)
+
+message("Figure S1 correlation heatmap successfully saved to:")
+message("  - PNG: ", figureS1.png.path)
+message("  - PDF: ", figureS1.pdf.path)
+
+# ==============================================================================
+# 11-3. Figure S2: Shared chromatin loops between rat strains (network plot)
+# ==============================================================================
+
+figure_green <- "#00573F"
+figure_orange <- "#FFA300"
+
+# Step 1: Extract loops shared by >= 2 samples across all resolutions
+shared_loops_s2 <- df.sample.loop.1based %>%
+  group_by(resolution, loop_id) %>%
+  summarise(n_samples = n_distinct(sample), .groups = "drop") %>%
+  filter(n_samples > 1L) %>%
+  inner_join(df.sample.loop.1based, by = c("resolution", "loop_id"))
+
+# Step 2: Generate pairwise strain co-occurrence counts (weights)
+strain_pairs_s2 <- shared_loops_s2 %>%
+  dplyr::select(loop_id, strain) %>%
+  distinct() %>%
+  group_by(loop_id) %>%
+  summarise(strains = list(sort(unique(strain))), .groups = "drop") %>%
+  mutate(pairs = map(strains, ~ combn(.x, 2, simplify = FALSE))) %>%
+  dplyr::select(pairs) %>%
+  unnest(pairs) %>%
+  mutate(
+    from = map_chr(pairs, 1),
+    to = map_chr(pairs, 2)
+  ) %>%
+  count(from, to, name = "weight") %>%
+  arrange(from, to)
+
+# Step 3: Build igraph network and render with ggraph
+network_graph_s2 <- graph_from_data_frame(strain_pairs_s2, directed = FALSE)
+
+set.seed(20260501)
+plot.figureS2.network <- ggraph(network_graph_s2, layout = "fr") +
+  geom_edge_link(aes(width = weight), alpha = 0.7, color = figure_green) +
+  geom_node_point(size = 5, color = figure_orange) +
+  geom_node_text(aes(label = name), repel = TRUE, size = 3.6, fontface = "bold") +
+  scale_edge_width(range = c(0.5, 3), name = "weight") +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    legend.title = element_text(size = 9, face = "plain"),
+    legend.text = element_text(size = 8),
+    plot.margin = margin(15, 15, 15, 15)
+  )
+
+figureS2.png.path <- file.path(results.dir, "revision_figureS2_shared_loops_network.png")
+figureS2.pdf.path <- file.path(results.dir, "revision_figureS2_shared_loops_network.pdf")
+
+ggsave(
+  filename = figureS2.png.path,
+  plot = plot.figureS2.network,
+  width = 6.5,
+  height = 6.0,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  filename = figureS2.pdf.path,
+  plot = plot.figureS2.network,
+  width = 6.5,
+  height = 6.0,
+  device = "pdf",
+  bg = "white"
+)
+
+message("Figure S2 network plot successfully saved to:")
+message("  - PNG: ", figureS2.png.path)
+message("  - PDF: ", figureS2.pdf.path)
+
+# ==============================================================================
+# 11-4. Figure S3: Heatmaps of pairwise common loop percentages across resolution
+# ==============================================================================
+
+figureS3.strains.order <- c(
+  "BN-Lx",
+  "BXH6",
+  "F344/Stm",
+  "HXB10",
+  "HXB2",
+  "HXB23",
+  "HXB31",
+  "LE/Stm",
+  "SHR/OlaIpcv",
+  "SHR/OlaIpcvxBN/NHsdMcwi"
+)
+
+figureS3.resolutions <- c("5K", "10K", "25K")
+plots.figureS3 <- list()
+
+for (res in figureS3.resolutions) {
+  df.sample.res <- df.sample.loop.1based %>%
+    filter(resolution == res)
+
+  location_list <- split(
+    df.sample.res$loop_id,
+    factor(df.sample.res$strain, levels = figureS3.strains.order)
+  )
+  n_strains <- length(figureS3.strains.order)
+
+  mat <- matrix(
+    0,
+    nrow = n_strains,
+    ncol = n_strains,
+    dimnames = list(figureS3.strains.order, figureS3.strains.order)
+  )
+
+  for (i in seq_along(figureS3.strains.order)) {
+    s_y <- figureS3.strains.order[i] # Y-axis strain (row)
+    loops_y <- location_list[[s_y]]
+    for (j in seq_along(figureS3.strains.order)) {
+      s_x <- figureS3.strains.order[j] # X-axis strain (col)
+      loops_x <- location_list[[s_x]]
+      common_n <- length(intersect(loops_y, loops_x))
+      # Percentage relative to X-axis strain loop count
+      pct <- if (length(loops_x) > 0) (common_n / length(loops_x)) * 100 else 0
+      mat[i, j] <- pct
+    }
+  }
+
+  df.mat.long <- as_tibble(mat, rownames = "Y_strain") %>%
+    pivot_longer(
+      cols = -Y_strain,
+      names_to = "X_strain",
+      values_to = "value"
+    ) %>%
+    mutate(
+      X_strain = factor(X_strain, levels = figureS3.strains.order),
+      Y_strain = factor(Y_strain, levels = figureS3.strains.order)
+    )
+
+  p <- ggplot(df.mat.long, aes(x = X_strain, y = Y_strain, fill = value)) +
+    geom_tile(color = "grey80", linewidth = 0.2) +
+    geom_text(aes(label = sprintf("%.1f%%", value)), color = "black", size = 2.4) +
+    scale_fill_gradient(
+      low = "white",
+      high = "darkred",
+      name = "Common Loop %\n",
+      limits = c(0, 100)
+    ) +
+    labs(
+      x = "Strain",
+      y = "Strain",
+      title = paste("Heatmap of Common Loops Percentage -", res, "Resolution")
+    ) +
+    theme_minimal(base_size = 9) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 7),
+      axis.text.y = element_text(size = 7),
+      axis.title = element_text(size = 8.5),
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 10),
+      legend.title = element_text(size = 7.5),
+      legend.text = element_text(size = 7),
+      panel.grid = element_blank()
+    )
+
+  plots.figureS3[[res]] <- p
+}
+
+plot.figureS3.combined <- (plots.figureS3[["5K"]] / plots.figureS3[["10K"]] / plots.figureS3[["25K"]])
+
+figureS3.png.path <- file.path(results.dir, "revision_figureS3_pairwise_common_loop_percentage_by_resolution.png")
+figureS3.pdf.path <- file.path(results.dir, "revision_figureS3_pairwise_common_loop_percentage_by_resolution.pdf")
+
+ggsave(
+  filename = figureS3.png.path,
+  plot = plot.figureS3.combined,
+  width = 7.5,
+  height = 13.5,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  filename = figureS3.pdf.path,
+  plot = plot.figureS3.combined,
+  width = 7.5,
+  height = 13.5,
+  device = "pdf",
+  bg = "white"
+)
+
+message("Figure S3 heatmaps successfully saved to:")
+message("  - PNG: ", figureS3.png.path)
+message("  - PDF: ", figureS3.pdf.path)
+
+# ==============================================================================
+# 11-5. Figure S4: Histograms of positional distribution for three genomic components (CTCF, TSS, promoters)
+# ==============================================================================
+
+create.figureS4.histogram <- function(df.relative.position, panel.tag) {
+  ggplot(df.relative.position, aes(x = relative_position)) +
+    geom_histogram(
+      fill = "skyblue",
+      color = "grey70",
+      alpha = 0.7,
+      bins = 200,
+      linewidth = 0.1
+    ) +
+    geom_vline(
+      xintercept = c(0, 1),
+      color = "grey70",
+      linewidth = 0.3
+    ) +
+    coord_cartesian(xlim = c(-1, 2)) +
+    scale_x_continuous(breaks = c(-1, 0, 1, 2)) +
+    labs(
+      tag = panel.tag,
+      x = "Relative Position to Loop",
+      y = "Count"
+    ) +
+    theme_bw(base_size = 9) +
+    theme(
+      plot.tag = element_text(face = "bold"),
+      plot.tag.position = c(0.02, 0.98),
+      axis.title = element_text(size = 8.5),
+      axis.text = element_text(size = 7.5),
+      panel.grid.minor = element_blank()
+    )
+}
+
+plot.figureS4a.ctcf.hist <- create.figureS4.histogram(
+  df.figure5.ctcf.relative.position,
+  panel.tag = "a"
+)
+
+plot.figureS4b.true.tss.hist <- create.figureS4.histogram(
+  df.figure5.true.tss.relative.position,
+  panel.tag = "b"
+)
+
+plot.figureS4c.promoter.hist <- create.figureS4.histogram(
+  df.figure5.promoter.relative.position,
+  panel.tag = "c"
+)
+
+plot.figureS4.combined <- patchwork::wrap_plots(
+  plot.figureS4a.ctcf.hist,
+  plot.figureS4b.true.tss.hist,
+  plot.figureS4c.promoter.hist,
+  nrow = 1
+)
+
+figureS4.png.path <- file.path(results.dir, "revision_figureS4_density_histograms.png")
+figureS4.pdf.path <- file.path(results.dir, "revision_figureS4_density_histograms.pdf")
+
+ggsave(
+  filename = figureS4.png.path,
+  plot = plot.figureS4.combined,
+  width = 9.5,
+  height = 3.5,
+  dpi = 300
+)
+
+ggsave(
+  filename = figureS4.pdf.path,
+  plot = plot.figureS4.combined,
+  width = 9.5,
+  height = 3.5,
+  device = "pdf"
+)
+
+message("Figure S4 density histograms successfully saved to:")
+message("  - PNG: ", figureS4.png.path)
+message("  - PDF: ", figureS4.pdf.path)
+
+# ==============================================================================
+# 11-6. Figure S5: Distribution of CTCF across chromosomes (chromosome-wise histograms)
+# ==============================================================================
+
+figureS5.chr.order <- c(paste0("chr", 1:20), "chrX", "chrY")
+figureS5.chr.titles <- setNames(
+  c(paste0("Chr", 1:20), "ChrX", "ChrY"),
+  figureS5.chr.order
+)
+
+create.figureS5.chr.hist <- function(df.chr.subset, chr.title) {
+  ggplot(df.chr.subset, aes(x = relative_position)) +
+    geom_histogram(
+      fill = "skyblue",
+      color = "grey70",
+      alpha = 0.7,
+      bins = 200,
+      linewidth = 0.1
+    ) +
+    geom_vline(
+      xintercept = c(0, 1),
+      color = "grey70",
+      linewidth = 0.3
+    ) +
+    coord_cartesian(xlim = c(-1, 2)) +
+    scale_x_continuous(breaks = c(-1, 0, 1, 2)) +
+    labs(
+      title = chr.title,
+      x = "Relative Position",
+      y = "Count"
+    ) +
+    theme_bw(base_size = 7.5) +
+    theme(
+      plot.title = element_text(size = 8.5, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 6.5),
+      axis.text = element_text(size = 5.5),
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(3, 4, 3, 4)
+    )
+}
+
+plots.figureS5.chr.list <- map(figureS5.chr.order, function(chr_name) {
+  df.sub <- df.figure5.ctcf.relative.position %>% filter(chr == chr_name)
+  create.figureS5.chr.hist(df.sub, figureS5.chr.titles[[chr_name]])
+})
+
+plot.figureS5.combined <- patchwork::wrap_plots(plots.figureS5.chr.list, ncol = 3) +
+  patchwork::plot_annotation(
+    title = "Histogram of CTCF Found over Loop by Chromosome",
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 11, margin = margin(b = 8))
+    )
+  )
+
+figureS5.png.path <- file.path(results.dir, "revision_figureS5_ctcf_histograms_by_chromosome.png")
+figureS5.pdf.path <- file.path(results.dir, "revision_figureS5_ctcf_histograms_by_chromosome.pdf")
+
+ggsave(
+  filename = figureS5.png.path,
+  plot = plot.figureS5.combined,
+  width = 8.5,
+  height = 11.5,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  filename = figureS5.pdf.path,
+  plot = plot.figureS5.combined,
+  width = 8.5,
+  height = 11.5,
+  device = "pdf",
+  bg = "white"
+)
+
+message("Figure S5 chromosome CTCF histograms successfully saved to:")
+message("  - PNG: ", figureS5.png.path)
+message("  - PDF: ", figureS5.pdf.path)
+
+# ==============================================================================
+# 11-7. Figure S6: Distribution of TSS across chromosomes (chromosome-wise histograms)
+# ==============================================================================
+
+figureS6.chr.order <- c(paste0("chr", 1:20), "chrX", "chrY")
+figureS6.chr.titles <- setNames(
+  c(paste0("Chr", 1:20), "ChrX", "ChrY"),
+  figureS6.chr.order
+)
+
+create.figureS6.chr.hist <- function(df.chr.subset, chr.title) {
+  ggplot(df.chr.subset, aes(x = relative_position)) +
+    geom_histogram(
+      fill = "skyblue",
+      color = "grey70",
+      alpha = 0.7,
+      bins = 200,
+      linewidth = 0.1
+    ) +
+    geom_vline(
+      xintercept = c(0, 1),
+      color = "grey70",
+      linewidth = 0.3
+    ) +
+    coord_cartesian(xlim = c(-1, 2)) +
+    scale_x_continuous(breaks = c(-1, 0, 1, 2)) +
+    labs(
+      title = chr.title,
+      x = "Relative Position",
+      y = "Count"
+    ) +
+    theme_bw(base_size = 7.5) +
+    theme(
+      plot.title = element_text(size = 8.5, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 6.5),
+      axis.text = element_text(size = 5.5),
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(3, 4, 3, 4)
+    )
+}
+
+plots.figureS6.chr.list <- map(figureS6.chr.order, function(chr_name) {
+  df.sub <- df.figure5.true.tss.relative.position %>% filter(chr == chr_name)
+  create.figureS6.chr.hist(df.sub, figureS6.chr.titles[[chr_name]])
+})
+
+plot.figureS6.combined <- patchwork::wrap_plots(plots.figureS6.chr.list, ncol = 3) +
+  patchwork::plot_annotation(
+    title = "Histogram of TSS Found over Loop by Chromosome",
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 11, margin = margin(b = 8))
+    )
+  )
+
+figureS6.png.path <- file.path(results.dir, "revision_figureS6_tss_histograms_by_chromosome.png")
+figureS6.pdf.path <- file.path(results.dir, "revision_figureS6_tss_histograms_by_chromosome.pdf")
+
+ggsave(
+  filename = figureS6.png.path,
+  plot = plot.figureS6.combined,
+  width = 8.5,
+  height = 11.5,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  filename = figureS6.pdf.path,
+  plot = plot.figureS6.combined,
+  width = 8.5,
+  height = 11.5,
+  device = "pdf",
+  bg = "white"
+)
+
+message("Figure S6 chromosome TSS histograms successfully saved to:")
+message("  - PNG: ", figureS6.png.path)
+message("  - PDF: ", figureS6.pdf.path)
+
+# ==============================================================================
+# 11-8. Figure S7: Distribution of promoters across chromosomes (chromosome-wise histograms)
+# ==============================================================================
+
+figureS7.chr.order <- c(paste0("chr", 1:20), "chrX", "chrY")
+figureS7.chr.titles <- setNames(
+  c(paste0("Chr", 1:20), "ChrX", "ChrY"),
+  figureS7.chr.order
+)
+
+create.figureS7.chr.hist <- function(df.chr.subset, chr.title) {
+  ggplot(df.chr.subset, aes(x = relative_position)) +
+    geom_histogram(
+      fill = "skyblue",
+      color = "grey70",
+      alpha = 0.7,
+      bins = 200,
+      linewidth = 0.1
+    ) +
+    geom_vline(
+      xintercept = c(0, 1),
+      color = "grey70",
+      linewidth = 0.3
+    ) +
+    coord_cartesian(xlim = c(-1, 2)) +
+    scale_x_continuous(breaks = c(-1, 0, 1, 2)) +
+    labs(
+      title = chr.title,
+      x = "Relative Position",
+      y = "Count"
+    ) +
+    theme_bw(base_size = 7.5) +
+    theme(
+      plot.title = element_text(size = 8.5, face = "bold", hjust = 0.5),
+      axis.title = element_text(size = 6.5),
+      axis.text = element_text(size = 5.5),
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(3, 4, 3, 4)
+    )
+}
+
+plots.figureS7.chr.list <- map(figureS7.chr.order, function(chr_name) {
+  df.sub <- df.figure5.promoter.relative.position %>% filter(chr == chr_name)
+  create.figureS7.chr.hist(df.sub, figureS7.chr.titles[[chr_name]])
+})
+
+plot.figureS7.combined <- patchwork::wrap_plots(plots.figureS7.chr.list, ncol = 3) +
+  patchwork::plot_annotation(
+    title = "Histogram of PROMOTER Found over Loop by Chromosome",
+    theme = theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 11, margin = margin(b = 8))
+    )
+  )
+
+figureS7.png.path <- file.path(results.dir, "revision_figureS7_promoter_histograms_by_chromosome.png")
+figureS7.pdf.path <- file.path(results.dir, "revision_figureS7_promoter_histograms_by_chromosome.pdf")
+
+ggsave(
+  filename = figureS7.png.path,
+  plot = plot.figureS7.combined,
+  width = 8.5,
+  height = 11.5,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  filename = figureS7.pdf.path,
+  plot = plot.figureS7.combined,
+  width = 8.5,
+  height = 11.5,
+  device = "pdf",
+  bg = "white"
+)
+
+message("Figure S7 chromosome promoter histograms successfully saved to:")
+message("  - PNG: ", figureS7.png.path)
+message("  - PDF: ", figureS7.pdf.path)
+
+# ==============================================================================
+# 11-10. Figure S9: Circos plots for putative regulatory loops across individual chromosomes
+# ==============================================================================
+
+figureS9.chr.order <- c(paste0("chr", 1:20), "chrX", "chrY")
+figureS9.chr.labels <- setNames(
+  c(paste0("Chromosome ", 1:20), "Chromosome X", "Chromosome Y"),
+  figureS9.chr.order
+)
+
+figureS9.temp.dir <- file.path(results.dir, "temp_circos_s9")
+dir.create(figureS9.temp.dir, recursive = TRUE, showWarnings = FALSE)
+
+figureS9.png.paths <- character(length(figureS9.chr.order))
+
+for (idx in seq_along(figureS9.chr.order)) {
+  chr_i <- figureS9.chr.order[idx]
+  df_sub <- subset(df.circos.input.putative, chr1 == chr_i | chr2 == chr_i)
+  png_file <- file.path(figureS9.temp.dir, paste0("circos_", chr_i, ".png"))
+  figureS9.png.paths[idx] <- png_file
+
+  png(png_file, width = 800, height = 800, res = 180, bg = "white")
+  par(mar = c(2.5, 0.5, 0.5, 0.5), xpd = NA)
+  circos.clear()
+  circos.par(
+    gap.degree = 25,
+    canvas.xlim = c(-0.85, 0.85),
+    canvas.ylim = c(-0.85, 0.85),
+    points.overflow.warning = FALSE
+  )
+  circos.initializeWithIdeogram(
+    cytoband = df_cytoband_rn7,
+    chromosome.index = chr_i,
+    plotType = c("ideogram", "labels")
+  )
+  draw_circos_links_putative(df_sub)
+
+  if (chr_i == "chr1") {
+    legend(
+      "bottomright",
+      inset = c(-0.02, 0.15),
+      legend = c("5K", "10K", "25K"),
+      fill = circos_resolution_colors,
+      title = "Resolution",
+      cex = 0.65,
+      bty = "n"
+    )
+  }
+
+  mtext(figureS9.chr.labels[[chr_i]], side = 1, line = 0.5, cex = 1.1, font = 1)
+  circos.clear()
+  dev.off()
+}
+
+# Combine into 5x5 grid using magick
+img_list_s9 <- lapply(figureS9.png.paths, image_read)
+blank_img_s9 <- image_blank(width = 800, height = 800, color = "white")
+all_imgs_s9 <- c(img_list_s9, list(blank_img_s9, blank_img_s9, blank_img_s9))
+
+rows_s9 <- list()
+for (r in 0:4) {
+  row_imgs <- all_imgs_s9[(r * 5 + 1):(r * 5 + 5)]
+  rows_s9[[r + 1]] <- image_append(image_join(row_imgs), stack = FALSE)
+}
+
+final_grid_s9 <- image_append(image_join(rows_s9), stack = TRUE)
+final_grid_s9 <- image_border(final_grid_s9, color = "white", geometry = "40x40")
+
+figureS9.png.path <- file.path(results.dir, "revision_figureS9_circos_by_chromosome.png")
+figureS9.pdf.path <- file.path(results.dir, "revision_figureS9_circos_by_chromosome.pdf")
+
+image_write(final_grid_s9, path = figureS9.png.path, format = "png", quality = 100)
+image_write(final_grid_s9, path = figureS9.pdf.path, format = "pdf")
+
+unlink(figureS9.temp.dir, recursive = TRUE)
+
+message("Figure S9 chromosome Circos plots successfully saved to:")
+message("  - PNG: ", figureS9.png.path)
+message("  - PDF: ", figureS9.pdf.path)
+
+# ==============================================================================
+# 11-11. Table S3: Genes with multiple valid interactions across loop categories
+# ==============================================================================
+
+# Extensible helper function to rank genes by number of valid chromatin loop interactions
+generate_table_s3_gene_interaction_ranking <- function(
+  df.gene.assignment = df.direct.gene.assignment.position.flags,
+  df.loop.subset = df.loop.evidence %>% filter(revised_putative_regulatory_support),
+  threshold_distance = Inf,
+  minimum_interactions = 2L,
+  top_n = NULL,
+  set_label = "Putative Regulatory Loops"
+) {
+  # 1. Join gene assignments with targeted loop subset
+  df.joined <- df.gene.assignment %>%
+    inner_join(
+      df.loop.subset %>% dplyr::select(loop_id, resolution, loop_distance),
+      by = c("loop_id", "resolution")
+    )
+
+  if (is.finite(threshold_distance)) {
+    df.joined <- df.joined %>% filter(loop_distance <= threshold_distance)
+  }
+
+  # 2. Prefer gene_name (gene symbol), fallback to gene_id if missing/empty
+  df.dedup <- df.joined %>%
+    mutate(
+      gene_display = if_else(
+        !is.na(gene_name) & str_trim(gene_name) != "",
+        gene_name,
+        gene_id
+      )
+    ) %>%
+    distinct(gene_display, loop_id, .keep_all = TRUE)
+
+  # 3. Count distinct loop interactions per gene and rank
+  df.gene.counts <- df.dedup %>%
+    count(gene_display, name = "Number of interactions") %>%
+    filter(`Number of interactions` >= minimum_interactions) %>%
+    arrange(desc(`Number of interactions`), gene_display) %>%
+    dplyr::rename(Gene = gene_display) %>%
+    mutate(No. = row_number(), .before = 1)
+
+  if (!is.null(top_n)) {
+    df.gene.counts <- df.gene.counts %>% slice_head(n = top_n)
+  }
+
+  attr(df.gene.counts, "set_label") <- set_label
+  return(df.gene.counts)
+}
+
+# 1. Primary Table S3: Putative regulatory loops (single direct promoter + opposite ATAC >=50bp)
+df.table.s3.putative <- generate_table_s3_gene_interaction_ranking(
+  df.gene.assignment = df.direct.gene.assignment.position.flags,
+  df.loop.subset = df.loop.evidence %>% filter(revised_putative_regulatory_support),
+  minimum_interactions = 2L,
+  set_label = "Putative Regulatory Loops (Single-promoter + Opposite ATAC)"
+)
+
+# 2. Additional: Both-anchor promoter-promoter compatible loops
+df.table.s3.both.promoter <- generate_table_s3_gene_interaction_ranking(
+  df.gene.assignment = df.direct.gene.assignment.position.flags,
+  df.loop.subset = df.loop.evidence %>% filter(revised_promoter_promoter_compatible),
+  minimum_interactions = 2L,
+  set_label = "Promoter-Promoter Compatible Loops (Both Anchors Promoter)"
+)
+
+# 3. Additional: All direct promoter/TSS loops (>=1 promoter anchor)
+df.table.s3.all.direct <- generate_table_s3_gene_interaction_ranking(
+  df.gene.assignment = df.direct.gene.assignment.position.flags,
+  df.loop.subset = df.loop.evidence %>% filter(n_direct_anchor_sides >= 1L),
+  minimum_interactions = 2L,
+  set_label = "All Direct Promoter/TSS Loops"
+)
+
+# Export Primary Table S3
+table.s3.tsv.path <- file.path(results.dir, "table_s3_multiple_interaction_genes_putative_regulatory.tsv")
+table.s3.csv.path <- file.path(results.dir, "table_s3_multiple_interaction_genes_putative_regulatory.csv")
+
+write_tsv(df.table.s3.putative, file = table.s3.tsv.path)
+write_csv(df.table.s3.putative, file = table.s3.csv.path)
+
+# Export additional category tables for full reference
+write_tsv(df.table.s3.both.promoter, file = file.path(results.dir, "table_s3_multiple_interaction_genes_both_promoter.tsv"))
+write_csv(df.table.s3.both.promoter, file = file.path(results.dir, "table_s3_multiple_interaction_genes_both_promoter.csv"))
+write_tsv(df.table.s3.all.direct, file = file.path(results.dir, "table_s3_multiple_interaction_genes_all_direct_promoter.tsv"))
+write_csv(df.table.s3.all.direct, file = file.path(results.dir, "table_s3_multiple_interaction_genes_all_direct_promoter.csv"))
+
+message("Table S3 multiple interaction genes successfully saved to:")
+message("  - TSV: ", table.s3.tsv.path)
+message("  - CSV: ", table.s3.csv.path)
+
+# Print helper: Display genes filtered by minimum interaction count threshold
+print_table_s3_by_min_interactions <- function(df_table, min_interactions = 9L) {
+  df_subset <- df_table %>%
+    filter(`Number of interactions` >= min_interactions) %>%
+    arrange(desc(`Number of interactions`), Gene)
+
+  cat(sprintf(
+    "\n=== %s (Number of interactions >= %d: %d genes) ===\n",
+    if (!is.null(attr(df_table, "set_label"))) attr(df_table, "set_label") else "Table S3",
+    min_interactions,
+    nrow(df_subset)
+  ))
+  print(df_subset, n = Inf)
+  invisible(df_subset)
+}
+
+# Print all genes with Number of interactions >= 9 (ordered descending from 16 to 9)
+print_table_s3_by_min_interactions(df.table.s3.putative, min_interactions = 9L)
+
+
+
+
+
+
+
