@@ -1,2 +1,0 @@
-plink_version	n_libraries	n_complete_variable_snps	n_ld_pruned_snps	minimum_pairwise_ibs_distance	maximum_pairwise_ibs_distance	pruning_parameters	distance_method	pca_method
-PLINK v2.0.0-a.7.3 M1 (8 Aug 2026)	10	22854	1509	0.12061	0.534791	PLINK 2.0 --indep-pairwise 50 5 0.2 --indep-order 1 --bad-ld	PLINK 2.0 --make-king-table cols=fid,id,nsnp,ibs	PLINK 2.0 --pca 5 --bad-freqs

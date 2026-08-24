@@ -1,0 +1,14 @@
+field	value
+input_directory	/Volumes/external_1000GB_all/playground/enhancer/data/228_gvcf
+n_gvcf_specimens	228
+denominator_definition	alternate alleles observed in one representative specimen for each of 94 HRDP strains: 30 classic, 30 HXB/BXH RI, and 34 FXLE/LEXF RI
+study_definition	nine unique inbred backgrounds represented by the ten Hi-C libraries; the SHR x BN F1 was not counted as an additional allele source
+chromosomes	chr1-chr20
+primary_quality_threshold	QUAL >= 30
+sensitivity_quality_threshold	QUAL >= 40
+primary_maf_threshold	MAF > 0.10 across 94 HRDP strains
+sensitivity_maf_threshold	MAF > 0.20 across 94 HRDP strains
+unfiltered_maf_threshold	MAF > 0 retained for comparison
+accepted_filter_values	. or PASS
+primary_measurement	variant sites
+sensitivity_measurement	alternate alleles at multiallelic records
