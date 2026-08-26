@@ -1,0 +1,8 @@
+panel	category	depth	recovered_n	reference_n	recovery_pct	source
+all_10_resolution	5 kb	140M	777	6522	11.91	downsampling_depth_sensitivity_summary.md
+all_10_resolution	10 kb	140M	3867	11977	32.290000000000006	downsampling_depth_sensitivity_summary.md
+all_10_resolution	25 kb	140M	6292	12522	50.25	downsampling_depth_sensitivity_summary.md
+matched_7_depth	Exact calls	140M	7904	27969	28.259859129750797	pooled_exact_recovery.tsv
+matched_7_depth	Exact calls	250M	16576	27969	59.265615502878184	pooled_exact_recovery.tsv
+matched_7_depth	Approximate loci	140M	6826	14138	48.28122789644929	pooled_approximate_locus_recovery.tsv
+matched_7_depth	Approximate loci	250M	10499	14138	74.26085726411091	pooled_approximate_locus_recovery.tsv
