@@ -121,16 +121,16 @@ load_atac <- function(path, label) {
   )
 }
 
-gr.atac <- load_atac(path.narrowpeak.atac, "Duttke2022_snATAC_PFC")
+gr.atac.rn7.1based <- load_atac(path.narrowpeak.atac, "Duttke2022_snATAC_PFC")
 
 cat("ATAC Peak width (bp) distribution:\n")
-summary(width(gr.atac))
+summary(width(gr.atac.rn7.1based))
 
 cat("\n-log10(q-value) distribution:\n")
-summary(gr.atac$neglog10q)
+summary(gr.atac.rn7.1based$neglog10q)
 cat("\nNote: The original narrowPeak file provides -1 as a placeholder for q-values, indicating the authors provided a pre-filtered highly confident peak set.\n")
 
-gr.atac.union <- GenomicRanges::reduce(gr.atac)
+gr.atac.union <- GenomicRanges::reduce(gr.atac.rn7.1based)
 print(str_c("Merged ATAC peaks (union): ", length(gr.atac.union)))
 ```
 

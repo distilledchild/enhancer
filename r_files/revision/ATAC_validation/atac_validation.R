@@ -1146,6 +1146,114 @@ plot.atac.null <- df.atac.matched.null.summary %>%
     legend.position = "bottom"
   )
 
+# Slide-ready summary of the primary matched-anchor null model. This plot uses
+# the analysis results above directly; no values are entered manually.
+plot.atac.matched.null.dumbbell <- df.atac.matched.null.summary %>%
+  filter(
+    null_method == "matched_HiC_anchor",
+    metric == "atac_overlap_ge50"
+  ) %>%
+  mutate(
+    resolution = factor(resolution, levels = c("5K", "10K", "25K", "ALL")),
+    resolution_label = recode(
+      as.character(resolution),
+      `5K` = "5 kb",
+      `10K` = "10 kb",
+      `25K` = "25 kb",
+      ALL = "All"
+    ),
+    resolution_label = factor(
+      resolution_label,
+      levels = c("All", "25 kb", "10 kb", "5 kb")
+    ),
+    observed_pct = 100 * observed_rate,
+    null_pct = 100 * mean_null_rate,
+    null_low_pct = 100 * null_rate_q025,
+    null_high_pct = 100 * null_rate_q975
+  ) %>%
+  ggplot(aes(y = resolution_label)) +
+  geom_segment(
+    aes(x = null_low_pct, xend = null_high_pct, yend = resolution_label),
+    color = "#8A99A6",
+    linewidth = 1.1,
+    lineend = "round"
+  ) +
+  geom_segment(
+    aes(x = null_pct, xend = observed_pct, yend = resolution_label),
+    color = "#D8A62A",
+    linewidth = 1.5,
+    lineend = "round"
+  ) +
+  geom_point(aes(x = null_pct), size = 3.8, color = "#8A99A6") +
+  geom_point(aes(x = observed_pct), size = 4.2, color = "#1C918D") +
+  geom_text(
+    aes(x = null_low_pct - 0.35, label = sprintf("%.1f%%", null_pct)),
+    hjust = 1,
+    color = "#687783",
+    fontface = "bold",
+    size = 3.8
+  ) +
+  geom_text(
+    aes(x = observed_pct + 0.55, label = sprintf("%.1f%%", observed_pct)),
+    hjust = 0,
+    color = "#0B7773",
+    fontface = "bold",
+    size = 3.8
+  ) +
+  annotate(
+    "point",
+    x = 69.5,
+    y = 4.65,
+    color = "#8A99A6",
+    size = 3.2
+  ) +
+  annotate(
+    "text",
+    x = 70,
+    y = 4.65,
+    label = "Matched null",
+    hjust = 0,
+    color = "#8A99A6",
+    fontface = "bold",
+    size = 3.7
+  ) +
+  annotate(
+    "point",
+    x = 77.5,
+    y = 4.65,
+    color = "#1C918D",
+    size = 3.5
+  ) +
+  annotate(
+    "text",
+    x = 78,
+    y = 4.65,
+    label = "Observed",
+    hjust = 0,
+    color = "#1C918D",
+    fontface = "bold",
+    size = 3.7
+  ) +
+  scale_x_continuous(
+    limits = c(68, 93),
+    breaks = c(70, 75, 80, 85, 90),
+    labels = function(x) paste0(x, "%"),
+    expand = expansion(mult = c(0, 0))
+  ) +
+  coord_cartesian(clip = "off") +
+  labs(x = NULL, y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_line(color = "#DFE6EC", linewidth = 0.55),
+    axis.text.x = element_text(color = "#657584", size = 10.5),
+    axis.text.y = element_text(color = "#123E6A", face = "bold", size = 11.5),
+    plot.margin = margin(16, 32, 8, 8),
+    plot.background = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA)
+  )
+
 output.tables <- list(
   revised_atac_threshold_sensitivity_by_resolution =
     df.atac.threshold.sensitivity.by.resolution,
@@ -1192,6 +1300,29 @@ ggsave(
   plot.atac.null,
   width = 8,
   height = 4.2,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  file.path(
+    output.dir,
+    "revised_atac_matched_null_dumbbell_by_resolution.pdf"
+  ),
+  plot.atac.matched.null.dumbbell,
+  width = 6.35,
+  height = 3.05,
+  device = "pdf",
+  bg = "white"
+)
+ggsave(
+  file.path(
+    output.dir,
+    "revised_atac_matched_null_dumbbell_by_resolution.png"
+  ),
+  plot.atac.matched.null.dumbbell,
+  width = 6.35,
+  height = 3.05,
   dpi = 300,
   bg = "white"
 )
