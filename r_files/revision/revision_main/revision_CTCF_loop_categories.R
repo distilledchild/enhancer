@@ -1,22 +1,19 @@
 # lintr: disable
 ################################################################################
-# Resubmission Analysis: CTCF Motif Occupancy and Comparison Across Loop Categories
+# Resubmission Analysis: Predicted CTCF Motifs Across Revised Loop Categories
 #
-# Script Name: revision_CTCF_loop_categories.R
-# Purpose:     Comprehensive quantification and statistical comparison of predicted
-#              CTCF motif counts and anchor occupancy across the 3 newly categorized
-#              chromatin loop classes (and 5 sub-categories) in rat frontal cortex.
-#              (Strictly synchronized with Figure 7 flowchart nomenclature)
+# Purpose: Compare q-value-supported predicted CTCF motif intervals across the
+#          three revised loop categories without using CTCF to select or classify
+#          regulatory loops.
 #
-# Inputs:      Cached coordinate-normalized data from 00_promoter_enhancer_interaction_resubmit_coord_prep.R
-# Outputs:     - Statistical summary tables (TSV)
-#              - High-resolution publication-quality ggplot2 figures (PNG / PDF)
+# Primary unit: Exact-coordinate-distinct predicted motif intervals with FIMO
+#               q-value <= 0.05. All FIMO predictions are retained only as a
+#               sensitivity analysis.
 ################################################################################
 
 if (basename(getwd()) != "enhancer" && dir.exists("enhancer")) {
   setwd("./enhancer")
 }
-getwd()
 
 funcs.file <- "./funcs_enhancer.R"
 source(funcs.file)
@@ -24,366 +21,446 @@ list2env(resolve_enhancer_analysis_paths(funcs.file), envir = environment())
 
 library("tidyverse")
 library("GenomicRanges")
-library("GenomeInfoDb")
 library("cowplot")
 library("scales")
 
-options(tibble.width = Inf, tibble.print_max = Inf, tibble.max_extra_cols = Inf, scipen = 999)
+options(tibble.width = Inf, tibble.print_max = Inf, scipen = 999)
 
-# Results directory
 results.dir <- file.path(analysis.dir, "results")
 dir.create(results.dir, recursive = TRUE, showWarnings = FALSE)
 
 ################################################################################
-# 1. Load Coordinate Cache and Reconstruct Loop Master Table
+# 1. Load the official pooled resource and coordinate-normalized CTCF cache
 ################################################################################
 
-coord.cache.object.names <- coordinate_cache_object_names()
-load_coordinate_cache_objects(cache.dir = coord.cache.dir, object.names = coord.cache.object.names, envir = environment())
+resource.file <- file.path(results.dir, "revised_pooled_loop_annotation_resource.tsv")
+ctcf.cache.file <- file.path(coord.cache.dir, "gr.ctcf.motif.rds")
 
-message("Loaded coordinate-normalized cache objects.")
-
-# Read core annotation pipeline (Lines 1 to 1235 of 01_promoter_enhancer_interaction_resubmit_loop_annotation.R)
-annotation.script.file <- file.path(analysis.dir, "01_promoter_enhancer_interaction_resubmit_loop_annotation.R")
-if (!file.exists(annotation.script.file)) {
-  stop("Cannot locate main annotation script: ", annotation.script.file)
+if (!file.exists(resource.file) || !file.exists(ctcf.cache.file)) {
+  stop("Missing pooled loop resource or CTCF coordinate cache.", call. = FALSE)
 }
-script_lines <- readLines(annotation.script.file)
-eval(parse(text = script_lines[1:1235]))
+
+df.loop.resource <- read_tsv(resource.file, show_col_types = FALSE)
+gr.ctcf.all <- readRDS(ctcf.cache.file)
+
+required.loop.columns <- c(
+  "loop_id", "chr1", "start1", "end1", "chr2", "start2", "end2",
+  "resolution", "direct_anchor_assignment_class",
+  "dual_promoter_directional_category", "revised_putative_regulatory_support",
+  "revised_promoter_promoter_compatible",
+  "revised_single_promoter_without_opposite_atac",
+  "revised_no_direct_promoter_tss",
+  "predicted_ctcf_motif_interval_count_anchor1",
+  "predicted_ctcf_motif_interval_count_anchor2"
+)
+check_required_columns(df.loop.resource, required.loop.columns, "Pooled loop resource")
+
+if (!"best_q_value" %in% names(mcols(gr.ctcf.all))) {
+  stop("The CTCF cache does not retain FIMO q-values.", call. = FALSE)
+}
 
 assert_analysis_condition(
-  condition = exists("df.loop.evidence") && nrow(df.loop.evidence) == 31021L,
-  message = "Failed to assemble df.loop.evidence with 31,021 pooled loops.",
-  success.message = "Verified: Successfully assembled df.loop.evidence with 31,021 distinct loops."
+  nrow(df.loop.resource) == 31021L && !anyDuplicated(df.loop.resource$loop_id),
+  "The pooled resource must contain 31,021 unique exact loop-call records."
 )
 
+# FIMO q-values are monotonic with p-values; the cached representative for each
+# exact interval is the prediction with the smallest p-value.
+gr.ctcf.q05 <- gr.ctcf.all[
+  !is.na(mcols(gr.ctcf.all)$best_q_value) &
+    mcols(gr.ctcf.all)$best_q_value <= 0.05
+]
+
+message("All exact-coordinate-distinct predicted intervals: ", length(gr.ctcf.all))
+message("Primary q <= 0.05 predicted intervals: ", length(gr.ctcf.q05))
+
 ################################################################################
-# 2. Categorize Loops into 3 Major Categories and 5 Sub-Categories (Flowchart Synchronized)
+# 2. Recalculate anchor-level CTCF annotation and revised loop categories
 ################################################################################
 
-df.ctcf.master <- df.loop.evidence %>%
+gr.anchor1 <- GRanges(
+  seqnames = df.loop.resource$chr1,
+  ranges = IRanges(df.loop.resource$start1, df.loop.resource$end1)
+)
+gr.anchor2 <- GRanges(
+  seqnames = df.loop.resource$chr2,
+  ranges = IRanges(df.loop.resource$start2, df.loop.resource$end2)
+)
+
+ctcf.all.anchor1 <- countOverlaps(gr.anchor1, gr.ctcf.all, ignore.strand = TRUE)
+ctcf.all.anchor2 <- countOverlaps(gr.anchor2, gr.ctcf.all, ignore.strand = TRUE)
+
+assert_analysis_condition(
+  identical(
+    as.integer(ctcf.all.anchor1),
+    as.integer(df.loop.resource$predicted_ctcf_motif_interval_count_anchor1)
+  ) && identical(
+    as.integer(ctcf.all.anchor2),
+    as.integer(df.loop.resource$predicted_ctcf_motif_interval_count_anchor2)
+  ),
+  "Recomputed unfiltered CTCF counts do not match the official resource."
+)
+
+df.ctcf.master <- df.loop.resource %>%
   mutate(
-    loop_dist_bp = as.numeric(end2 - start1),
-    loop_dist_kb = loop_dist_bp / 1000,
-    
-    # 5 Sub-categories (❶ ~ ❺) matching Figure 7 Flowchart exactly
-    sub_category = case_when(
-      revised_putative_regulatory_support ~ "❶ Single-promoter\nPutative Regulatory\n(10,469; 33.7%)",
-      revised_single_promoter_without_opposite_atac ~ "❷ Single-promoter w/o\ndistal ATAC support\n(1,826; 5.9%)",
-      revised_promoter_promoter_compatible & dual_promoter_directional_category %in% c(
-        "both_directions_supported_bidirectional_or_ambiguous",
-        "one_direction_stringent_asymmetric_mixed_regulatory_evidence",
-        "one_direction_broader_mixed_promoter_regulatory_evidence"
-      ) ~ "❸ Dual-promoter with\nEnhancer ATAC Support\n(2,907; 9.4%)",
-      revised_promoter_promoter_compatible & dual_promoter_directional_category == "neither_direction_supported_promoter_promoter_or_lower_support" ~ "❹ Pure Promoter–\nPromoter Contacts\n(1,141; 3.7%)",
-      revised_no_direct_promoter_tss ~ "❺ Loops without direct\npromoter/TSS overlap\n(14,678; 47.3%)",
-      TRUE ~ "Other"
+    ctcf_q05_anchor1 = as.integer(countOverlaps(gr.anchor1, gr.ctcf.q05, ignore.strand = TRUE)),
+    ctcf_q05_anchor2 = as.integer(countOverlaps(gr.anchor2, gr.ctcf.q05, ignore.strand = TRUE)),
+    total_ctcf_q05 = ctcf_q05_anchor1 + ctcf_q05_anchor2,
+    both_anchors_ctcf_q05 = ctcf_q05_anchor1 > 0L & ctcf_q05_anchor2 > 0L,
+    total_ctcf_all = ctcf.all.anchor1 + ctcf.all.anchor2,
+    both_anchors_ctcf_all = ctcf.all.anchor1 > 0L & ctcf.all.anchor2 > 0L,
+    sub_category_id = case_when(
+      revised_putative_regulatory_support ~ "single_promoter_distal_atac",
+      revised_single_promoter_without_opposite_atac ~ "single_promoter_no_distal_atac",
+      revised_promoter_promoter_compatible &
+        dual_promoter_directional_category !=
+          "neither_direction_supported_promoter_promoter_or_lower_support" ~
+        "promoter_both_anchors_with_distal_atac",
+      revised_promoter_promoter_compatible ~
+        "promoter_both_anchors_no_directional_distal_atac",
+      revised_no_direct_promoter_tss ~ "no_direct_promoter_tss",
+      TRUE ~ NA_character_
     ),
-    
-    # 3 Major Categories matching Figure 7 Bottom Parallelogram Summary exactly
-    major_category = case_when(
-      sub_category %in% c("❶ Single-promoter\nPutative Regulatory\n(10,469; 33.7%)", "❸ Dual-promoter with\nEnhancer ATAC Support\n(2,907; 9.4%)") ~ 
-        "1. Putative regulatory loops with\ndistal open-chromatin support\n(13,376 loops; 43.1%)",
-      sub_category %in% c("❷ Single-promoter w/o\ndistal ATAC support\n(1,826; 5.9%)", "❹ Pure Promoter–\nPromoter Contacts\n(1,141; 3.7%)") ~ 
-        "2. Promoter-associated loops\nwithout distal ATAC support\n(2,967 loops; 9.6%)",
-      sub_category == "❺ Loops without direct\npromoter/TSS overlap\n(14,678; 47.3%)" ~ 
-        "3. Loops without direct\npromoter/TSS overlap\n(14,678 loops; 47.3%)",
-      TRUE ~ "Other"
-    ),
-    
-    # CTCF Counts & Anchor Flags
-    ctcf_anchor1 = as.integer(predicted_ctcf_motif_interval_count_anchor1),
-    ctcf_anchor2 = as.integer(predicted_ctcf_motif_interval_count_anchor2),
-    total_ctcf = ctcf_anchor1 + ctcf_anchor2,
-    both_anchors_ctcf = predicted_ctcf_motif_intervals_both_anchors,
-    one_or_more_anchor_ctcf = (ctcf_anchor1 > 0L | ctcf_anchor2 > 0L)
+    major_category_id = case_when(
+      sub_category_id %in% c(
+        "single_promoter_distal_atac",
+        "promoter_both_anchors_with_distal_atac"
+      ) ~ "putative_regulatory",
+      sub_category_id %in% c(
+        "single_promoter_no_distal_atac",
+        "promoter_both_anchors_no_directional_distal_atac"
+      ) ~ "promoter_associated_no_distal_atac",
+      sub_category_id == "no_direct_promoter_tss" ~ "no_direct_promoter_tss",
+      TRUE ~ NA_character_
+    )
   )
 
-# Set factor levels for consistent plotting order
-major_cat_levels <- c(
-  "1. Putative regulatory loops with\ndistal open-chromatin support\n(13,376 loops; 43.1%)",
-  "2. Promoter-associated loops\nwithout distal ATAC support\n(2,967 loops; 9.6%)",
-  "3. Loops without direct\npromoter/TSS overlap\n(14,678 loops; 47.3%)"
+assert_analysis_condition(
+  !anyNA(df.ctcf.master$major_category_id) &&
+    sum(df.ctcf.master$major_category_id == "putative_regulatory") == 13376L &&
+    sum(df.ctcf.master$major_category_id == "promoter_associated_no_distal_atac") == 2967L &&
+    sum(df.ctcf.master$major_category_id == "no_direct_promoter_tss") == 14678L,
+  "Revised loop categories are incomplete or do not match the official counts."
 )
-df.ctcf.master$major_category <- factor(df.ctcf.master$major_category, levels = major_cat_levels)
 
-sub_cat_levels <- c(
-  "❶ Single-promoter\nPutative Regulatory\n(10,469; 33.7%)",
-  "❷ Single-promoter w/o\ndistal ATAC support\n(1,826; 5.9%)",
-  "❸ Dual-promoter with\nEnhancer ATAC Support\n(2,907; 9.4%)",
-  "❹ Pure Promoter–\nPromoter Contacts\n(1,141; 3.7%)",
-  "❺ Loops without direct\npromoter/TSS overlap\n(14,678; 47.3%)"
+major.labels <- c(
+  putative_regulatory = "1. Putative regulatory loops\nwith distal non-TSS ATAC support",
+  promoter_associated_no_distal_atac = "2. Promoter-associated loops\nwithout distal ATAC support",
+  no_direct_promoter_tss = "3. Loops without direct\npromoter/TSS overlap"
 )
-df.ctcf.master$sub_category <- factor(df.ctcf.master$sub_category, levels = sub_cat_levels)
+sub.labels <- c(
+  single_promoter_distal_atac = "Single-promoter loops\nwith distal non-TSS ATAC",
+  single_promoter_no_distal_atac = "Single-promoter loops\nwithout distal ATAC",
+  promoter_both_anchors_with_distal_atac = "Promoter/TSS at both anchors\nwith directional distal ATAC",
+  promoter_both_anchors_no_directional_distal_atac = "Promoter/TSS at both anchors\nwithout directional distal ATAC",
+  no_direct_promoter_tss = "No direct promoter/TSS overlap"
+)
+
+df.ctcf.master <- df.ctcf.master %>%
+  mutate(
+    major_category = factor(
+      unname(major.labels[major_category_id]),
+      levels = unname(major.labels)
+    ),
+    sub_category = factor(
+      unname(sub.labels[sub_category_id]),
+      levels = unname(sub.labels)
+    ),
+    resolution = factor(resolution, levels = c("5K", "10K", "25K"))
+  )
 
 ################################################################################
-# 3. Anchor-Level CTCF Dataset Construction (N = 62,042 Anchors)
+# 3. Build a correctly oriented anchor-level table (N = 62,042)
 ################################################################################
 
 df.anchor.level <- bind_rows(
   df.ctcf.master %>%
     transmute(
-      loop_id,
-      resolution,
-      major_category,
-      sub_category,
-      anchor_side = "anchor1",
-      ctcf_count = ctcf_anchor1,
-      has_promoter = has_any_direct_promoter_tss & (n_direct_anchor_sides == 2L | !is.na(direct_anchor_assignment_class)),
-      anchor_role = case_when(
-        str_detect(sub_category, "^❶") ~ "Category 1 Loop:\nPromoter Anchor (❶)",
-        str_detect(sub_category, "^❷") ~ "Category 2 Loop:\nPromoter Anchor (❷)",
-        str_detect(sub_category, "^❸") ~ "Category 1 Loop:\nDual-Promoter Anchor (❸)",
-        str_detect(sub_category, "^❹") ~ "Category 2 Loop:\nDual-Promoter Anchor (❹)",
-        TRUE ~ "Category 3 Loop:\nStructural Anchor (❺)"
-      )
+      loop_id, resolution, major_category, sub_category, sub_category_id,
+      anchor_side = "anchor1", ctcf_count_q05 = ctcf_q05_anchor1,
+      promoter_tss_anchor = direct_anchor_assignment_class %in%
+        c("direct_anchor1_only", "direct_both_anchors")
     ),
   df.ctcf.master %>%
     transmute(
-      loop_id,
-      resolution,
-      major_category,
-      sub_category,
-      anchor_side = "anchor2",
-      ctcf_count = ctcf_anchor2,
-      has_promoter = has_any_direct_promoter_tss & (n_direct_anchor_sides == 2L),
-      anchor_role = case_when(
-        str_detect(sub_category, "^❶") ~ "Category 1 Loop:\nDistal ATAC Anchor (❶)",
-        str_detect(sub_category, "^❷") ~ "Category 2 Loop:\nOpposite Anchor w/o ATAC (❷)",
-        str_detect(sub_category, "^❸") ~ "Category 1 Loop:\nDual-Promoter Anchor (❸)",
-        str_detect(sub_category, "^❹") ~ "Category 2 Loop:\nDual-Promoter Anchor (❹)",
-        TRUE ~ "Category 3 Loop:\nStructural Anchor (❺)"
-      )
+      loop_id, resolution, major_category, sub_category, sub_category_id,
+      anchor_side = "anchor2", ctcf_count_q05 = ctcf_q05_anchor2,
+      promoter_tss_anchor = direct_anchor_assignment_class %in%
+        c("direct_anchor2_only", "direct_both_anchors")
     )
-)
-
-################################################################################
-# 4. Statistical Testing and Summary Tables
-################################################################################
-
-# Major Category Summary Table
-df.summary.major <- df.ctcf.master %>%
-  group_by(major_category) %>%
-  summarise(
-    n_loops = n(),
-    pct_loops = round(100 * n() / nrow(df.ctcf.master), 2),
-    n_both_ctcf = sum(both_anchors_ctcf),
-    pct_both_ctcf = round(100 * mean(both_anchors_ctcf), 2),
-    mean_ctcf = round(mean(total_ctcf), 2),
-    sd_ctcf = round(sd(total_ctcf), 2),
-    median_ctcf = stats::median(total_ctcf),
-    q25_ctcf = quantile(total_ctcf, 0.25),
-    q75_ctcf = quantile(total_ctcf, 0.75),
-    iqr_ctcf = IQR(total_ctcf),
-    mean_anchor1 = round(mean(ctcf_anchor1), 2),
-    mean_anchor2 = round(mean(ctcf_anchor2), 2),
-    mean_dist_kb = round(mean(loop_dist_kb), 1),
-    median_dist_kb = round(stats::median(loop_dist_kb), 1),
-    .groups = "drop"
+) %>%
+  mutate(
+    anchor_role = case_when(
+      sub_category_id == "single_promoter_distal_atac" & promoter_tss_anchor ~
+        "Promoter/TSS anchor\n(putative regulatory)",
+      sub_category_id == "single_promoter_distal_atac" ~
+        "Distal non-TSS ATAC anchor\n(putative regulatory)",
+      sub_category_id == "single_promoter_no_distal_atac" & promoter_tss_anchor ~
+        "Promoter/TSS anchor\n(no distal ATAC)",
+      sub_category_id == "single_promoter_no_distal_atac" ~
+        "Opposite anchor\n(no distal ATAC)",
+      sub_category_id == "promoter_both_anchors_with_distal_atac" ~
+        "Promoter/TSS anchor\n(promoter at both anchors; distal ATAC)",
+      sub_category_id == "promoter_both_anchors_no_directional_distal_atac" ~
+        "Promoter/TSS anchor\n(promoter at both anchors; no directional ATAC)",
+      TRUE ~ "Anchor without direct\npromoter/TSS overlap"
+    )
   )
 
-# Export Summary TSV
-summary_tsv_path <- file.path(results.dir, "revision_ctcf_major_category_summary.tsv")
-write_tsv(df.summary.major, summary_tsv_path)
-message("Saved major category summary TSV to: ", summary_tsv_path)
-
-# Statistical Tests
-kw_test <- kruskal.test(total_ctcf ~ major_category, data = df.ctcf.master)
-chisq_test <- chisq.test(table(df.ctcf.master$major_category, df.ctcf.master$both_anchors_ctcf))
-
-################################################################################
-# 5. Publication-Quality ggplot2 Visualizations (Flowchart Colors & Aesthetics)
-################################################################################
-
-# Color Scheme matching the requested 3-color palette (Standard ggplot2 3-color: Red, Green, Blue)
-cat_colors <- c(
-  "1. Putative regulatory loops with\ndistal open-chromatin support\n(13,376 loops; 43.1%)" = "#F8766D", # Coral Red
-  "2. Promoter-associated loops\nwithout distal ATAC support\n(2,967 loops; 9.6%)"          = "#00BA38", # Green
-  "3. Loops without direct\npromoter/TSS overlap\n(14,678 loops; 47.3%)"                  = "#619CFF"  # Sky Blue
+assert_analysis_condition(
+  nrow(df.anchor.level) == 62042L &&
+    sum(df.anchor.level$promoter_tss_anchor) == 12295L + 2L * 4048L,
+  "Anchor-level reconstruction did not preserve all anchors or promoter sides."
 )
 
-sub_cat_colors <- c(
-  "❶ Single-promoter\nPutative Regulatory\n(10,469; 33.7%)"     = "#16A34A",
-  "❷ Single-promoter w/o\ndistal ATAC support\n(1,826; 5.9%)"   = "#EA580C",
-  "❸ Dual-promoter with\nEnhancer ATAC Support\n(2,907; 9.4%)"  = "#15803D",
-  "❹ Pure Promoter–\nPromoter Contacts\n(1,141; 3.7%)"         = "#C2410C",
-  "❺ Loops without direct\npromoter/TSS overlap\n(14,678; 47.3%)" = "#E11D48"
+################################################################################
+# 4. Summary tables and statistical tests
+################################################################################
+
+summarise_ctcf <- function(data, count.column, both.column) {
+  count.vector <- data[[count.column]]
+  both.vector <- data[[both.column]]
+
+  tibble(
+    n_loops = nrow(data),
+    n_both_anchors = sum(both.vector),
+    pct_both_anchors = 100 * mean(both.vector),
+    mean_intervals_per_loop = mean(count.vector),
+    sd_intervals_per_loop = sd(count.vector),
+    median_intervals_per_loop = median(count.vector),
+    q25_intervals_per_loop = quantile(count.vector, 0.25),
+    q75_intervals_per_loop = quantile(count.vector, 0.75)
+  )
+}
+
+df.summary.major <- df.ctcf.master %>%
+  group_by(major_category_id, major_category) %>%
+  group_modify(~summarise_ctcf(.x, "total_ctcf_q05", "both_anchors_ctcf_q05")) %>%
+  ungroup() %>%
+  mutate(pct_loops = 100 * n_loops / sum(n_loops))
+
+df.summary.by.resolution <- df.ctcf.master %>%
+  group_by(resolution, major_category_id, major_category) %>%
+  group_modify(~summarise_ctcf(.x, "total_ctcf_q05", "both_anchors_ctcf_q05")) %>%
+  ungroup()
+
+df.summary.subcategory <- df.ctcf.master %>%
+  group_by(sub_category_id, sub_category) %>%
+  group_modify(~summarise_ctcf(.x, "total_ctcf_q05", "both_anchors_ctcf_q05")) %>%
+  ungroup() %>%
+  mutate(pct_loops = 100 * n_loops / sum(n_loops))
+
+df.summary.all.predictions <- df.ctcf.master %>%
+  group_by(resolution, major_category_id, major_category) %>%
+  group_modify(~summarise_ctcf(.x, "total_ctcf_all", "both_anchors_ctcf_all")) %>%
+  ungroup()
+
+run_global_tests <- function(data, scope) {
+  kw <- kruskal.test(total_ctcf_q05 ~ major_category_id, data = data)
+  chi <- chisq.test(table(data$major_category_id, data$both_anchors_ctcf_q05))
+
+  tibble(
+    scope = scope,
+    count_test = "Kruskal-Wallis",
+    count_statistic = unname(kw$statistic),
+    count_df = unname(kw$parameter),
+    count_p_value = kw$p.value,
+    both_anchor_test = "Pearson chi-squared",
+    both_anchor_statistic = unname(chi$statistic),
+    both_anchor_df = unname(chi$parameter),
+    both_anchor_p_value = chi$p.value
+  )
+}
+
+run_pairwise_count_tests <- function(data, scope) {
+  pairs <- combn(unique(as.character(data$major_category_id)), 2L, simplify = FALSE)
+
+  map_dfr(pairs, function(pair) {
+    x <- data$total_ctcf_q05[data$major_category_id == pair[1]]
+    y <- data$total_ctcf_q05[data$major_category_id == pair[2]]
+    test <- wilcox.test(x, y, exact = FALSE)
+    u <- as.numeric(test$statistic)
+
+    tibble(
+      scope = scope,
+      category_1 = pair[1], category_2 = pair[2],
+      n_1 = length(x), n_2 = length(y),
+      median_1 = median(x), median_2 = median(y),
+      median_difference = median(x) - median(y),
+      rank_biserial = 2 * u / (length(x) * length(y)) - 1,
+      p_value = test$p.value
+    )
+  }) %>%
+    mutate(p_adjust_bh = p.adjust(p_value, method = "BH"))
+}
+
+run_pairwise_binary_tests <- function(data, scope) {
+  pairs <- combn(unique(as.character(data$major_category_id)), 2L, simplify = FALSE)
+
+  map_dfr(pairs, function(pair) {
+    first <- data$both_anchors_ctcf_q05[data$major_category_id == pair[1]]
+    second <- data$both_anchors_ctcf_q05[data$major_category_id == pair[2]]
+    contingency <- matrix(
+      c(sum(first), sum(!first), sum(second), sum(!second)),
+      nrow = 2L,
+      byrow = TRUE
+    )
+    test <- fisher.test(contingency)
+
+    tibble(
+      scope = scope,
+      category_1 = pair[1], category_2 = pair[2],
+      n_1 = length(first), n_2 = length(second),
+      pct_both_1 = 100 * mean(first), pct_both_2 = 100 * mean(second),
+      percentage_point_difference = 100 * (mean(first) - mean(second)),
+      odds_ratio = unname(test$estimate),
+      odds_ratio_ci_low = test$conf.int[1],
+      odds_ratio_ci_high = test$conf.int[2],
+      p_value = test$p.value
+    )
+  }) %>%
+    mutate(p_adjust_bh = p.adjust(p_value, method = "BH"))
+}
+
+analysis.scopes <- c(list(All = df.ctcf.master), split(df.ctcf.master, df.ctcf.master$resolution))
+df.global.tests <- imap_dfr(analysis.scopes, run_global_tests)
+df.pairwise.count.tests <- imap_dfr(analysis.scopes, run_pairwise_count_tests)
+df.pairwise.binary.tests <- imap_dfr(analysis.scopes, run_pairwise_binary_tests)
+
+output.tables <- list(
+  revision_ctcf_major_category_summary = df.summary.major,
+  revision_ctcf_major_category_summary_by_resolution = df.summary.by.resolution,
+  revision_ctcf_subcategory_summary = df.summary.subcategory,
+  revision_ctcf_all_predictions_sensitivity_by_resolution = df.summary.all.predictions,
+  revision_ctcf_global_tests = df.global.tests,
+  revision_ctcf_pairwise_count_tests = df.pairwise.count.tests,
+  revision_ctcf_pairwise_both_anchor_tests = df.pairwise.binary.tests
 )
 
-# Common Theme
-theme_publication <- function(base_size = 11) {
-  theme_classic(base_size = base_size) +
+# Keep line breaks in plot labels, but flatten them before writing machine-readable TSVs.
+write_analysis_tsv <- function(data, name) {
+  data %>%
+    mutate(
+      across(where(is.factor), as.character),
+      across(where(is.character), ~str_replace_all(.x, "[\\r\\n]+", " "))
+    ) %>%
+    write_tsv(file.path(results.dir, paste0(name, ".tsv")))
+}
+
+iwalk(output.tables, write_analysis_tsv)
+
+################################################################################
+# 5. Publication figures based on q <= 0.05 predicted motif intervals
+################################################################################
+
+cat.colors <- c(
+  "1. Putative regulatory loops\nwith distal non-TSS ATAC support" = "#F8766D",
+  "2. Promoter-associated loops\nwithout distal ATAC support" = "#00BA38",
+  "3. Loops without direct\npromoter/TSS overlap" = "#619CFF"
+)
+
+theme.publication <- function(base.size = 10) {
+  theme_classic(base_size = base.size) +
     theme(
-      plot.title = element_text(face = "bold", size = rel(1.08), hjust = 0, margin = margin(b = 6)),
-      plot.subtitle = element_text(size = rel(0.90), color = "gray25", margin = margin(b = 8)),
-      axis.title = element_text(face = "bold", size = rel(0.95)),
-      axis.text = element_text(size = rel(0.85), color = "black"),
-      axis.text.x = element_text(angle = 0, hjust = 0.5, lineheight = 1.05),
+      plot.title = element_text(face = "bold", hjust = 0.5, margin = margin(b = 6)),
+      plot.subtitle = element_text(color = "gray25", hjust = 0.5, margin = margin(b = 8)),
+      axis.title = element_text(face = "bold"),
+      axis.text = element_text(color = "black"),
       panel.grid.major.y = element_line(color = "gray92", linewidth = 0.4),
       panel.grid.minor = element_blank(),
       legend.position = "none",
-      plot.margin = margin(t = 10, r = 10, b = 10, l = 10)
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold"),
+      plot.margin = margin(10, 10, 10, 10)
     )
 }
 
-# ------------------------------------------------------------------------------
-# Panel A: Total CTCF Motif Count per Loop across 3 Major Categories (Violin + Boxplot)
-# ------------------------------------------------------------------------------
-p_panel_a <- ggplot(df.ctcf.master, aes(x = major_category, y = total_ctcf, fill = major_category, color = major_category)) +
-  geom_violin(alpha = 0.35, width = 0.8, trim = TRUE, scale = "width", linewidth = 0.6) +
-  geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, alpha = 0.92, linewidth = 0.75, color = "black") +
-  stat_summary(fun = mean, geom = "point", shape = 23, size = 3.2, fill = "#DC2626", color = "black") +
-  scale_fill_manual(values = cat_colors) +
-  scale_color_manual(values = cat_colors) +
-  scale_y_continuous(
-    trans = "log1p",
-    breaks = c(0, 10, 25, 50, 100, 200, 400),
-    limits = c(0, 750),
-    expand = expansion(mult = c(0.02, 0.05))
-  ) +
+p.panel.a <- ggplot(df.ctcf.master, aes(major_category, total_ctcf_q05, fill = major_category)) +
+  geom_violin(alpha = 0.30, width = 0.82, trim = TRUE, scale = "width") +
+  geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, linewidth = 0.6) +
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 2.8, fill = "#DC2626") +
+  scale_fill_manual(values = cat.colors) +
+  scale_y_continuous(trans = "log1p", breaks = c(0, 5, 10, 25, 50, 100, 200)) +
   labs(
-    title = "A. Total CTCF Motif Count per Loop Across 3 Major Categories",
-    subtitle = "Kruskal-Wallis p < 2.2e-16 (Red diamond: Mean, Solid line: Median)",
+    title = "A. Predicted CTCF motif intervals per loop",
+    subtitle = "Exact-coordinate-distinct FIMO intervals with q <= 0.05; pooled descriptive comparison",
     x = NULL,
-    y = "Total Predicted CTCF Motifs per Loop (log1p scale)"
+    y = "Intervals per loop (log1p scale)"
   ) +
-  annotate("text", x = 1, y = 540, label = "Mean: 104.7\nMedian: 92", size = 3.6, fontface = "bold", color = "#E05353") +
-  annotate("text", x = 2, y = 540, label = "Mean: 77.1\nMedian: 65", size = 3.6, fontface = "bold", color = "#009E2E") +
-  annotate("text", x = 3, y = 540, label = "Mean: 78.1\nMedian: 69", size = 3.6, fontface = "bold", color = "#3B82F6") +
-  theme_publication()
+  theme.publication() +
+  theme(axis.text.x = element_text(size = 7.5, lineheight = 0.95))
 
-# ------------------------------------------------------------------------------
-# Panel B: Proportion of Loops with Both-Anchor CTCF Support (%)
-# ------------------------------------------------------------------------------
-df_prop_plot <- df.summary.major %>%
-  mutate(
-    pct_label = sprintf("%.1f%%\n(%s / %s)", pct_both_ctcf, scales::comma(n_both_ctcf), scales::comma(n_loops))
-  )
-
-p_panel_b <- ggplot(df_prop_plot, aes(x = major_category, y = pct_both_ctcf, fill = major_category)) +
-  geom_col(width = 0.55, color = "black", linewidth = 0.7, alpha = 0.88) +
-  geom_text(aes(label = pct_label), vjust = -0.3, size = 3.6, fontface = "bold") +
-  scale_fill_manual(values = cat_colors) +
-  scale_y_continuous(
-    limits = c(0, 115),
-    breaks = seq(0, 100, by = 20),
-    labels = paste0(seq(0, 100, by = 20), "%"),
-    expand = c(0, 0)
+p.panel.b <- ggplot(df.ctcf.master, aes(resolution, total_ctcf_q05, fill = major_category)) +
+  geom_boxplot(
+    width = 0.72,
+    position = position_dodge2(width = 0.78, preserve = "single"),
+    outlier.shape = NA,
+    alpha = 0.78,
+    linewidth = 0.45
   ) +
+  scale_fill_manual(values = cat.colors) +
+  scale_y_continuous(trans = "log1p", breaks = c(0, 5, 10, 25, 50, 100, 200)) +
   labs(
-    title = "B. Both-Anchor CTCF Motif Support Rate (%) Across Categories",
-    subtitle = "Chi-squared p < 2.2e-16 (Category 1 vs Cat 2/3: p < 1e-15)",
-    x = NULL,
-    y = "Loops with Predicted CTCF Motifs at Both Anchors (%)"
+    title = "B. Resolution-stratified motif interval counts",
+    subtitle = "Resolution is shown explicitly because anchor width changes overlap opportunity",
+    x = "HiCCUPS resolution",
+    y = "Intervals per loop (log1p scale)"
   ) +
-  theme_publication()
+  theme.publication()
 
-# ------------------------------------------------------------------------------
-# Panel C: Detailed Comparison Across 5 Sub-Categories (❶ ~ ❺)
-# ------------------------------------------------------------------------------
-p_panel_c <- ggplot(df.ctcf.master, aes(x = sub_category, y = total_ctcf, fill = sub_category)) +
-  geom_boxplot(width = 0.55, outlier.alpha = 0.12, outlier.size = 0.5, linewidth = 0.6, color = "black", alpha = 0.85) +
-  stat_summary(fun = mean, geom = "point", shape = 23, size = 3.0, fill = "#DC2626", color = "black") +
-  scale_fill_manual(values = sub_cat_colors) +
-  scale_y_continuous(
-    trans = "log1p",
-    breaks = c(0, 10, 25, 50, 100, 200, 400),
-    limits = c(0, 500),
-    expand = expansion(mult = c(0.02, 0.05))
-  ) +
+df.both.plot <- df.summary.by.resolution %>%
+  mutate(label = sprintf("%.1f%%", pct_both_anchors))
+
+p.panel.c <- ggplot(df.both.plot, aes(resolution, pct_both_anchors, fill = major_category)) +
+  geom_col(position = position_dodge(width = 0.75), width = 0.68, color = "black", linewidth = 0.35) +
+  geom_text(aes(label = label), position = position_dodge(width = 0.75), vjust = -0.35, size = 2.7) +
+  scale_fill_manual(values = cat.colors) +
+  scale_y_continuous(limits = c(0, 100), labels = label_percent(scale = 1), expand = expansion(mult = c(0, 0.08))) +
   labs(
-    title = "C. CTCF Motif Abundance Across 5 Detailed Sub-Categories (❶ ~ ❺)",
-    subtitle = "Sub-category ❸ exhibits the highest CTCF enrichment (Mean: 123.2, Median: 110)",
-    x = NULL,
-    y = "Total Predicted CTCF Motifs per Loop (log1p scale)"
+    title = "C. Motif support at both anchors",
+    subtitle = "At least one q <= 0.05 predicted motif interval at each anchor",
+    x = "HiCCUPS resolution",
+    y = "Loop records with both-anchor support"
   ) +
-  theme_publication() +
-  theme(axis.text.x = element_text(size = rel(0.80), face = "bold"))
+  theme.publication() +
+  theme(legend.position = "bottom", legend.title = element_blank(), legend.text = element_text(size = 7))
 
-# ------------------------------------------------------------------------------
-# Panel D: Anchor-Level CTCF Motif Count by Anchor Functional Role
-# ------------------------------------------------------------------------------
-df.anchor.level.clean <- df.anchor.level %>%
-  filter(!str_detect(anchor_role, "Opposite Anchor")) %>%
-  mutate(
-    anchor_role = factor(
-      anchor_role,
-      levels = c(
-        "Category 1 Loop:\nPromoter Anchor (❶)",
-        "Category 1 Loop:\nDistal ATAC Anchor (❶)",
-        "Category 2 Loop:\nPromoter Anchor (❷)",
-        "Category 1 Loop:\nDual-Promoter Anchor (❸)",
-        "Category 2 Loop:\nDual-Promoter Anchor (❹)",
-        "Category 3 Loop:\nStructural Anchor (❺)"
-      )
-    )
-  )
-
-role_colors <- c(
-  "Category 1 Loop:\nPromoter Anchor (❶)"      = "#16A34A",
-  "Category 1 Loop:\nDistal ATAC Anchor (❶)"  = "#22C55E",
-  "Category 2 Loop:\nPromoter Anchor (❷)"      = "#EA580C",
-  "Category 1 Loop:\nDual-Promoter Anchor (❸)" = "#15803D",
-  "Category 2 Loop:\nDual-Promoter Anchor (❹)" = "#C2410C",
-  "Category 3 Loop:\nStructural Anchor (❺)"    = "#E11D48"
+role.levels <- c(
+  "Promoter/TSS anchor\n(putative regulatory)",
+  "Distal non-TSS ATAC anchor\n(putative regulatory)",
+  "Promoter/TSS anchor\n(no distal ATAC)",
+  "Opposite anchor\n(no distal ATAC)",
+  "Promoter/TSS anchor\n(promoter at both anchors; distal ATAC)",
+  "Promoter/TSS anchor\n(promoter at both anchors; no directional ATAC)",
+  "Anchor without direct\npromoter/TSS overlap"
 )
+df.anchor.level$anchor_role <- factor(df.anchor.level$anchor_role, levels = role.levels)
 
-p_panel_d <- ggplot(df.anchor.level.clean, aes(x = anchor_role, y = ctcf_count, fill = anchor_role)) +
-  geom_boxplot(width = 0.55, outlier.alpha = 0.12, outlier.size = 0.5, linewidth = 0.6, color = "black", alpha = 0.85) +
-  stat_summary(fun = mean, geom = "point", shape = 23, size = 2.8, fill = "#DC2626", color = "black") +
-  scale_fill_manual(values = role_colors) +
-  scale_y_continuous(
-    trans = "log1p",
-    breaks = c(0, 5, 15, 30, 60, 120, 250),
-    limits = c(0, 250),
-    expand = expansion(mult = c(0.02, 0.05))
-  ) +
+p.panel.d <- ggplot(df.anchor.level, aes(anchor_role, ctcf_count_q05, fill = anchor_role)) +
+  geom_boxplot(width = 0.58, outlier.shape = NA, alpha = 0.82, linewidth = 0.45) +
+  scale_fill_manual(values = setNames(hue_pal()(length(role.levels)), role.levels)) +
+  scale_y_continuous(trans = "log1p", breaks = c(0, 2, 5, 10, 25, 50, 100)) +
   labs(
-    title = "D. Individual Anchor-Level CTCF Motif Abundance by Functional Role",
-    subtitle = "Single anchor level (N = 62,042 anchors across 31,021 loops)",
+    title = "D. Anchor-level motif annotation by anchor role",
+    subtitle = "All 62,042 anchors are retained; promoter sides follow the observed anchor assignment",
     x = NULL,
-    y = "Predicted CTCF Motifs per Single Anchor (log1p scale)"
+    y = "Intervals per anchor (log1p scale)"
   ) +
-  theme_publication() +
-  theme(
-    axis.text.x = element_text(angle = 25, hjust = 1, vjust = 1, size = rel(0.72), face = "bold", lineheight = 1.05)
-  )
+  theme.publication() +
+  theme(axis.text.x = element_text(angle = 28, hjust = 1, size = 6.8, lineheight = 0.95))
 
-# ------------------------------------------------------------------------------
-# Assemble Multi-Panel Figure & Save (2x2 Grid)
-# ------------------------------------------------------------------------------
-p_master_ctcf_figure <- plot_grid(
-  p_panel_a, p_panel_b,
-  p_panel_c, p_panel_d,
+p.master <- plot_grid(
+  p.panel.a, p.panel.b,
+  p.panel.c, p.panel.d,
   ncol = 2,
   align = "hv",
   axis = "tblr"
 )
 
-output_png_path <- file.path(results.dir, "revision_figure_ctcf_loop_categories.png")
-output_pdf_path <- file.path(results.dir, "revision_figure_ctcf_loop_categories.pdf")
+output.png <- file.path(results.dir, "revision_figure_ctcf_loop_categories.png")
+output.pdf <- file.path(results.dir, "revision_figure_ctcf_loop_categories.pdf")
 
-ggsave(
-  filename = output_png_path,
-  plot = p_master_ctcf_figure,
-  width = 14.5,
-  height = 11.5,
-  dpi = 300,
-  bg = "white"
-)
+ggsave(output.png, p.master, width = 15, height = 11.5, dpi = 300, bg = "white")
+ggsave(output.pdf, p.master, width = 15, height = 11.5, bg = "white")
 
-ggsave(
-  filename = output_pdf_path,
-  plot = p_master_ctcf_figure,
-  width = 14.5,
-  height = 11.5,
-  bg = "white"
-)
-
-message("Successfully generated and saved CTCF multi-panel figure to:")
-message("  - PNG: ", output_png_path)
-message("  - PDF: ", output_pdf_path)
-
-message("\n================================================================================")
-message("All CTCF Loop Category Analyses Completed Successfully!")
-message("================================================================================")
+message("Saved q <= 0.05 CTCF category analysis and figures to: ", results.dir)

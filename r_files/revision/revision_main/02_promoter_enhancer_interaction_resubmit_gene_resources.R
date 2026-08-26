@@ -25,8 +25,11 @@ df.revised.loop.gene.resource <- df.direct.gene.assignment.position.flags %>%
     df.loop.evidence %>%
       dplyr::select(
         loop_id, resolution, chr1, start1, end1, chr2, start2, end2, loop_distance, n_direct_anchor_sides,
-        revised_putative_regulatory_support, revised_promoter_promoter_compatible, revised_single_promoter_without_opposite_atac,
-        revised_no_direct_promoter_tss, revised_major_category, revised_detailed_category, predicted_ctcf_motif_interval_count_anchor1,
+        revised_putative_regulatory_support, revised_single_promoter_distal_atac_support,
+        revised_dual_promoter_directional_distal_atac_support, revised_promoter_promoter_compatible,
+        revised_single_promoter_without_opposite_atac, revised_dual_promoter_without_directional_distal_atac,
+        revised_promoter_associated_without_distal_atac, revised_no_direct_promoter_tss,
+        supported_regulatory_direction, revised_major_category, revised_detailed_category, predicted_ctcf_motif_interval_count_anchor1,
         predicted_ctcf_motif_interval_count_anchor2, predicted_ctcf_motif_intervals_both_anchors, predicted_ctcf_motif_annotation_class, candidate_anchor_non_tss_atac_ge50
       ),
     by = c("loop_id", "resolution")
@@ -34,14 +37,29 @@ df.revised.loop.gene.resource <- df.direct.gene.assignment.position.flags %>%
   mutate(
     ensembl_gene_id = gene_id,
     gene_symbol = gene_name,
+    is_direction_supported_putative_gene_assignment =
+      revised_putative_regulatory_support &
+      (
+        n_direct_anchor_sides == 1L |
+          supported_regulatory_direction == "both_directions_supported" |
+          (supported_regulatory_direction == "anchor1_promoter_to_anchor2_regulatory" & anchor_side == "anchor1") |
+          (supported_regulatory_direction == "anchor2_promoter_to_anchor1_regulatory" & anchor_side == "anchor2")
+      ),
     revised_gene_assignment_role = case_when(
-      revised_putative_regulatory_support ~ "direct_promoter_TSS_gene_in_putative_regulatory_loop",
+      is_direction_supported_putative_gene_assignment & n_direct_anchor_sides == 1L ~
+        "single_promoter_gene_in_putative_regulatory_loop",
+      is_direction_supported_putative_gene_assignment & n_direct_anchor_sides == 2L ~
+        "direction_supported_promoter_gene_in_both_anchor_promoter_loop",
       revised_promoter_promoter_compatible & anchor_side == "anchor1" ~ "promoter_TSS_gene_at_anchor1_in_promoter_promoter_loop",
       revised_promoter_promoter_compatible & anchor_side == "anchor2" ~ "promoter_TSS_gene_at_anchor2_in_promoter_promoter_loop",
       revised_single_promoter_without_opposite_atac ~ "direct_promoter_TSS_gene_without_opposite_ATAC_support",
       TRUE ~ "direct_promoter_TSS_gene_in_unassigned_loop"
     ),
-    candidate_regulatory_anchor_side = if_else(revised_putative_regulatory_support, opposite_anchor_side, NA_character_)
+    candidate_regulatory_anchor_side = if_else(
+      is_direction_supported_putative_gene_assignment,
+      opposite_anchor_side,
+      NA_character_
+    )
   ) %>%
   arrange(loop_id, anchor_side, ensembl_gene_id)
 
@@ -54,7 +72,9 @@ assert_analysis_condition(
 
 # Require every revised putative-regulatory loop to retain a direct gene.
 assert_analysis_condition(
-  n_distinct(df.revised.loop.gene.resource$loop_id[df.revised.loop.gene.resource$revised_putative_regulatory_support]) == sum(df.loop.evidence$revised_putative_regulatory_support),
+  n_distinct(df.revised.loop.gene.resource$loop_id[
+    df.revised.loop.gene.resource$is_direction_supported_putative_gene_assignment
+  ]) == sum(df.loop.evidence$revised_putative_regulatory_support),
   "Not every revised putative-regulatory loop has a direct gene assignment."
 )
 
@@ -141,9 +161,18 @@ df.revised.gene.loop.membership <- bind_rows(
       gene_symbol
     ),
   df.revised.loop.gene.resource %>%
-    filter(revised_putative_regulatory_support) %>%
+    filter(is_direction_supported_putative_gene_assignment) %>%
     transmute(
       gene_set = "revised_putative_regulatory",
+      loop_id,
+      resolution,
+      ensembl_gene_id,
+      gene_symbol
+    ),
+  df.revised.loop.gene.resource %>%
+    filter(revised_promoter_associated_without_distal_atac) %>%
+    transmute(
+      gene_set = "revised_promoter_associated_without_distal_ATAC_support",
       loop_id,
       resolution,
       ensembl_gene_id,
@@ -232,13 +261,13 @@ df.revised.gene.count.threshold.summary <- df.revised.gene.count.by.set %>%
   ) %>%
   arrange(gene_set)
 
-df.revised.gene.count.threshold.detail <- crossing(
+df.revised.gene.count.threshold.detail <- tidyr::crossing(
   gene_set = sort(unique(df.revised.gene.count.by.set$gene_set)),
   minimum_interactions = c(1L, 5L, 10L, 11L, 12L)
 ) %>%
   left_join(
     df.revised.gene.count.by.set %>%
-      crossing(minimum_interactions = c(1L, 5L, 10L, 11L, 12L)) %>%
+      tidyr::crossing(minimum_interactions = c(1L, 5L, 10L, 11L, 12L)) %>%
       filter(n >= minimum_interactions) %>%
       count(gene_set, minimum_interactions, name = "n_genes"),
     by = c("gene_set", "minimum_interactions")
@@ -254,10 +283,10 @@ revised.go.gene.sets <- list(
   )
 )
 
-assert_analysis_row_count(
-  revised.go.gene.sets$revised_putative_all,
-  6420L,
-  "The primary exact-call GO input no longer contains 6,420 genes."
+assert_analysis_condition(
+  nrow(revised.go.gene.sets$revised_putative_all) > 0L &&
+    !anyDuplicated(revised.go.gene.sets$revised_putative_all$ensembl_gene_id),
+  "The primary exact-call GO input is empty or contains duplicate Ensembl gene IDs."
 )
 
 # The primary GO background contains every Ensembl gene observable by the
@@ -323,6 +352,8 @@ revised.resource.tables <- list(
     tibble()
   },
   revised_putative_regulatory_loops = df.loop.evidence %>% filter(revised_putative_regulatory_support),
+  revised_promoter_associated_without_distal_atac_loops =
+    df.loop.evidence %>% filter(revised_promoter_associated_without_distal_atac),
   revised_promoter_promoter_compatible_loops = df.loop.evidence %>% filter(revised_promoter_promoter_compatible),
   revised_single_promoter_without_opposite_atac_loops = df.loop.evidence %>% filter(revised_single_promoter_without_opposite_atac),
   revised_no_direct_promoter_tss_loops = df.loop.evidence %>% filter(revised_no_direct_promoter_tss)
@@ -395,9 +426,9 @@ df.main.all.annotation.gene.loop.membership <- df.revised.gene.loop.membership %
   dplyr::select(loop_id, resolution, ensembl_gene_id, gene_symbol) %>%
   distinct(loop_id, ensembl_gene_id, .keep_all = TRUE)
 
-df.main.putative.promoter.anchor <- df.atac.unambiguous.orientation %>%
-  filter(loop_id %in% main.putative.loop.ids) %>%
-  transmute(loop_id, anchor_side = promoter_anchor_side)
+df.main.putative.promoter.anchor <- df.revised.loop.gene.resource %>%
+  filter(is_direction_supported_putative_gene_assignment) %>%
+  distinct(loop_id, anchor_side)
 
 df.canonical.tss.main.loop.gene.membership <- df.direct.true.tss.anchor.overlap %>%
   filter(coalesce(is_ensembl_canonical, FALSE)) %>%
@@ -509,308 +540,5 @@ df.gene.rank.sensitivity.correlation <- bind_rows(
   summarise_gene_count_spearman(df.gene.rank.sensitivity.detail, "all_annotation_n_approximate_loop_loci", "canonical_tss_n_approximate_loop_loci", "all_annotation_vs_canonical_TSS_approximate_loci")
 )
 
-################################################################################
-# 12-2. Revised Figure 5a-c positional-density analysis
 #
-# This rebuild follows the original Figure 5 transformation in
-# enhancer_promoter_interaction.R and
-# enhancer_promoter_interaction_for_submission.R: one loop length is added on
-# both sides, and the two anchor midpoints map to relative positions 0 and 1.
-# Panel a reports predicted CTCF motif intervals as structural sequence
-# annotation. Panel b uses strand-aware Ensembl transcript TSS coordinates
-# rather than start-codon intervals. Panel c uses the coordinate-normalized EPD
-# rn7 promoter annotation reconstructed in Step 1. Identical genomic sites are
-# counted once so transcript or annotation duplication does not change density
-# weighting.
-################################################################################
-
-figure5.resolution.colors <- c(
-  "5K" = "#a6cee3",
-  "10K" = "#1f78b4",
-  "25K" = "#1f3a93"
-)
-
-# Define the expanded loop window and retain the unrounded anchor midpoints for
-# an exact relative-position transformation: anchor1 = 0 and anchor2 = 1.
-df.figure5.loop.window <- df.loop.distinct.2mb %>%
-  transmute(
-    loop_id,
-    chr = chr1,
-    resolution = factor(resolution, levels = names(figure5.resolution.colors)),
-    anchor1_midpoint = (start1 + end1) / 2,
-    anchor2_midpoint = (start2 + end2) / 2,
-    anchor_midpoint_distance = anchor2_midpoint - anchor1_midpoint,
-    expanded_start_unclipped = anchor1_midpoint - anchor_midpoint_distance,
-    expanded_end_unclipped = anchor2_midpoint + anchor_midpoint_distance,
-    expanded_start = pmax(1L, as.integer(floor(expanded_start_unclipped))),
-    expanded_end = as.integer(ceiling(expanded_end_unclipped)),
-    same_chromosome = chr1 == chr2
-  )
-
-# Require valid cis-loop windows before calculating positional distributions.
-assert_analysis_condition(
-  all(df.figure5.loop.window$same_chromosome) &&
-    all(df.figure5.loop.window$anchor_midpoint_distance > 0) &&
-    !any(is.na(df.figure5.loop.window$resolution)),
-  "Figure 5 loop windows require ordered cis loops at 5K, 10K, or 25K."
-)
-
-gr.figure5.loop.window <- GRanges(
-  seqnames = df.figure5.loop.window$chr,
-  ranges = IRanges(start = df.figure5.loop.window$expanded_start, end = df.figure5.loop.window$expanded_end)
-)
-
-# Map predicted CTCF motif intervals to expanded loop windows chromosome by
-# chromosome. Relative positions are aggregated into narrow bins for plotting,
-# avoiding materialization of tens of millions of overlap rows in memory.
-figure5.ctcf.chromosomes <- intersect(
-  unique(as.character(seqnames(gr.ctcf.motif))),
-  unique(df.figure5.loop.window$chr)
-)
-figure5.ctcf.chromosome.results <- map(
-  figure5.ctcf.chromosomes,
-  function(chr.i) {
-    motif.index <- which(as.character(seqnames(gr.ctcf.motif)) == chr.i)
-    loop.index <- which(df.figure5.loop.window$chr == chr.i)
-    hit.i <- findOverlaps(
-      gr.ctcf.motif[motif.index],
-      gr.figure5.loop.window[loop.index],
-      type = "any",
-      select = "all"
-    )
-    if (length(hit.i) == 0L) {
-      return(list(density = tibble(), summary = tibble()))
-    }
-
-    motif.index.hit <- motif.index[queryHits(hit.i)]
-    loop.index.hit <- loop.index[subjectHits(hit.i)]
-    relative.position <- (
-      (
-        start(gr.ctcf.motif)[motif.index.hit] +
-          end(gr.ctcf.motif)[motif.index.hit]
-      ) / 2 - df.figure5.loop.window$anchor1_midpoint[loop.index.hit]
-    ) / df.figure5.loop.window$anchor_midpoint_distance[loop.index.hit]
-    keep <- dplyr::between(relative.position, -1, 2)
-
-    density.i <- tibble(
-      resolution = df.figure5.loop.window$resolution[loop.index.hit[keep]],
-      relative_position = relative.position[keep]
-    ) %>%
-      mutate(relative_position = round(relative_position / 0.0025) * 0.0025) %>%
-      count(resolution, relative_position, name = "n_overlap")
-
-    summary.i <- tibble(
-      resolution = df.figure5.loop.window$resolution[loop.index.hit[keep]],
-      feature_index = motif.index.hit[keep],
-      loop_id = df.figure5.loop.window$loop_id[loop.index.hit[keep]]
-    ) %>%
-      group_by(resolution) %>%
-      summarise(
-        feature_type = "predicted_CTCF_motif_interval",
-        n_loop_feature_overlaps = n(),
-        n_unique_features = n_distinct(feature_index),
-        n_unique_loops = n_distinct(loop_id),
-        .groups = "drop"
-      )
-    list(density = density.i, summary = summary.i)
-  }
-)
-df.figure5.ctcf.relative.position <- map_dfr(
-  figure5.ctcf.chromosome.results,
-  "density"
-) %>%
-  group_by(resolution, relative_position) %>%
-  summarise(n_overlap = sum(n_overlap), .groups = "drop")
-df.figure5.ctcf.feature.summary <- map_dfr(
-  figure5.ctcf.chromosome.results,
-  "summary"
-) %>%
-  group_by(feature_type, resolution) %>%
-  summarise(
-    n_loop_feature_overlaps = sum(n_loop_feature_overlaps),
-    n_unique_features = sum(n_unique_features),
-    n_unique_loops = sum(n_unique_loops),
-    .groups = "drop"
-  )
-
-# Collapse transcripts sharing the same strand-aware TSS into one genomic TSS
-# site while preserving transcript and gene multiplicity as descriptive fields.
-df.figure5.true.tss.site <- df.true.tss.transcript %>%
-  group_by(chr, true_tss_start, true_tss_end, strand) %>%
-  summarise(n_transcripts = n_distinct(transcript_id), n_genes = n_distinct(gene_id), .groups = "drop") %>%
-  mutate(feature_id = str_c(chr, true_tss_start, strand, sep = ":"), feature_position = as.numeric(true_tss_start), feature_type = "strand_aware_true_TSS")
-
-gr.figure5.true.tss.site <- GRanges(
-  seqnames = df.figure5.true.tss.site$chr,
-  ranges = IRanges(start = df.figure5.true.tss.site$true_tss_start, end = df.figure5.true.tss.site$true_tss_end)
-)
-
-# Map every unique true-TSS site within the expanded loop windows and calculate
-# its location in the original Figure 5 coordinate frame (-1 to 2).
-figure5.true.tss.hit <- findOverlaps(gr.figure5.true.tss.site, gr.figure5.loop.window, type = "any", select = "all")
-df.figure5.true.tss.relative.position <- tibble(
-  loop_index = subjectHits(figure5.true.tss.hit),
-  feature_index = queryHits(figure5.true.tss.hit)
-) %>%
-  transmute(
-    loop_id = df.figure5.loop.window$loop_id[loop_index],
-    resolution = df.figure5.loop.window$resolution[loop_index],
-    feature_id = df.figure5.true.tss.site$feature_id[feature_index],
-    feature_chr = df.figure5.true.tss.site$chr[feature_index],
-    feature_position = df.figure5.true.tss.site$feature_position[feature_index],
-    feature_strand = df.figure5.true.tss.site$strand[feature_index],
-    anchor1_midpoint = df.figure5.loop.window$anchor1_midpoint[loop_index],
-    anchor2_midpoint = df.figure5.loop.window$anchor2_midpoint[loop_index],
-    anchor_midpoint_distance = df.figure5.loop.window$anchor_midpoint_distance[loop_index],
-    relative_position = (feature_position - anchor1_midpoint) / anchor_midpoint_distance,
-    feature_type = "strand_aware_true_TSS"
-  ) %>%
-  filter(dplyr::between(relative_position, -1, 2))
-
-# Retain each coordinate-normalized EPD interval once and use its interval
-# midpoint, matching the promoter-position definition in the original analysis.
-df.figure5.promoter.site <- df.promoter.epd.rn7.1based %>%
-  distinct(chr, promoter_start, promoter_end, strand, .keep_all = TRUE) %>%
-  transmute(
-    feature_id = promoter_annotation_id, chr, promoter_start, promoter_end, strand, gene_id, gene_name,
-    feature_position = (promoter_start + promoter_end) / 2,
-    feature_type = "coordinate_normalized_EPD_promoter"
-  )
-
-gr.figure5.promoter.site <- GRanges(
-  seqnames = df.figure5.promoter.site$chr,
-  ranges = IRanges(start = df.figure5.promoter.site$promoter_start, end = df.figure5.promoter.site$promoter_end)
-)
-
-# Map every normalized EPD promoter within the same expanded loop windows and
-# apply the identical anchor-centred relative-position transformation.
-figure5.promoter.hit <- findOverlaps(gr.figure5.promoter.site, gr.figure5.loop.window, type = "any", select = "all")
-df.figure5.promoter.relative.position <- tibble(
-  loop_index = subjectHits(figure5.promoter.hit),
-  feature_index = queryHits(figure5.promoter.hit)
-) %>%
-  transmute(
-    loop_id = df.figure5.loop.window$loop_id[loop_index],
-    resolution = df.figure5.loop.window$resolution[loop_index],
-    feature_id = df.figure5.promoter.site$feature_id[feature_index],
-    feature_chr = df.figure5.promoter.site$chr[feature_index],
-    feature_position = df.figure5.promoter.site$feature_position[feature_index],
-    feature_strand = df.figure5.promoter.site$strand[feature_index],
-    anchor1_midpoint = df.figure5.loop.window$anchor1_midpoint[loop_index],
-    anchor2_midpoint = df.figure5.loop.window$anchor2_midpoint[loop_index],
-    anchor_midpoint_distance = df.figure5.loop.window$anchor_midpoint_distance[loop_index],
-    relative_position = (feature_position - anchor1_midpoint) / anchor_midpoint_distance,
-    feature_type = "coordinate_normalized_EPD_promoter"
-  ) %>%
-  filter(dplyr::between(relative_position, -1, 2))
-
-# Summarize the number of unique features and loop-feature overlaps contributing
-# to each resolution-specific density curve.
-df.figure5.revised.feature.summary <- bind_rows(
-  df.figure5.ctcf.feature.summary,
-  bind_rows(df.figure5.true.tss.relative.position, df.figure5.promoter.relative.position) %>%
-    group_by(feature_type, resolution) %>%
-    summarise(
-      n_loop_feature_overlaps = n(),
-      n_unique_features = n_distinct(feature_id),
-      n_unique_loops = n_distinct(loop_id),
-      .groups = "drop"
-    )
-)
-
-# Reuse the original resolution colours and density geometry for both revised
-# panels while showing the two loop anchors explicitly at x = 0 and x = 1.
-create.figure5.revised.density.plot <- function(
-  df.relative.position,
-  panel.tag,
-  panel.title
-) {
-  if (!"n_overlap" %in% colnames(df.relative.position)) {
-    df.relative.position <- df.relative.position %>%
-      mutate(n_overlap = 1)
-  }
-  ggplot(
-    df.relative.position,
-    aes(
-      x = relative_position,
-      weight = n_overlap,
-      color = resolution,
-      fill = resolution
-    )
-  ) +
-    geom_density(alpha = 0.3, linewidth = 0.55) +
-    geom_vline(
-      xintercept = c(0, 1),
-      color = "grey70",
-      linewidth = 0.3
-    ) +
-    scale_color_manual(
-      values = figure5.resolution.colors,
-      drop = FALSE
-    ) +
-    scale_fill_manual(
-      values = figure5.resolution.colors,
-      drop = FALSE
-    ) +
-    coord_cartesian(xlim = c(-1, 2), ylim = c(0, 0.8)) +
-    scale_x_continuous(breaks = c(-1, 0, 1, 2)) +
-    labs(
-      tag = panel.tag,
-      title = panel.title,
-      x = "Relative Position to Loop",
-      y = "Density",
-      color = "Resolution",
-      fill = "Resolution"
-    ) +
-    theme_bw(base_size = 9) +
-    theme(
-      plot.tag = element_text(face = "bold"),
-      plot.tag.position = c(0.02, 0.98),
-      plot.title = element_text(size = 9, face = "bold", hjust = 0.5),
-      legend.position = "bottom",
-      legend.title = element_text(size = 8),
-      legend.text = element_text(size = 8),
-      panel.grid.minor = element_blank()
-    )
-}
-
-plot.figure5a.ctcf.density <- create.figure5.revised.density.plot(
-  df.figure5.ctcf.relative.position,
-  panel.tag = "a",
-  panel.title = "Predicted CTCF motif intervals"
-)
-plot.figure5b.true.tss.density <- create.figure5.revised.density.plot(
-  df.figure5.true.tss.relative.position,
-  panel.tag = "b",
-  panel.title = "Strand-aware Ensembl TSSs"
-)
-plot.figure5c.promoter.density <- create.figure5.revised.density.plot(
-  df.figure5.promoter.relative.position,
-  panel.tag = "c",
-  panel.title = "EPD promoters"
-)
-plot.figure5abc.revised.density <- patchwork::wrap_plots(
-  plot.figure5a.ctcf.density,
-  plot.figure5b.true.tss.density,
-  plot.figure5c.promoter.density,
-  nrow = 1,
-  guides = "collect"
-) &
-  theme(legend.position = "bottom")
-
-# Save the final a-c panel in vector PDF and 300-dpi PNG formats.
-figure5.output.files <- basename(saving_plot_dual(
-  plot.figure5abc.revised.density,
-  filename_base = "figure5abc_revised_density_by_resolution",
-  output_dir = output.dir,
-  width_in = 10.5,
-  height_in = 3.3
-))
-
-################################################################################
-# 12-3. Legacy comparison is intentionally excluded from production
-#
-# Historical old-vs-new analyses remain in the separate comparison script and
-# are not sourced by this production workflow.
-################################################################################
-
+# End of 02_promoter_enhancer_interaction_resubmit_gene_resources.R

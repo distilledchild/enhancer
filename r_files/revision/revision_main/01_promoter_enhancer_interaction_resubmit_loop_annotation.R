@@ -1202,21 +1202,35 @@ df.loop.evidence <- df.loop.distinct.2mb %>%
     n_direct_anchor_sides = coalesce(n_direct_anchor_sides, 0L),
     dual_promoter_directional_category = replace_na(dual_promoter_directional_category, "not_dual_promoter_loop"),
     supported_regulatory_direction = replace_na(supported_regulatory_direction, "not_dual_promoter_loop"),
-    revised_putative_regulatory_support = (n_direct_anchor_sides == 1L & coalesce(candidate_anchor_non_tss_atac_ge50, FALSE)),
+    revised_single_promoter_distal_atac_support =
+      n_direct_anchor_sides == 1L & coalesce(candidate_anchor_non_tss_atac_ge50, FALSE),
     revised_promoter_promoter_compatible = n_direct_anchor_sides == 2L,
-    revised_single_promoter_without_opposite_atac = (n_direct_anchor_sides == 1L & !coalesce(candidate_anchor_non_tss_atac_ge50, FALSE)),
+    revised_dual_promoter_directional_distal_atac_support =
+      n_direct_anchor_sides == 2L & coalesce(n_supported_regulatory_directions, 0L) >= 1L,
+    revised_putative_regulatory_support =
+      revised_single_promoter_distal_atac_support |
+      revised_dual_promoter_directional_distal_atac_support,
+    revised_single_promoter_without_opposite_atac =
+      n_direct_anchor_sides == 1L & !coalesce(candidate_anchor_non_tss_atac_ge50, FALSE),
+    revised_dual_promoter_without_directional_distal_atac =
+      n_direct_anchor_sides == 2L & coalesce(n_supported_regulatory_directions, 0L) == 0L,
+    revised_promoter_associated_without_distal_atac =
+      revised_single_promoter_without_opposite_atac |
+      revised_dual_promoter_without_directional_distal_atac,
     revised_no_direct_promoter_tss = n_direct_anchor_sides == 0L,
     revised_major_category = case_when(
-      revised_putative_regulatory_support ~ "putative_regulatory_direct_promoter_TSS_opposite_nonTSS_ATAC",
-      revised_promoter_promoter_compatible ~ "promoter_promoter_compatible_both_direct_anchors",
-      revised_single_promoter_without_opposite_atac ~ "single_direct_promoter_TSS_without_opposite_nonTSS_ATAC",
-      TRUE ~ "no_direct_promoter_TSS"
+      revised_putative_regulatory_support ~ "putative_regulatory",
+      revised_promoter_associated_without_distal_atac ~ "promoter_associated_without_distal_ATAC_support",
+      revised_no_direct_promoter_tss ~ "no_direct_promoter_TSS",
+      TRUE ~ NA_character_
     ),
     revised_detailed_category = case_when(
-      revised_putative_regulatory_support ~ "single_direct_promoter_TSS_with_opposite_nonTSS_ATAC",
-      revised_promoter_promoter_compatible ~ str_c("promoter_promoter_compatible__", dual_promoter_directional_category),
-      revised_single_promoter_without_opposite_atac ~ "single_direct_promoter_TSS_without_opposite_nonTSS_ATAC",
-      TRUE ~ "no_direct_promoter_TSS"
+      revised_single_promoter_distal_atac_support ~ "single_promoter_distal_ATAC",
+      revised_single_promoter_without_opposite_atac ~ "single_promoter_no_distal_ATAC",
+      revised_dual_promoter_directional_distal_atac_support ~ "promoter_at_both_anchors_with_directional_distal_ATAC",
+      revised_dual_promoter_without_directional_distal_atac ~ "promoter_at_both_anchors_without_directional_distal_ATAC",
+      revised_no_direct_promoter_tss ~ "no_direct_promoter_TSS",
+      TRUE ~ NA_character_
     )
   ) %>%
   arrange(chr1, start1, end1, chr2, start2, end2)
@@ -1235,15 +1249,12 @@ assert_analysis_condition(
 # 8-2. Document operational definitions of major loop categories
 df.loop.category.definition <- tribble(
   ~revised_major_category, ~required_evidence, ~interpretation,
-  "putative_regulatory_direct_promoter_TSS_opposite_nonTSS_ATAC",
-  "Exactly one anchor directly overlaps a promoter/TSS +/-1-kb window; the opposite anchor has >=50 bp true-TSS-excluded ATAC overlap.",
-  "Open-chromatin-supported putative promoter-to-distal-element contact; not a validated enhancer or functional P-E interaction.",
-  "promoter_promoter_compatible_both_direct_anchors",
-  "Both anchors directly overlap promoter/TSS +/-1-kb windows.",
-  "Promoter-promoter-compatible contact retained without forcing either anchor to be an enhancer.",
-  "single_direct_promoter_TSS_without_opposite_nonTSS_ATAC",
-  "Exactly one anchor directly overlaps a promoter/TSS +/-1-kb window; the opposite anchor lacks >=50 bp true-TSS-excluded ATAC overlap.",
-  "Directionally assignable promoter contact without distal open-chromatin support.",
+  "putative_regulatory",
+  "A promoter/TSS-overlapping anchor has a supported direction to >=50 bp of TSS-excluded ATAC at the opposite anchor; this includes single-promoter loops and directionally supported loops with promoter/TSS annotations at both anchors.",
+  "Open-chromatin-supported putative promoter-to-distal-element contact; not a validated enhancer or functional promoter-enhancer interaction.",
+  "promoter_associated_without_distal_ATAC_support",
+  "At least one anchor directly overlaps a promoter/TSS +/-1-kb window, but no supported promoter-to-opposite-residual-ATAC direction is completed.",
+  "Promoter-associated contact retained without distal open-chromatin support.",
   "no_direct_promoter_TSS",
   "Neither anchor directly overlaps a promoter/TSS +/-1-kb window.",
   "Pooled HiCCUPS call retained without direct promoter/TSS assignment."
@@ -1262,7 +1273,78 @@ df.loop.category.by.resolution <- df.loop.evidence %>%
   ungroup() %>%
   arrange(resolution, desc(n_loops), revised_major_category)
 
+df.loop.detailed.category.summary <- df.loop.evidence %>%
+  count(revised_detailed_category, name = "n_loops") %>%
+  mutate(pct_pooled_loops = round(100 * n_loops / sum(n_loops), 1)) %>%
+  arrange(desc(n_loops), revised_detailed_category)
+
 message("Loop categories cover all ", nrow(df.loop.distinct.2mb), " calls.")
+
+# Verify the three official categories and five detailed workflow branches.
+assert_analysis_condition(
+  identical(
+    df.loop.category.summary %>%
+      dplyr::select(revised_major_category, n_loops) %>%
+      arrange(revised_major_category),
+    tibble(
+      revised_major_category = c(
+        "no_direct_promoter_TSS",
+        "promoter_associated_without_distal_ATAC_support",
+        "putative_regulatory"
+      ),
+      n_loops = c(14678L, 2967L, 13376L)
+    )
+  ),
+  "The official three-category loop counts do not match the approved workflow."
+)
+
+assert_analysis_condition(
+  identical(
+    df.loop.detailed.category.summary %>%
+      dplyr::select(revised_detailed_category, n_loops) %>%
+      arrange(revised_detailed_category),
+    tibble(
+      revised_detailed_category = c(
+        "no_direct_promoter_TSS",
+        "promoter_at_both_anchors_with_directional_distal_ATAC",
+        "promoter_at_both_anchors_without_directional_distal_ATAC",
+        "single_promoter_distal_ATAC",
+        "single_promoter_no_distal_ATAC"
+      ),
+      n_loops = c(14678L, 2907L, 1141L, 10469L, 1826L)
+    )
+  ),
+  "The five detailed workflow branches do not match the approved workflow."
+)
+
+# Retain only promoter genes on directions supported by distal non-TSS ATAC.
+df.putative.regulatory.gene.assignment <- df.direct.gene.assignment.position.flags %>%
+  inner_join(
+    df.loop.evidence %>%
+      dplyr::select(
+        loop_id,
+        resolution,
+        n_direct_anchor_sides,
+        revised_putative_regulatory_support,
+        supported_regulatory_direction
+      ),
+    by = c("loop_id", "resolution")
+  ) %>%
+  filter(
+    revised_putative_regulatory_support,
+    n_direct_anchor_sides == 1L |
+      supported_regulatory_direction == "both_directions_supported" |
+      (supported_regulatory_direction == "anchor1_promoter_to_anchor2_regulatory" & anchor_side == "anchor1") |
+      (supported_regulatory_direction == "anchor2_promoter_to_anchor1_regulatory" & anchor_side == "anchor2")
+  ) %>%
+  distinct(loop_id, resolution, gene_id, .keep_all = TRUE) %>%
+  arrange(loop_id, anchor_side, gene_id)
+
+assert_analysis_condition(
+  n_distinct(df.putative.regulatory.gene.assignment$loop_id) ==
+    sum(df.loop.evidence$revised_putative_regulatory_support),
+  "Direction-aware gene assignment does not cover all putative-regulatory loops."
+)
 
 ################################################################################
 # 9. final loop categories
@@ -1650,6 +1732,39 @@ df.sample.2mb.figure3 <- df.sample.loop.1based %>%
   filter(passes_lt2mb) %>%
   mutate(strain_label = recode(strain, !!!strain_clean_map))
 
+# Full-depth exact loop-call records used in the sequencing-depth design table.
+# Calls are counted separately at 5, 10, and 25 kb after the <2 Mb filter.
+slide_library_order <- c(
+  "607", "DA21A", "DBA9A", "DA68A", "DE8BA",
+  "D765A", "592BB", "DA08A", "A2DB", "74AA"
+)
+
+df.full.depth.loop.calls.lt2mb.by.library <- df.sample.2mb.figure3 %>%
+  distinct(sample, strain, resolution, loop_id) %>%
+  count(sample, strain, name = "full_depth_loop_calls_lt2mb") %>%
+  mutate(sample = factor(sample, levels = slide_library_order)) %>%
+  arrange(sample) %>%
+  transmute(
+    Library = as.character(sample),
+    Strain = strain,
+    `Full-depth loop calls (<2 Mb)` = full_depth_loop_calls_lt2mb
+  )
+
+print(df.full.depth.loop.calls.lt2mb.by.library, n = Inf)
+
+full.depth.loop.count.path <- file.path(
+  results.dir,
+  "full_depth_loop_calls_lt2mb_by_library.tsv"
+)
+write_tsv(
+  df.full.depth.loop.calls.lt2mb.by.library,
+  full.depth.loop.count.path
+)
+message(
+  "Full-depth <2 Mb loop counts by library saved to: ",
+  full.depth.loop.count.path
+)
+
 # --- Panel 3a: Shared Loops by Resolution (Mean & SD per resolution) ---
 shared_loops_per_res <- df.sample.2mb.figure3 %>%
   group_by(resolution, loop_id) %>%
@@ -1687,13 +1802,13 @@ plot.figure3a.shared.resolution <- ggplot(
   ) +
   coord_cartesian(ylim = c(0, 2100)) +
   labs(
-    title = "a. Shared Loop by Resolution",
+    title = "a. Multi-library-supported Calls\n   by Resolution",
     x = "Resolution",
-    y = "Shared Loop"
+    y = "Number of Exact Calls"
   ) +
   theme_minimal(base_size = 11) +
   theme(
-    plot.title = element_text(face = "plain", hjust = 0, size = 12),
+    plot.title = element_text(face = "bold", hjust = 0, size = 11.5, lineheight = 1.1),
     legend.position = "none",
     panel.grid.minor = element_blank(),
     axis.title.x = element_text(margin = margin(t = 8)),
@@ -1705,8 +1820,8 @@ loop.sharing.overall <- df.sample.2mb.figure3 %>%
   group_by(loop_id) %>%
   summarise(n_samples = n_distinct(sample), .groups = "drop") %>%
   mutate(loop_type = factor(
-    ifelse(n_samples > 1, "Shared Loops", "Unique Loops"),
-    levels = c("Unique Loops", "Shared Loops")
+    ifelse(n_samples > 1, "Multi-library-supported", "Single-library-supported"),
+    levels = c("Single-library-supported", "Multi-library-supported")
   ))
 
 df.fig3b.data <- df.sample.2mb.figure3 %>%
@@ -1737,35 +1852,37 @@ plot.figure3b.shared.sample <- ggplot(
 ) +
   geom_bar(stat = "identity", position = "stack", width = 0.85) +
   scale_fill_manual(
-    values = c("Unique Loops" = "#FFA300", "Shared Loops" = "#00573F"),
-    breaks = c("Unique Loops", "Shared Loops")
+    values = c("Single-library-supported" = "#FFA300", "Multi-library-supported" = "#00573F"),
+    breaks = c("Single-library-supported", "Multi-library-supported")
   ) +
   scale_x_discrete(labels = strain_depth_labels) +
   scale_y_continuous(breaks = seq(0, 10000, 2500), limits = c(0, 9500)) +
   labs(
-    title = "b. Shared Loops by Sample",
-    x = "Strain",
-    y = "Number of Loops",
+    title = "\nb. Library Support Composition",
+    x = "Hi-C Library",
+    y = "Number of Exact Calls",
     fill = "Loop Type"
   ) +
   theme_minimal(base_size = 11) +
   theme(
-    plot.title = element_text(face = "plain", hjust = 0, size = 12),
+    plot.title = element_text(face = "bold", hjust = 0, size = 11, lineheight = 1.15),
     axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
     legend.position = "right",
     legend.title = element_text(size = 10, face = "plain"),
     legend.text = element_text(size = 9),
     panel.grid.minor = element_blank(),
     axis.title.x = element_text(margin = margin(t = 8)),
-    axis.title.y = element_text(margin = margin(r = 8))
+    axis.title.y = element_text(margin = margin(r = 8)),
+    plot.margin = margin(t = 10, r = 10, b = 10, l = 10)
   )
 
 # Combine Figure 3 panels
-plot.figure3.revised <- patchwork::wrap_plots(
+plot.figure3.revised <- cowplot::plot_grid(
   plot.figure3a.shared.resolution,
   plot.figure3b.shared.sample,
-  widths = c(1, 2.2),
-  nrow = 1
+  rel_widths = c(1, 2.2),
+  align = "h",
+  axis = "tb"
 )
 
 # Save Figure 3 to results directory
@@ -1780,16 +1897,16 @@ figure3.pdf.path <- file.path(results.dir, "revision_figure3_shared_loops.pdf")
 ggsave(
   filename = figure3.png.path,
   plot = plot.figure3.revised,
-  width = 9.5,
-  height = 4.2,
+  width = 10.2,
+  height = 4.6,
   dpi = 300
 )
 
 ggsave(
   filename = figure3.pdf.path,
   plot = plot.figure3.revised,
-  width = 9.5,
-  height = 4.2,
+  width = 10.2,
+  height = 4.6,
   device = "pdf"
 )
 
@@ -1798,17 +1915,8 @@ message("  - PNG: ", figure3.png.path)
 message("  - PDF: ", figure3.pdf.path)
 
 # ==============================================================================
-# 10-4. Figure 4: Chromosomal distribution of CTCF binding site density and gene density correlation
+# 10-4. Figure 4: Chromosomal distribution of predicted CTCF motif interval density and gene density
 # ==============================================================================
-
-ncbi_gff_file <- file.path(
-  data.dir,
-  "GCF_015227675.2_mRatBN7.2_genomic.gff"
-)
-if (!file.exists(ncbi_gff_file)) {
-  # Fallback to local dropbox directory
-  ncbi_gff_file <- "/Users/pete/Library/CloudStorage/Dropbox/Gateway_to_Hao/enhancer/data/GCF_015227675.2_mRatBN7.2_genomic.gff"
-}
 
 chr_len_file <- file.path(
   enhancer.project.dir,
@@ -1818,17 +1926,6 @@ chr_len_file <- file.path(
 
 chromosome_levels_fig4 <- as.character(c(1:20, "X", "Y"))
 valid_chromosomes_fig4 <- c(paste0("chr", 1:20), "chrX", "chrY")
-
-ncbi_accession_to_chr <- c(
-  "NC_051336.1" = "chr1",  "NC_051337.1" = "chr2",  "NC_051338.1" = "chr3",
-  "NC_051339.1" = "chr4",  "NC_051340.1" = "chr5",  "NC_051341.1" = "chr6",
-  "NC_051342.1" = "chr7",  "NC_051343.1" = "chr8",  "NC_051344.1" = "chr9",
-  "NC_051345.1" = "chr10", "NC_051346.1" = "chr11", "NC_051347.1" = "chr12",
-  "NC_051348.1" = "chr13", "NC_051349.1" = "chr14", "NC_051350.1" = "chr15",
-  "NC_051351.1" = "chr16", "NC_051352.1" = "chr17", "NC_051353.1" = "chr18",
-  "NC_051354.1" = "chr19", "NC_051355.1" = "chr20",
-  "NC_051356.1" = "chrX",  "NC_051357.1" = "chrY",  "NC_001665.2" = "chrM"
-)
 
 # Chromosome length data
 df_chrom_fig4 <- read.table(chr_len_file, sep = "\t", col.names = c("chr", "end")) %>%
@@ -1840,47 +1937,19 @@ df_chrom_fig4 <- read.table(chr_len_file, sep = "\t", col.names = c("chr", "end"
   filter(Chr %in% chromosome_levels_fig4) %>%
   arrange(factor(Chr, levels = chromosome_levels_fig4))
 
-# Read NCBI RefSeq genes if available
-if (file.exists(ncbi_gff_file)) {
-  message("Reading NCBI RefSeq gene catalog for Figure 4...")
-  gff_raw_fig4 <- read_tsv(
-    ncbi_gff_file,
-    comment = "#",
-    col_names = c("chr", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"),
-    col_types = cols(.default = "c")
+# Ensembl Release 113 gene catalog (unified with primary annotation)
+df_ensembl_genes <- df.true.tss.transcript %>%
+  distinct(gene_id, .keep_all = TRUE) %>%
+  transmute(
+    chr,
+    start = transcript_start,
+    end = transcript_end,
+    strand,
+    gene_id,
+    gene_name,
+    gene_biotype
   ) %>%
-    filter(feature == "gene") %>%
-    filter(chr %in% names(ncbi_accession_to_chr)) %>%
-    mutate(
-      chr = ncbi_accession_to_chr[chr],
-      start = as.numeric(start),
-      end = as.numeric(end)
-    ) %>%
-    filter(chr %in% valid_chromosomes_fig4)
-
-  df_ncbi_genes <- gff_raw_fig4 %>%
-    mutate(
-      gene_id = str_match(attribute, "ID=gene-([^;]+)")[, 2],
-      gene_name = str_match(attribute, "gene=([^;]+)")[, 2],
-      gene_biotype = str_match(attribute, "gene_biotype=([^;]+)")[, 2]
-    ) %>%
-    distinct(gene_id, .keep_all = TRUE) %>%
-    dplyr::select(chr, start, end, strand, gene_id, gene_name, gene_biotype)
-} else {
-  # Fallback to Ensembl transcripts
-  message("NCBI RefSeq GFF file not found. Using Ensembl genes for Figure 4 correlation.")
-  df_ncbi_genes <- df.transcript.ensembl.rn7.1based %>%
-    distinct(gene_id, .keep_all = TRUE) %>%
-    transmute(
-      chr,
-      start = transcript_start,
-      end = transcript_end,
-      strand,
-      gene_id,
-      gene_name,
-      gene_biotype = transcript_biotype
-    )
-}
+  filter(chr %in% valid_chromosomes_fig4)
 
 # CTCF data
 df_ctcf_fig4 <- as_tibble(gr.ctcf.motif) %>%
@@ -1891,7 +1960,7 @@ df_ctcf_fig4 <- as_tibble(gr.ctcf.motif) %>%
   ) %>%
   filter(chr %in% valid_chromosomes_fig4)
 
-# --- Panel 4a: CTCF binding site density ideogram ---
+# --- Panel 4a: Predicted CTCF motif interval density ideogram ---
 karyotype_data_fig4 <- df_chrom_fig4 %>%
   transmute(Chr = as.character(Chr), Start = 0L, End = as.integer(End)) %>%
   arrange(factor(Chr, levels = chromosome_levels_fig4))
@@ -1984,7 +2053,7 @@ make_figure4_scatter_plot <- function(gene_df, title_text) {
       title = title_text,
       subtitle = paste0("Pearson r = ", r_val, " (p = ", p_val, ")"),
       x = "Genes per Mb",
-      y = "CTCF sites per Mb"
+      y = "Predicted CTCF motif intervals per Mb"
     ) +
     theme_bw(base_size = 9) +
     theme(
@@ -1998,9 +2067,9 @@ make_figure4_scatter_plot <- function(gene_df, title_text) {
     )
 }
 
-plot_fig4_b <- make_figure4_scatter_plot(df_ncbi_genes, "b. All genes")
-plot_fig4_c <- make_figure4_scatter_plot(df_ncbi_genes %>% filter(gene_biotype == "protein_coding"), "c. Protein-coding genes")
-plot_fig4_d <- make_figure4_scatter_plot(df_ncbi_genes %>% filter(gene_biotype == "lncRNA"), "d. lncRNA genes")
+plot_fig4_b <- make_figure4_scatter_plot(df_ensembl_genes, "b. All genes")
+plot_fig4_c <- make_figure4_scatter_plot(df_ensembl_genes %>% filter(gene_biotype == "protein_coding"), "c. Protein-coding genes")
+plot_fig4_d <- make_figure4_scatter_plot(df_ensembl_genes %>% filter(gene_biotype == "lncRNA"), "d. lncRNA genes")
 
 # Combine Figure 4 into 1x4 layout
 panel_4a <- ggdraw() +
@@ -2050,6 +2119,7 @@ figure5.resolution.colors <- c(
 )
 
 df.figure5.loop.window <- df.loop.distinct.2mb %>%
+  left_join(df_chrom_fig4 %>% dplyr::select(chr, chr_length = end), by = c("chr1" = "chr")) %>%
   transmute(
     loop_id,
     chr = chr1,
@@ -2059,10 +2129,20 @@ df.figure5.loop.window <- df.loop.distinct.2mb %>%
     anchor_midpoint_distance = anchor2_midpoint - anchor1_midpoint,
     expanded_start_unclipped = anchor1_midpoint - anchor_midpoint_distance,
     expanded_end_unclipped = anchor2_midpoint + anchor_midpoint_distance,
-    expanded_start = pmax(1L, as.integer(floor(expanded_start_unclipped))),
+    expanded_start = as.integer(floor(expanded_start_unclipped)),
     expanded_end = as.integer(ceiling(expanded_end_unclipped)),
-    same_chromosome = chr1 == chr2
+    same_chromosome = chr1 == chr2,
+    within_chromosome_boundary = expanded_start_unclipped > 0 & expanded_end_unclipped <= chr_length
+  ) %>%
+  filter(within_chromosome_boundary)
+
+assert_analysis_condition(
+  nrow(df.figure5.loop.window) == 30932L,
+  sprintf(
+    "Expected exactly 30,932 distinct < 2Mb loops without chromosome boundary capping, but found %d.",
+    nrow(df.figure5.loop.window)
   )
+)
 
 assert_analysis_condition(
   all(df.figure5.loop.window$same_chromosome) &&
@@ -2278,7 +2358,8 @@ message("  - PDF: ", figure5.pdf.path)
 # 10-6. Figure 8: Circos plots of putative regulatory loops (genome-wide and chr1)
 # ==============================================================================
 
-# Extract the 10,469 putative regulatory loops
+# Extract all 13,376 putative-regulatory loops, including directionally
+# supported calls with promoter/TSS annotations at both anchors.
 df.putative.regulatory.loops <- df.loop.evidence %>%
   filter(revised_putative_regulatory_support)
 
@@ -2342,6 +2423,12 @@ draw_circos_links_putative <- function(df_links) {
 # Genome-wide circos diagram
 plot_circos_all_chromosomes_putative <- function(df_links, cytoband_df) {
   circos.clear()
+  circos.par(
+    gap.degree = 2,
+    canvas.xlim = c(-1.05, 1.05),
+    canvas.ylim = c(-1.05, 1.05),
+    points.overflow.warning = FALSE
+  )
   circos.initializeWithIdeogram(cytoband = cytoband_df, plotType = c("ideogram", "labels"))
   draw_circos_links_putative(df_links)
   circos.clear()
@@ -2355,12 +2442,12 @@ plot_circos_for_chromosome_putative <- function(df_links, cytoband_df, chr_targe
     original_par <- par(no.readonly = TRUE)
     on.exit(par(original_par), add = TRUE)
 
-    par(mar = c(2.2, 2.2, 0.8, 3.6), xpd = NA)
+    par(mar = c(1.2, 1.2, 1.2, 1.2), xpd = NA)
     circos.clear()
     circos.par(
       gap.degree = 25,
-      canvas.xlim = c(-0.78, 0.9),
-      canvas.ylim = c(-0.82, 0.86),
+      canvas.xlim = c(-1.05, 1.05),
+      canvas.ylim = c(-1.05, 1.05),
       points.overflow.warning = FALSE
     )
     circos.initializeWithIdeogram(
@@ -2383,17 +2470,17 @@ plot_circos_all_chromosomes_putative(df.circos.input.putative, df_cytoband_rn7)
 dev.off()
 
 png(filename = figure8_panel_b_png, width = 2400, height = 1800, res = 300, bg = "white")
-par(mar = c(1.2, 1.2, 1.2, 1.2))
+par(mar = c(1.2, 1.2, 1.2, 1.2), xpd = NA)
 plot_circos_for_chromosome_putative(df.circos.input.putative, df_cytoband_rn7, chr_target = "chr1")
 dev.off()
 
 # Combine panels with annotations and legend into Figure 8
 plot_fig8_a <- ggdraw() +
-  draw_image(figure8_panel_a_png, scale = 1.1) +
+  draw_image(figure8_panel_a_png, scale = 1.08) +
   draw_label("a", x = 0.02, y = 0.88, hjust = 0, vjust = 1, fontface = "bold", size = 16)
 
 plot_fig8_b <- ggdraw() +
-  draw_image(figure8_panel_b_png, scale = 0.9345) +
+  draw_image(figure8_panel_b_png, scale = 0.96) +
   draw_label("b", x = 0.02, y = 0.88, hjust = 0, vjust = 1, fontface = "bold", size = 16)
 
 legend_df_fig8 <- tibble(
@@ -2432,10 +2519,10 @@ legend_grob_fig8 <- get_legend(legend_plot_fig8)
 base_panels_fig8 <- plot_grid(plot_fig8_a, plot_fig8_b, nrow = 1, rel_widths = c(1, 1))
 
 combined_plot_fig8 <- ggdraw() +
-  draw_plot(base_panels_fig8, x = 0, y = 0.12, width = 1, height = 0.88) +
-  draw_grob(legend_grob_fig8, x = 0.468, y = 0.228, width = 0.06, height = 0.132) +
-  draw_label("All chromosomes", x = 0.24, y = 0.25, fontface = "bold", size = 10) +
-  draw_label("Chromosome 1", x = 0.76, y = 0.25, fontface = "bold", size = 10)
+  draw_plot(base_panels_fig8, x = 0, y = 0.08, width = 1, height = 0.92) +
+  draw_grob(legend_grob_fig8, x = 0.468, y = 0.16, width = 0.06, height = 0.132) +
+  draw_label("All chromosomes", x = 0.25, y = 0.13, fontface = "bold", size = 10) +
+  draw_label("Chromosome 1", x = 0.75, y = 0.13, fontface = "bold", size = 10)
 
 figure8.png.path <- file.path(results.dir, "revision_figure8_circos_putative_regulatory_loops.png")
 figure8.pdf.path <- file.path(results.dir, "revision_figure8_circos_putative_regulatory_loops.pdf")
@@ -3224,7 +3311,7 @@ message("  - PDF: ", figureS9.pdf.path)
 # 11-11. Table S3: Genes with multiple valid interactions across loop categories
 # ==============================================================================
 
-# Extensible helper function to rank genes by number of valid chromatin loop interactions
+# Rank stable Ensembl gene IDs by distinct exact HiCCUPS call records.
 generate_table_s3_gene_interaction_ranking <- function(
   df.gene.assignment = df.direct.gene.assignment.position.flags,
   df.loop.subset = df.loop.evidence %>% filter(revised_putative_regulatory_support),
@@ -3244,23 +3331,25 @@ generate_table_s3_gene_interaction_ranking <- function(
     df.joined <- df.joined %>% filter(loop_distance <= threshold_distance)
   }
 
-  # 2. Prefer gene_name (gene symbol), fallback to gene_id if missing/empty
+  # 2. Collapse transcript/source duplicates by stable gene ID, never by symbol.
   df.dedup <- df.joined %>%
-    mutate(
-      gene_display = if_else(
-        !is.na(gene_name) & str_trim(gene_name) != "",
-        gene_name,
-        gene_id
-      )
-    ) %>%
-    distinct(gene_display, loop_id, .keep_all = TRUE)
+    filter(!is.na(gene_id)) %>%
+    distinct(gene_id, loop_id, .keep_all = TRUE)
 
-  # 3. Count distinct loop interactions per gene and rank
+  # 3. Count distinct exact calls per gene and retain a display symbol.
   df.gene.counts <- df.dedup %>%
-    count(gene_display, name = "Number of interactions") %>%
-    filter(`Number of interactions` >= minimum_interactions) %>%
-    arrange(desc(`Number of interactions`), gene_display) %>%
-    dplyr::rename(Gene = gene_display) %>%
+    group_by(gene_id) %>%
+    summarise(
+      Gene = {
+        symbols <- sort(unique(gene_name[!is.na(gene_name) & str_trim(gene_name) != ""]))
+        if (length(symbols) == 0L) gene_id[[1]] else symbols[[1]]
+      },
+      `Number of exact loop calls` = n_distinct(loop_id),
+      .groups = "drop"
+    ) %>%
+    filter(`Number of exact loop calls` >= minimum_interactions) %>%
+    arrange(desc(`Number of exact loop calls`), Gene, gene_id) %>%
+    dplyr::rename(`Ensembl gene ID` = gene_id) %>%
     mutate(No. = row_number(), .before = 1)
 
   if (!is.null(top_n)) {
@@ -3271,12 +3360,12 @@ generate_table_s3_gene_interaction_ranking <- function(
   return(df.gene.counts)
 }
 
-# 1. Primary Table S3: Putative regulatory loops (single direct promoter + opposite ATAC >=50bp)
+# 1. Primary Table S3: all 13,376 putative-regulatory loops with direction-aware genes
 df.table.s3.putative <- generate_table_s3_gene_interaction_ranking(
-  df.gene.assignment = df.direct.gene.assignment.position.flags,
+  df.gene.assignment = df.putative.regulatory.gene.assignment,
   df.loop.subset = df.loop.evidence %>% filter(revised_putative_regulatory_support),
   minimum_interactions = 2L,
-  set_label = "Putative Regulatory Loops (Single-promoter + Opposite ATAC)"
+  set_label = "Putative Regulatory Loops (Promoter/TSS + Distal non-TSS ATAC)"
 )
 
 # 2. Additional: Both-anchor promoter-promoter compatible loops
@@ -3315,8 +3404,8 @@ message("  - CSV: ", table.s3.csv.path)
 # Print helper: Display genes filtered by minimum interaction count threshold
 print_table_s3_by_min_interactions <- function(df_table, min_interactions = 9L) {
   df_subset <- df_table %>%
-    filter(`Number of interactions` >= min_interactions) %>%
-    arrange(desc(`Number of interactions`), Gene)
+    filter(`Number of exact loop calls` >= min_interactions) %>%
+    arrange(desc(`Number of exact loop calls`), Gene, `Ensembl gene ID`)
 
   cat(sprintf(
     "\n=== %s (Number of interactions >= %d: %d genes) ===\n",
@@ -3328,12 +3417,6 @@ print_table_s3_by_min_interactions <- function(df_table, min_interactions = 9L) 
   invisible(df_subset)
 }
 
-# Print all genes with Number of interactions >= 9 (ordered descending from 16 to 9)
+# Print all genes with at least nine exact loop calls.
 print_table_s3_by_min_interactions(df.table.s3.putative, min_interactions = 9L)
-
-
-
-
-
-
 

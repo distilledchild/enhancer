@@ -515,8 +515,23 @@ def generate_revision_flowchart(output_file):
 
     x_center = 74
     x_rem_right = 152  # Shifted right to create ample space for vertical alignment
-    x_left = 37
-    x_right = 107
+
+    # Box centers with equal gaps (G = 3.5) across all 4 boxes:
+    # Box 1 (w=32): [4.75, 36.75], center = 20.75
+    # Gap 1-2 = 3.5
+    # Box 2 (w=32): [40.25, 72.25], center = 56.25
+    # Gap 2-3 = 3.5 -> [72.25, 75.75] with exact center at x_center = 74.0
+    # Box 3 (w=39): [75.75, 114.75], center = 95.25
+    # Gap 3-4 = 3.5
+    # Box 4 (w=34): [118.25, 152.25], center = 135.25
+    x_box1_center = 20.75
+    x_box2_center = 56.25
+    x_box3_center = 95.25
+    x_box4_center = 133.25
+
+    # Diamond centers (centered over their respective box pairs)
+    x_left = (x_box1_center + x_box2_center) / 2    # 38.5
+    x_right = (x_box3_center + x_box4_center) / 2  # 115.25
 
     # Y-coordinates
     y_start = 208
@@ -588,13 +603,13 @@ def generate_revision_flowchart(output_file):
         fontweight='normal'
     )
 
-    # 4. Decision 3: Direct Promoter/TSS Overlap
+    # 4. Decision 3: Direct TSS/Promoter Overlap
     n_dec3 = draw_diamond(
         ax,
         (x_center, y_dec3),
         56,
         14,
-        "Direct Promoter/TSS overlap\n(TSS ± 1 kb at ≥ 1 anchor)",
+        "Direct TSS/Promoter overlap\n(TSS ± 1 kb at ≥ 1 anchor)",
         fill_color='#E0F2FE',
         edgecolor='#0284C7',
         fontsize=14.5,
@@ -606,7 +621,7 @@ def generate_revision_flowchart(output_file):
         (x_rem_right, y_dec3),
         36,
         13,
-        "14,678 loops (47.3%)\n❺ Loops without\ndirect promoter/TSS overlap",
+        "14,678 loops (47.3%)\n❺ Loops without\ndirect TSS/Promoter overlap",
         fill_color='#FFE6E6',
         edgecolor='black',
         fontsize=13.0,
@@ -636,7 +651,7 @@ def generate_revision_flowchart(output_file):
     # Box 1: Single Putative (❶)
     n_box_single_putative = draw_box(
         ax,
-        (19.5, y_leaf_boxes),
+        (x_box1_center, y_leaf_boxes),
         32,
         15,
         "10,469 loops (33.7%)\n❶ Single-promoter\nPutative Regulatory",
@@ -651,10 +666,10 @@ def generate_revision_flowchart(output_file):
     # Box 2: Single No ATAC (❷)
     n_box_single_no_atac = draw_box(
         ax,
-        (53.0, y_leaf_boxes),
+        (x_box2_center, y_leaf_boxes),
         32,
         15,
-        "1,826 loops (5.9%)\n❷ Single-promoter w/o\ndistal ATAC support",
+        "1,826 loops (5.9%)\n❷ Single-promoter\nw/o distal ATAC support",
         fill_color='#FFF7ED',
         edgecolor='#C2410C',
         fontsize=LEAF_FONTSIZE,
@@ -677,14 +692,13 @@ def generate_revision_flowchart(output_file):
         y_offset=-0.75
     )
 
-    # Box 3: Dual Putative (❸) - width=39.0, center=90.0
-    x_box3_center = 90.0
+    # Box 3: Dual Putative (❸) - width=39.0, center=95.25
     n_box_dual_putative = draw_box(
         ax,
         (x_box3_center, y_leaf_boxes),
         39.0,
         15,
-        "2,907 loops (9.4%)\n❸ Dual-promoter with\nEnhancer ATAC Support\n(P–E:1,094 | P–P/E:629 | P/E–P/E:1,184)",
+        "2,907 loops (9.4%)\n❸ Dual-promoter\nwith Enhancer ATAC Support\n(P–E:1,094 | P–P/E:629 | P/E–P/E:1,184)",
         fill_color='#DCFCE7',
         edgecolor='#16A34A',
         fontsize=LEAF_FONTSIZE,
@@ -693,12 +707,11 @@ def generate_revision_flowchart(output_file):
         linespacing=1.08
     )
 
-    # Box 4: Dual No ATAC (❹) - center=128.0, width=34.0
-    x_box4_center = 128.0
+    # Box 4: Dual No ATAC (❹) - center=135.25, width=34.0
     n_box_dual_no_atac = draw_box(
         ax,
         (x_box4_center, y_leaf_boxes),
-        34.0,
+        31.0,
         15,
         "1,141 loops (3.7%)\n❹ Pure Promoter–\nPromoter Contacts\n(No distal enhancer ATAC)",
         fill_color='#FFF7ED',
@@ -721,8 +734,8 @@ def generate_revision_flowchart(output_file):
             "   • ❶ Single-promoter with distal ATAC (10,469) + ❸ Dual-promoter with enhancer ATAC (2,907)",
             "2. Promoter-associated loops without distal ATAC support: 2,967 loops (9.6%)",
             "   • ❷ Single-promoter w/o ATAC (1,826) + ❹ Pure promoter–promoter contacts (1,141)",
-            "3. Loops without direct promoter/TSS overlap: 14,678 loops (47.3%)",
-            "   • ❺ No direct promoter/TSS overlap (14,678; 47.3%); 96.6% CTCF-supported structural contacts"
+            "3. Loops without direct TSS/Promoter overlap: 14,678 loops (47.3%)",
+            "   • ❺ No direct TSS/Promoter overlap (14,678; 47.3%); 96.6% CTCF-supported structural contacts"
         ],
         # footer_note="* Independent Structural Annotation: 29,980 loops (96.6%) have predicted CTCF motifs at both anchors",
         fill_color='#ECFCCB',
@@ -764,7 +777,7 @@ def generate_revision_flowchart(output_file):
     # ATAC decision arrows (Left Branch: Left=Yes, Right=No)
     draw_polyline_arrow(
         ax,
-        [n_dec_single_atac['w'], (x_left - 17.5, n_dec_single_atac['w'][1]), n_box_single_putative['n']],
+        [n_dec_single_atac['w'], (x_box1_center, n_dec_single_atac['w'][1]), n_box_single_putative['n']],
         label="Yes  (≥ 50 bp)",
         label_idx=1,
         offset_label=(0, 0),
@@ -772,7 +785,7 @@ def generate_revision_flowchart(output_file):
     )
     draw_polyline_arrow(
         ax,
-        [n_dec_single_atac['e'], (53.0, n_dec_single_atac['e'][1]), n_box_single_no_atac['n']],
+        [n_dec_single_atac['e'], (x_box2_center, n_dec_single_atac['e'][1]), n_box_single_no_atac['n']],
         label="No  (< 50 bp)",
         label_idx=1,
         offset_label=(0, 0),
@@ -799,11 +812,11 @@ def generate_revision_flowchart(output_file):
 
     # Arrows to Final Summary Node
     # Category 1 arrows (Green)
-    draw_arrow(ax, n_box_single_putative['s'], (x_left - 17.5, n_final_master['top_mid'][1]), color='#16A34A', lw=2.2)
+    draw_arrow(ax, n_box_single_putative['s'], (x_box1_center, n_final_master['top_mid'][1]), color='#16A34A', lw=2.2)
     draw_arrow(ax, n_box_dual_putative['s'], (x_box3_center, n_final_master['top_mid'][1]), color='#16A34A', lw=2.2)
 
     # Category 2 arrows (Orange/Dark)
-    draw_arrow(ax, n_box_single_no_atac['s'], (x_left + 16.5, n_final_master['top_mid'][1]), color='#C2410C', lw=2.0)
+    draw_arrow(ax, n_box_single_no_atac['s'], (x_box2_center, n_final_master['top_mid'][1]), color='#C2410C', lw=2.0)
     draw_arrow(ax, n_box_dual_no_atac['s'], (x_box4_center, n_final_master['top_mid'][1]), color='#C2410C', lw=2.0)
 
     # Category 3: Perfectly straight vertical black line from Box 14,678 down into the parallelogram!

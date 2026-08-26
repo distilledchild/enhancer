@@ -13,6 +13,13 @@ library("GenomeInfoDb")
 
 options(tibble.width = Inf, tibble.print_max = Inf, tibble.max_extra_cols = Inf, scipen = 999)
 
+# Run the optional loop-sharing/genetic-distance comparison only when a true
+# pairwise distance table is explicitly supplied or present in the analysis folder.
+genetic.distance.file <- Sys.getenv(
+  "HRDP_GENETIC_DISTANCE_FILE",
+  unset = file.path(analysis.dir, "hrdp_genetic_distance.tsv")
+)
+
 ################################################################################
 # 13. Exploratory strain-level loop sharing
 #
@@ -299,19 +306,15 @@ resolution.colors <- c(
   "25K" = "#173B7A"
 )
 category.colors <- c(
-  "putative_regulatory_direct_promoter_TSS_opposite_nonTSS_ATAC" = "#00BA38",
-  "promoter_promoter_compatible_both_direct_anchors" = "#C77CFF",
-  "single_direct_promoter_TSS_without_opposite_nonTSS_ATAC" = "#619CFF",
-  "no_direct_promoter_TSS" = "#F8766D"
+  "putative_regulatory" = "#00BA38",
+  "promoter_associated_without_distal_ATAC_support" = "#F8766D",
+  "no_direct_promoter_TSS" = "#619CFF"
 )
 category.labels <- c(
-  "putative_regulatory_direct_promoter_TSS_opposite_nonTSS_ATAC" =
-    "Promoter/TSS + opposite\nTSS-excluded ATAC",
-  "promoter_promoter_compatible_both_direct_anchors" =
-    "Promoter/TSS annotations\nat both anchors",
-  "single_direct_promoter_TSS_without_opposite_nonTSS_ATAC" =
-    "Single promoter/TSS;\nno opposite ATAC support",
-  "no_direct_promoter_TSS" = "No direct\npromoter/TSS"
+  "putative_regulatory" = "Putative regulatory",
+  "promoter_associated_without_distal_ATAC_support" =
+    "Promoter-associated without\ndistal ATAC support",
+  "no_direct_promoter_TSS" = "No direct promoter/TSS"
 )
 
 theme.revised.figure <- theme_bw(base_size = 10) +
@@ -428,7 +431,7 @@ df.figure2.chromosome.resolution <- df.loop.distinct.2mb %>%
       chromosome_label == "X" ~ 100,
       chromosome_label == "Y" ~ 101,
       chromosome_label %in% c("M", "MT") ~ 102,
-      TRUE ~ readr::parse_number(chromosome_label)
+      TRUE ~ suppressWarnings(as.numeric(chromosome_label))
     )
   ) %>%
   arrange(chromosome_order) %>%
@@ -529,13 +532,13 @@ figure3.output.files <- basename(saving_plot_dual(
 ))
 
 # Figure 4: display mutually exclusive promoter/TSS and ATAC evidence classes.
-df.figure4.category.summary <- df.revised.loop.category.summary %>%
+df.figure4.category.summary <- df.loop.category.summary %>%
   mutate(
     category_label = recode(revised_major_category, !!!category.labels),
     category_label = forcats::fct_reorder(category_label, n_loops),
     count_label = str_c(scales::comma(n_loops), " (", pct_pooled_loops, "%)")
   )
-df.figure4.category.by.resolution <- df.revised.loop.category.by.resolution %>%
+df.figure4.category.by.resolution <- df.loop.category.by.resolution %>%
   mutate(
     category_label = recode(revised_major_category, !!!category.labels),
     resolution = factor(resolution, levels = names(resolution.colors))
@@ -766,19 +769,21 @@ revised.output.table.registry <- tribble(
   "hiccups_sample_loop_quality.tsv.gz", "df.hiccups.sample.loop.quality",
   "hiccups_quality_field_definitions.tsv", "df.hiccups.quality.field.definition",
   "true_tss_generation_summary.tsv", "df.true.tss.summary",
-  "promoter_tss_anchor_evidence_definition_summary.tsv", "df.promoter.tss.anchor.evidence.definition.summary",
+  "promoter_tss_anchor_evidence_definition_summary.tsv", "df.promoter.anchor.assignment.definitions",
   "direct_promoter_tss_summary.tsv", "df.direct.promoter.tss.summary",
   "dual_promoter_atac_directional_category_definitions.tsv", "df.dual.promoter.atac.directional.category.definition",
   "dual_promoter_atac_directional_summary.tsv", "df.dual.promoter.atac.directional.summary",
-  "revised_atac_support_by_resolution.tsv", "df.revised.atac.support.by.resolution",
-  "revised_atac_paired_anchor_mcnemar.tsv", "df.revised.atac.paired.anchor.mcnemar",
-  "revised_atac_analysis_definition.tsv", "df.revised.atac.analysis.definition",
+  "revised_atac_support_by_resolution.tsv", "df.atac.support.by.resolution",
+  "revised_atac_paired_anchor_mcnemar.tsv", "df.atac.paired.anchor.mcnemar",
+  "revised_atac_analysis_definition.tsv", "df.atac.analysis.definition",
   "transcript_position_summary.tsv", "df.transcript.position.summary",
   "transcript_position_definitions.tsv", "df.transcript.position.definition",
   "revised_assignment_pipeline_status.tsv", "df.revised.assignment.pipeline.status",
-  "revised_loop_category_definitions.tsv", "df.revised.loop.category.definition",
-  "revised_loop_category_summary.tsv", "df.revised.loop.category.summary",
-  "revised_loop_category_by_resolution.tsv", "df.revised.loop.category.by.resolution",
+  "revised_loop_category_definitions.tsv", "df.loop.category.definition",
+  "revised_loop_category_summary.tsv", "df.loop.category.summary",
+  "revised_loop_detailed_category_summary.tsv", "df.loop.detailed.category.summary",
+  "revised_loop_category_by_resolution.tsv", "df.loop.category.by.resolution",
+  "table_s3_multiple_interaction_genes_putative_regulatory.tsv", "df.table.s3.putative",
   "revised_go_input_summary.tsv", "df.revised.go.input.summary",
   "revised_go_significance_summary.tsv", "df.revised.go.significance.summary",
   "revised_downstream_analysis_definitions.tsv", "df.revised.downstream.analysis.definition",
@@ -801,7 +806,13 @@ revised.output.table.registry <- tribble(
 output.tables <- resolve_output_table_registry(revised.output.table.registry, envir = environment())
 
 # Add the selected final resource and GO-input tables with stable filenames.
-selected.resource.table.names <- c("revised_pooled_loop_annotation_resource", "revised_direct_loop_gene_assignments", "revised_putative_regulatory_loops")
+selected.resource.table.names <- c(
+  "revised_pooled_loop_annotation_resource",
+  "revised_direct_loop_gene_assignments",
+  "revised_putative_regulatory_loops",
+  "revised_promoter_associated_without_distal_atac_loops",
+  "revised_no_direct_promoter_tss_loops"
+)
 output.tables <- c(
   output.tables,
   set_names(revised.resource.tables[selected.resource.table.names], paste0(selected.resource.table.names, ".tsv")),
@@ -867,26 +878,20 @@ message("\nWrote outputs to: ", output.dir)
 message("Pooled loop resource (<2 Mb): ", nrow(df.loop.distinct.2mb))
 message("Revised direct promoter/TSS-supported loops: ", sum(df.direct.promoter.tss.loop.summary$has_any_direct_promoter_tss))
 message("Revised direct loop-anchor-gene assignments: ", nrow(df.direct.promoter.tss.gene.assignment))
-message("Revised proximal promoter/TSS-supported loops (1-200 kb): ", sum(df.proximal.promoter.tss.loop.summary$has_any_proximal_promoter_tss))
+message("Revised proximal promoter/TSS-supported loops (1-200 kb): ", n_distinct(df.proximal.promoter.tss.gene.assignment$loop_id))
 message("Revised proximal loop-anchor-gene assignments: ", nrow(df.proximal.promoter.tss.gene.assignment))
-message("Revised secondary inward <=10-kb supported loops: ", sum(df.proximal.promoter.tss.loop.summary$has_any_secondary_inward_proximal_10kb))
+message("Revised secondary inward <=10-kb supported loops: ", n_distinct(df.secondary.inward.proximal.gene.assignment$loop_id))
 message("Revised secondary inward <=10-kb loop-anchor-gene assignments: ", nrow(df.secondary.inward.proximal.gene.assignment))
 message("Revised direct/proximal assignment, ATAC, transcript-position, and loop-category sections are complete. Legacy analyses are excluded from this production workflow.")
 
 message("\nRevised true-TSS-excluded ATAC support by resolution:")
-print(df.revised.atac.support.by.resolution)
+print(df.atac.support.by.resolution)
 message("\nRevised paired-anchor ATAC comparisons:")
-print(df.revised.atac.paired.anchor.mcnemar)
-message("\nRevised per-anchor vs. fragment-level ATAC agreement:")
-print(df.revised.atac.method.comparison.summary)
+print(df.atac.paired.anchor.mcnemar)
 message("\nRevised transcript-position summary:")
 print(df.transcript.position.summary)
 message("\nRevised mutually exclusive loop categories:")
-print(df.revised.loop.category.summary)
-message("\nPromoter/TSS categories split by anchor-site multiplicity:")
-print(df.promoter.tss.exclusive.loop.category.summary)
-message("\nDual-primary representative-anchor sensitivity summary:")
-print(df.dual.primary.anchor.representative.summary)
+print(df.loop.category.summary)
 message("\nRevised gene-loop threshold summary:")
 print(df.revised.gene.count.threshold.summary)
 message("\nApproach-2 multiple-interaction gene summary:")
