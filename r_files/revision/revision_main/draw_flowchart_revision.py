@@ -654,7 +654,7 @@ def generate_revision_flowchart(output_file):
         (x_box1_center, y_leaf_boxes),
         32,
         15,
-        "10,469 loops (33.7%)\n❶ Single-promoter\nPutative Regulatory",
+        "10,469 loops (33.7%)\n❶ Single-promoter with\ndistal non-TSS ATAC support",
         fill_color='#DCFCE7',
         edgecolor='#16A34A',
         fontsize=LEAF_FONTSIZE,
@@ -669,7 +669,7 @@ def generate_revision_flowchart(output_file):
         (x_box2_center, y_leaf_boxes),
         32,
         15,
-        "1,826 loops (5.9%)\n❷ Single-promoter\nw/o distal ATAC support",
+        "1,826 loops (5.9%)\n    ❷ Single-promoter without\ndistal non-TSS ATAC support",
         fill_color='#FFF7ED',
         edgecolor='#C2410C',
         fontsize=LEAF_FONTSIZE,
@@ -698,7 +698,7 @@ def generate_revision_flowchart(output_file):
         (x_box3_center, y_leaf_boxes),
         39.0,
         15,
-        "2,907 loops (9.4%)\n❸ Dual-promoter\nwith Enhancer ATAC Support\n(P–E:1,094 | P–P/E:629 | P/E–P/E:1,184)",
+        "2,907 loops (9.4%)\n❸ Dual-promoter with\nresidual non-TSS ATAC support\n(P–E:1,094 | P–P/E:629 | P/E–P/E:1,184)",
         fill_color='#DCFCE7',
         edgecolor='#16A34A',
         fontsize=LEAF_FONTSIZE,
@@ -711,15 +711,15 @@ def generate_revision_flowchart(output_file):
     n_box_dual_no_atac = draw_box(
         ax,
         (x_box4_center, y_leaf_boxes),
-        31.0,
+        33.0,
         15,
-        "1,141 loops (3.7%)\n❹ Pure Promoter–\nPromoter Contacts\n(No distal enhancer ATAC)",
+        "1,141 loops (3.7%)\n  ❹ Dual–promoter without\nresidual non-TSS ATAC support",
         fill_color='#FFF7ED',
         edgecolor='#C2410C',
         fontsize=LEAF_FONTSIZE,
         fontweight='normal',
         fit_text=False,
-        linespacing=1.12
+        linespacing=1.08
     )
 
     # 6. Final Comprehensive Master Summary (Expanded horizontally to catch vertical line at x=152)
@@ -728,14 +728,14 @@ def generate_revision_flowchart(output_file):
         (x_center + 4, y_end + 11.5),
         156,
         25,
-        title="Final Categorization of 31,021 Pooled Chromatin Loops (< 2 Mb)",
+        title="Final Categorization of 31,021 Pooled HiCCUPS Call Records (< 2 Mb)",
         list_items=[
-            "1. Putative regulatory loops with distal open-chromatin support: 13,376 loops (43.1%)",
-            "   • ❶ Single-promoter with distal ATAC (10,469) + ❸ Dual-promoter with enhancer ATAC (2,907)",
-            "2. Promoter-associated loops without distal ATAC support: 2,967 loops (9.6%)",
-            "   • ❷ Single-promoter w/o ATAC (1,826) + ❹ Pure promoter–promoter contacts (1,141)",
-            "3. Loops without direct TSS/Promoter overlap: 14,678 loops (47.3%)",
-            "   • ❺ No direct TSS/Promoter overlap (14,678; 47.3%); 96.6% CTCF-supported structural contacts"
+            "1. Putative regulatory loops with non-TSS ATAC support",
+            "   • ❶ (10,469) + ❸ (2,907) = 13,376 loops (43.1%)",
+            "2. Promoter-associated loops without non-TSS ATAC support",
+            "   • ❷ (1,826) + ❹ (1,141) = 2,967 loops (9.6%)",
+            "3. Loops without direct TSS/Promoter overlap",
+            "   • ❺ 14,678 loops (47.3%)"
         ],
         # footer_note="* Independent Structural Annotation: 29,980 loops (96.6%) have predicted CTCF motifs at both anchors",
         fill_color='#ECFCCB',

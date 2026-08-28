@@ -2355,7 +2355,121 @@ message("  - PNG: ", figure5.png.path)
 message("  - PDF: ", figure5.pdf.path)
 
 # ==============================================================================
-# 10-6. Figure 8: Circos plots of putative regulatory loops (genome-wide and chr1)
+# 10-6. Figure 6: Loop-level direct TSS/promoter status stacked bar
+# ==============================================================================
+
+figure6.promoter.status.levels <- c(
+  "Direct at one anchor",
+  "Direct at both anchors",
+  "No direct overlap"
+)
+
+df.figure6.promoter.status <- df.direct.promoter.tss.loop.summary %>%
+  count(n_direct_anchor_sides, name = "n_call_records") %>%
+  mutate(
+    promoter_status = case_when(
+      n_direct_anchor_sides == 1L ~ "Direct at one anchor",
+      n_direct_anchor_sides == 2L ~ "Direct at both anchors",
+      n_direct_anchor_sides == 0L ~ "No direct overlap",
+      TRUE ~ NA_character_
+    ),
+    promoter_status = factor(promoter_status, levels = figure6.promoter.status.levels)
+  ) %>%
+  arrange(promoter_status) %>%
+  mutate(
+    percent = 100 * n_call_records / sum(n_call_records),
+    segment_label = sprintf(
+      "%.1f%% (%s)",
+      percent,
+      scales::comma(n_call_records)
+    ),
+    label_colour = if_else(promoter_status == "No direct overlap", "#26364A", "white"),
+    bar_group = ""
+  )
+
+assert_analysis_condition(
+  nrow(df.figure6.promoter.status) == 3L &&
+    identical(as.integer(df.figure6.promoter.status$n_call_records), c(12295L, 4048L, 14678L)) &&
+    sum(df.figure6.promoter.status$n_call_records) == 31021L,
+  paste0(
+    "Figure 6 requires 12,295 one-anchor, 4,048 both-anchor, and ",
+    "14,678 no-direct-overlap pooled call records (31,021 total)."
+  )
+)
+
+figure6.promoter.status.colors <- c(
+  "Direct at one anchor" = "#2E86C1",
+  "Direct at both anchors" = "#1B998B",
+  "No direct overlap" = "#AAB4BF"
+)
+
+plot.figure6.promoter.status <- ggplot(
+  df.figure6.promoter.status,
+  aes(x = n_call_records, y = bar_group, fill = promoter_status)
+) +
+  geom_col(
+    width = 0.56,
+    colour = "white",
+    linewidth = 0.9,
+    position = position_stack(reverse = TRUE)
+  ) +
+  geom_text(
+    aes(label = segment_label, colour = label_colour, group = promoter_status),
+    position = position_stack(vjust = 0.5, reverse = TRUE),
+    size = 4.0,
+    fontface = "bold",
+    show.legend = FALSE
+  ) +
+  scale_fill_manual(values = figure6.promoter.status.colors, drop = FALSE) +
+  scale_colour_identity() +
+  scale_x_continuous(expand = expansion(mult = c(0, 0))) +
+  labs(
+    title = "Loop-level direct TSS/promoter status",
+    subtitle = "31,021 pooled HiCCUPS call records; direct overlap with Ensembl or EPD TSS +/-1 kb windows",
+    x = NULL,
+    y = NULL,
+    fill = NULL
+  ) +
+  theme_void(base_size = 12) +
+  theme(
+    plot.title = element_text(size = 17, face = "bold", colour = "#0B3B6E", hjust = 0),
+    plot.subtitle = element_text(size = 10.5, colour = "#5A6B7D", hjust = 0, margin = margin(b = 16)),
+    axis.text.y = element_blank(),
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 10.5, colour = "#26364A"),
+    legend.key.width = grid::unit(0.8, "cm"),
+    legend.spacing.x = grid::unit(0.25, "cm"),
+    plot.margin = margin(12, 18, 8, 12)
+  )
+
+figure6.png.path <- file.path(results.dir, "revision_figure6_tss_promoter_loop_status_stacked_bar.png")
+figure6.pdf.path <- file.path(results.dir, "revision_figure6_tss_promoter_loop_status_stacked_bar.pdf")
+
+ggsave(
+  filename = figure6.png.path,
+  plot = plot.figure6.promoter.status,
+  width = 9.2,
+  height = 3.1,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  filename = figure6.pdf.path,
+  plot = plot.figure6.promoter.status,
+  width = 9.2,
+  height = 3.1,
+  device = "pdf",
+  bg = "white"
+)
+
+message("Figure 6 TSS/promoter loop-status stacked bar successfully saved to:")
+message("  - PNG: ", figure6.png.path)
+message("  - PDF: ", figure6.pdf.path)
+
+# ==============================================================================
+# 10-7. Figure 8: Circos plots of putative regulatory loops (genome-wide and chr1)
 # ==============================================================================
 
 # Extract all 13,376 putative-regulatory loops, including directionally
@@ -3419,4 +3533,3 @@ print_table_s3_by_min_interactions <- function(df_table, min_interactions = 9L) 
 
 # Print all genes with at least nine exact loop calls.
 print_table_s3_by_min_interactions(df.table.s3.putative, min_interactions = 9L)
-
