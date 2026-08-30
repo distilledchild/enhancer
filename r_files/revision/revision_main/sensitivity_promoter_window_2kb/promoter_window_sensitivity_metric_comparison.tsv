@@ -1,0 +1,10 @@
+metric	primary_1kb_n_loops	sensitivity_n_loops	difference_n_loops	difference_percentage_points
+pooled_loops	31021	31021	0	0
+no_direct_promoter_TSS	14678	13579	-1099	-3.54
+exactly_one_promoter_anchor	12295	12859	564	1.82
+promoter_at_both_anchors	4048	4583	535	1.72
+any_promoter_associated_loop	16343	17442	1099	3.54
+putative_regulatory	13376	14210	834	2.69
+promoter_associated_without_distal_ATAC_support	2967	3232	265	0.85
+single_promoter_distal_ATAC	10469	10964	495	1.6
+dual_promoter_directional_distal_ATAC	2907	3246	339	1.09

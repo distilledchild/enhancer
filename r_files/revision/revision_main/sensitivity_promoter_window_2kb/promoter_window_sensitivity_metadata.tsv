@@ -1,0 +1,6 @@
+parameter	value
+promoter_window_flank_bp	2000
+promoter_window_width_bp_1based_closed	4001
+tss_exclusion_flank_bp	2000
+minimum_ATAC_overlap_bp	50
+pooled_loop_denominator	31021

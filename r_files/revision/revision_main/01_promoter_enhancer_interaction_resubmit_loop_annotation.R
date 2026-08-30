@@ -20,6 +20,25 @@ library("ggraph")
 
 options(tibble.width = Inf, tibble.print_max = Inf, tibble.max_extra_cols = Inf, scipen = 999)
 
+# The production analysis uses +/-1 kb. A different positive flank can be
+# supplied for an isolated sensitivity run without changing the default.
+promoter.window.flank.bp <- suppressWarnings(as.integer(Sys.getenv(
+  "PROMOTER_WINDOW_FLANK_BP",
+  unset = "1000"
+)))
+if (length(promoter.window.flank.bp) != 1L || is.na(promoter.window.flank.bp) || promoter.window.flank.bp < 1L) {
+  stop("PROMOTER_WINDOW_FLANK_BP must be one positive integer.", call. = FALSE)
+}
+promoter.window.label <- if (promoter.window.flank.bp %% 1000L == 0L) {
+  paste0("+/-", promoter.window.flank.bp / 1000L, " kb")
+} else {
+  paste0("+/-", promoter.window.flank.bp, " bp")
+}
+promoter.window.sensitivity.only <- identical(
+  Sys.getenv("PROMOTER_WINDOW_SENSITIVITY_ONLY", unset = "0"),
+  "1"
+)
+
 ################################################################################
 # Resubmission analysis: pooled rat frontal cortex chromatin-loop annotation
 #
@@ -149,8 +168,7 @@ list.gr.loop.anchor.by.side <- create_loop_anchor_granges_by_side(df.loop.distin
 names(list.gr.loop.anchor.by.side) # [1] "anchor1" "anchor2"
 gr.epd.tss <- create_epd_tss_granges(df.promoter.epd.rn7.1based)
 
-# func to manupulate coordinate for window (here, 1000L) in GR objects; 1. reuse gr.true.tss, 2 for tss around at the end of chr, 3. integrity for metadata & index (id), 4. easy for sensitivity test
-promoter.window.flank.bp <- 1000L
+# func to manupulate coordinate for the configured promoter window in GR objects; 1. reuse gr.true.tss, 2 for tss around at the end of chr, 3. integrity for metadata & index (id), 4. easy for sensitivity test
 gr.true.tss.promoter.window.1kb <- expand_tss_to_promoter_windows(gr.true.tss, flank.bp = promoter.window.flank.bp)
 gr.epd.tss.promoter.window.1kb <- expand_tss_to_promoter_windows(gr.epd.tss, flank.bp = promoter.window.flank.bp)
 
@@ -162,6 +180,8 @@ list.primary.direct.tier <- build_direct_promoter_tss_tier(
   df.true.tss = df.true.tss.transcript,
   df.epd.promoter = df.promoter.epd.rn7.1based,
   df.loop.distinct.2mb = df.loop.distinct.2mb,
+  # The helper currently uses this as a tier identifier; the actual flank is
+  # recorded separately in promoter.window.flank.bp.
   evidence.definition = "primary_1kb",
   promoter.window.flank.bp = promoter.window.flank.bp
 )
@@ -188,7 +208,7 @@ df.direct.promoter.tss.summary <- list.primary.direct.summary$summary # tibble (
 df.promoter.anchor.assignment.definitions <- tribble(
   ~evidence_tier, ~coordinate_rule, ~interpretation,
   "primary_direct",
-  paste0("Direct anchor overlap with a promoter window defined as TSS +/-1 kb from ", "either Ensembl transcript TSS or EPD TSS."),
+  paste0("Direct anchor overlap with a promoter window defined as TSS ", promoter.window.label, " from either Ensembl transcript TSS or EPD TSS."),
   paste0("Primary promoter-associated anchor evidence used by downstream revised ", "ATAC, category, gene-resource, and GO analyses."),
   "secondary_inward_proximal",
   paste0("Non-overlapping TSS or EPD promoter interval within 10 kb of an anchor and ", "fully located in the inter-anchor interval on that anchor's side of the ", "loop midpoint. The assigned anchor must be strictly closer than the ", "opposite anchor; same-anchor/gene primary direct assignments are excluded."),
@@ -276,7 +296,7 @@ df.direct.promoter.tss.loop.summary %>%
 # 5-1. Process Ensemble TSS & EPD TSS
 #######################################################################################
 atac.minimum.overlap.bp <- 50L
-tss.exclusion.flank.bp <- 1000L
+tss.exclusion.flank.bp <- promoter.window.flank.bp
 
 # 5-1-1. Combine every transcript-level Ensembl TSS with every EPD TSS.
 df.known.tss.source.record <- bind_rows( # 67,517
@@ -1012,9 +1032,9 @@ df.atac.method.comparison.summary
 df.atac.analysis.definition <- tribble(
   ~analysis_item, ~definition,
   "ATAC_interpretation", paste0("ATAC overlap supports open chromatin only; it does not validate enhancer ", "function or a promoter-enhancer interaction."),
-  "known_TSS_exclusion", paste0("Union of strand-aware Ensembl transcript TSS and lifted EPD TSS, expanded ", "symmetrically by +/-1 kb in rn7 coordinates."),
-  "primary_directional_set", paste0("Loops with primary TSS +/-1-kb promoter-window evidence at exactly one ", "anchor; the opposite anchor is evaluated as a candidate regulatory anchor."),
-  "both_direct_anchors", paste0("Loops with primary TSS +/-1-kb promoter-window evidence at both anchors ", "are retained as a promoter-promoter-compatible class without forced ", "direction."),
+  "known_TSS_exclusion", paste0("Union of strand-aware Ensembl transcript TSS and lifted EPD TSS, expanded symmetrically by ", promoter.window.label, " in rn7 coordinates."),
+  "primary_directional_set", paste0("Loops with primary TSS ", promoter.window.label, " promoter-window evidence at exactly one anchor; the opposite anchor is evaluated as a candidate regulatory anchor."),
+  "both_direct_anchors", paste0("Loops with primary TSS ", promoter.window.label, " promoter-window evidence at both anchors are retained as a promoter-promoter-compatible class without forced direction."),
   "minimum_overlap", paste0("Any-bp overlap is reported for sensitivity; >=50 bp overlap with one ", "reduced ATAC interval is the primary robust-support flag."),
   "fragment_sensitivity", paste0("TSS regions are subtracted independently from each candidate anchor and ", "the residual fragments are tested without losing original anchor identity."),
   "paired_test_interpretation", paste0("McNemar tests compare paired accessibility states conditional on selection ", "of loops with one direct promoter/TSS anchor; they do not validate the ", "opposite anchor as a functional enhancer."),
@@ -1253,10 +1273,10 @@ df.loop.category.definition <- tribble(
   "A promoter/TSS-overlapping anchor has a supported direction to >=50 bp of TSS-excluded ATAC at the opposite anchor; this includes single-promoter loops and directionally supported loops with promoter/TSS annotations at both anchors.",
   "Open-chromatin-supported putative promoter-to-distal-element contact; not a validated enhancer or functional promoter-enhancer interaction.",
   "promoter_associated_without_distal_ATAC_support",
-  "At least one anchor directly overlaps a promoter/TSS +/-1-kb window, but no supported promoter-to-opposite-residual-ATAC direction is completed.",
+  paste0("At least one anchor directly overlaps a promoter/TSS ", promoter.window.label, " window, but no supported promoter-to-opposite-residual-ATAC direction is completed."),
   "Promoter-associated contact retained without distal open-chromatin support.",
   "no_direct_promoter_TSS",
-  "Neither anchor directly overlaps a promoter/TSS +/-1-kb window.",
+  paste0("Neither anchor directly overlaps a promoter/TSS ", promoter.window.label, " window."),
   "Pooled HiCCUPS call retained without direct promoter/TSS assignment."
 )
 
@@ -1280,42 +1300,536 @@ df.loop.detailed.category.summary <- df.loop.evidence %>%
 
 message("Loop categories cover all ", nrow(df.loop.distinct.2mb), " calls.")
 
-# Verify the three official categories and five detailed workflow branches.
-assert_analysis_condition(
-  identical(
-    df.loop.category.summary %>%
-      dplyr::select(revised_major_category, n_loops) %>%
-      arrange(revised_major_category),
-    tibble(
-      revised_major_category = c(
-        "no_direct_promoter_TSS",
-        "promoter_associated_without_distal_ATAC_support",
-        "putative_regulatory"
-      ),
-      n_loops = c(14678L, 2967L, 13376L)
-    )
-  ),
-  "The official three-category loop counts do not match the approved workflow."
-)
+# Verify the locked production counts only for the default +/-1-kb analysis.
+if (promoter.window.flank.bp == 1000L) {
+  assert_analysis_condition(
+    identical(
+      df.loop.category.summary %>%
+        dplyr::select(revised_major_category, n_loops) %>%
+        arrange(revised_major_category),
+      tibble(
+        revised_major_category = c(
+          "no_direct_promoter_TSS",
+          "promoter_associated_without_distal_ATAC_support",
+          "putative_regulatory"
+        ),
+        n_loops = c(14678L, 2967L, 13376L)
+      )
+    ),
+    "The official three-category loop counts do not match the approved workflow."
+  )
 
-assert_analysis_condition(
-  identical(
-    df.loop.detailed.category.summary %>%
-      dplyr::select(revised_detailed_category, n_loops) %>%
-      arrange(revised_detailed_category),
-    tibble(
-      revised_detailed_category = c(
-        "no_direct_promoter_TSS",
-        "promoter_at_both_anchors_with_directional_distal_ATAC",
-        "promoter_at_both_anchors_without_directional_distal_ATAC",
-        "single_promoter_distal_ATAC",
-        "single_promoter_no_distal_ATAC"
-      ),
-      n_loops = c(14678L, 2907L, 1141L, 10469L, 1826L)
+  assert_analysis_condition(
+    identical(
+      df.loop.detailed.category.summary %>%
+        dplyr::select(revised_detailed_category, n_loops) %>%
+        arrange(revised_detailed_category),
+      tibble(
+        revised_detailed_category = c(
+          "no_direct_promoter_TSS",
+          "promoter_at_both_anchors_with_directional_distal_ATAC",
+          "promoter_at_both_anchors_without_directional_distal_ATAC",
+          "single_promoter_distal_ATAC",
+          "single_promoter_no_distal_ATAC"
+        ),
+        n_loops = c(14678L, 2907L, 1141L, 10469L, 1826L)
+      )
+    ),
+    "The five detailed workflow branches do not match the approved workflow."
+  )
+} else {
+  message(
+    "Sensitivity run detected (promoter/TSS flank ", promoter.window.flank.bp,
+    " bp); skipped assertions for locked +/-1-kb production counts."
+  )
+}
+
+# For a sensitivity-only Rscript run, export the core classifications before
+# production figure generation. The primary results directory is never touched.
+if (promoter.window.sensitivity.only) {
+  dir.create(output.dir, recursive = TRUE, showWarnings = FALSE)
+
+  df.promoter.window.sensitivity.metadata <- tibble(
+    parameter = c(
+      "promoter_window_flank_bp",
+      "promoter_window_width_bp_1based_closed",
+      "tss_exclusion_flank_bp",
+      "minimum_ATAC_overlap_bp",
+      "pooled_loop_denominator"
+    ),
+    value = c(
+      promoter.window.flank.bp,
+      2L * promoter.window.flank.bp + 1L,
+      tss.exclusion.flank.bp,
+      atac.minimum.overlap.bp,
+      nrow(df.loop.distinct.2mb)
     )
-  ),
-  "The five detailed workflow branches do not match the approved workflow."
-)
+  )
+
+  df.promoter.window.sensitivity.loop.annotation <- df.loop.evidence %>%
+    dplyr::select(
+      loop_id, chr1, start1, end1, chr2, start2, end2, resolution,
+      n_direct_anchor_sides, n_direct_genes_across_anchors,
+      has_any_direct_promoter_tss, has_direct_promoter_tss_both_anchors,
+      candidate_anchor_non_tss_atac_ge50, n_supported_regulatory_directions,
+      revised_putative_regulatory_support,
+      revised_promoter_associated_without_distal_atac,
+      revised_no_direct_promoter_tss,
+      revised_major_category, revised_detailed_category
+    )
+
+  # Retain only genes on promoter sides supported by the inferred regulatory
+  # direction, matching the production Table S3 gene-counting rule.
+  df.promoter.window.sensitivity.putative.gene.assignment <- df.direct.gene.assignment.position.flags %>%
+    inner_join(
+      df.loop.evidence %>%
+        dplyr::select(
+          loop_id, resolution, n_direct_anchor_sides,
+          revised_putative_regulatory_support,
+          supported_regulatory_direction
+        ),
+      by = c("loop_id", "resolution")
+    ) %>%
+    filter(
+      revised_putative_regulatory_support,
+      n_direct_anchor_sides == 1L |
+        supported_regulatory_direction == "both_directions_supported" |
+        (supported_regulatory_direction == "anchor1_promoter_to_anchor2_regulatory" & anchor_side == "anchor1") |
+        (supported_regulatory_direction == "anchor2_promoter_to_anchor1_regulatory" & anchor_side == "anchor2")
+    ) %>%
+    distinct(loop_id, resolution, gene_id, .keep_all = TRUE) %>%
+    arrange(loop_id, anchor_side, gene_id)
+
+  assert_analysis_condition(
+    n_distinct(df.promoter.window.sensitivity.putative.gene.assignment$loop_id) ==
+      sum(df.loop.evidence$revised_putative_regulatory_support),
+    "Sensitivity direction-aware gene assignments do not cover all putative-regulatory loops."
+  )
+
+  summarise.putative.gene.loop.counts <- function(df.assignment) {
+    df.assignment.filtered <- df.assignment %>%
+      filter(!is.na(gene_id), gene_id != "") %>%
+      distinct(gene_id, loop_id, .keep_all = TRUE)
+
+    if (nrow(df.assignment.filtered) == 0L) {
+      return(tibble(
+        rank_by_putative_loop_count = integer(),
+        gene_id = character(),
+        gene_symbol = character(),
+        n_putative_loops = integer(),
+        n_5kb_putative_loops = integer(),
+        n_10kb_putative_loops = integer(),
+        n_25kb_putative_loops = integer()
+      ))
+    }
+
+    df.assignment.filtered %>%
+      group_by(gene_id) %>%
+      summarise(
+        gene_symbol = {
+          symbols <- sort(unique(gene_name[!is.na(gene_name) & str_trim(gene_name) != ""]))
+          if (length(symbols) == 0L) gene_id[[1]] else symbols[[1]]
+        },
+        n_putative_loops = n_distinct(loop_id),
+        n_5kb_putative_loops = n_distinct(loop_id[resolution == "5K"]),
+        n_10kb_putative_loops = n_distinct(loop_id[resolution == "10K"]),
+        n_25kb_putative_loops = n_distinct(loop_id[resolution == "25K"]),
+        .groups = "drop"
+      ) %>%
+      arrange(dplyr::desc(n_putative_loops), gene_symbol, gene_id) %>%
+      mutate(rank_by_putative_loop_count = dplyr::min_rank(dplyr::desc(n_putative_loops)), .before = 1)
+  }
+
+  df.promoter.window.sensitivity.gene.loop.count <- summarise.putative.gene.loop.counts(
+    df.promoter.window.sensitivity.putative.gene.assignment
+  )
+
+  sensitivity.metric.table <- function(df) {
+    tibble(
+      metric = c(
+        "pooled_loops",
+        "no_direct_promoter_TSS",
+        "exactly_one_promoter_anchor",
+        "promoter_at_both_anchors",
+        "any_promoter_associated_loop",
+        "putative_regulatory",
+        "promoter_associated_without_distal_ATAC_support",
+        "single_promoter_distal_ATAC",
+        "dual_promoter_directional_distal_ATAC"
+      ),
+      n_loops = c(
+        nrow(df),
+        sum(df$n_direct_anchor_sides == 0L),
+        sum(df$n_direct_anchor_sides == 1L),
+        sum(df$n_direct_anchor_sides == 2L),
+        sum(df$n_direct_anchor_sides >= 1L),
+        sum(df$revised_putative_regulatory_support),
+        sum(df$revised_promoter_associated_without_distal_atac),
+        sum(df$revised_detailed_category == "single_promoter_distal_ATAC"),
+        sum(df$revised_detailed_category == "promoter_at_both_anchors_with_directional_distal_ATAC")
+      )
+    )
+  }
+
+  df.promoter.window.sensitivity.metric.comparison <- sensitivity.metric.table(df.loop.evidence) %>%
+    dplyr::rename(sensitivity_n_loops = n_loops)
+
+  primary.resource.file <- file.path(
+    analysis.dir,
+    "results",
+    "revised_pooled_loop_annotation_resource.tsv"
+  )
+  df.promoter.window.major.category.transitions <- tibble()
+  df.promoter.window.detailed.category.transitions <- tibble()
+  df.promoter.window.putative.membership.transitions <- tibble()
+  df.promoter.window.anchor.side.transitions <- tibble()
+  df.promoter.window.gene.loop.count.comparison <- tibble()
+  df.promoter.window.gene.loop.count.summary <- tibble()
+  df.promoter.window.gene.rank.stability <- tibble()
+  df.promoter.window.gained.putative.gene.loop.count <- tibble()
+  df.promoter.window.lost.putative.gene.loop.count <- tibble()
+
+  if (file.exists(primary.resource.file)) {
+    df.primary.loop.evidence <- readr::read_tsv(
+      primary.resource.file,
+      col_select = c(
+        loop_id, n_direct_anchor_sides,
+        revised_putative_regulatory_support,
+        revised_promoter_associated_without_distal_atac,
+        revised_no_direct_promoter_tss,
+        revised_major_category, revised_detailed_category
+      ),
+      show_col_types = FALSE
+    )
+
+    df.promoter.window.metric.primary <- sensitivity.metric.table(df.primary.loop.evidence) %>%
+      dplyr::rename(primary_1kb_n_loops = n_loops)
+    df.promoter.window.sensitivity.metric.comparison <- df.promoter.window.metric.primary %>%
+      inner_join(df.promoter.window.sensitivity.metric.comparison, by = "metric") %>%
+      mutate(
+        difference_n_loops = sensitivity_n_loops - primary_1kb_n_loops,
+        difference_percentage_points = round(
+          100 * difference_n_loops / nrow(df.loop.evidence),
+          2
+        )
+      )
+
+    df.promoter.window.loop.comparison <- df.primary.loop.evidence %>%
+      rename_with(~ paste0("primary_1kb_", .x), -loop_id) %>%
+      inner_join(
+        df.loop.evidence %>%
+          dplyr::select(
+            loop_id, n_direct_anchor_sides,
+            revised_putative_regulatory_support,
+            revised_major_category, revised_detailed_category
+          ) %>%
+          rename_with(~ paste0("sensitivity_", promoter.window.flank.bp, "bp_", .x), -loop_id),
+        by = "loop_id"
+      )
+
+    sensitivity.prefix <- paste0("sensitivity_", promoter.window.flank.bp, "bp_")
+    sensitivity.major.col <- paste0(sensitivity.prefix, "revised_major_category")
+    sensitivity.detailed.col <- paste0(sensitivity.prefix, "revised_detailed_category")
+    sensitivity.putative.col <- paste0(sensitivity.prefix, "revised_putative_regulatory_support")
+    sensitivity.anchor.col <- paste0(sensitivity.prefix, "n_direct_anchor_sides")
+
+    df.promoter.window.major.category.transitions <- df.promoter.window.loop.comparison %>%
+      count(
+        primary_1kb_revised_major_category,
+        sensitivity_major_category = .data[[sensitivity.major.col]],
+        name = "n_loops"
+      )
+    df.promoter.window.detailed.category.transitions <- df.promoter.window.loop.comparison %>%
+      count(
+        primary_1kb_revised_detailed_category,
+        sensitivity_detailed_category = .data[[sensitivity.detailed.col]],
+        name = "n_loops"
+      )
+    df.promoter.window.putative.membership.transitions <- df.promoter.window.loop.comparison %>%
+      transmute(
+        primary_putative = primary_1kb_revised_putative_regulatory_support,
+        sensitivity_putative = .data[[sensitivity.putative.col]],
+        membership_transition = case_when(
+          primary_putative & sensitivity_putative ~ "retained_putative",
+          !primary_putative & sensitivity_putative ~ "gained_putative",
+          primary_putative & !sensitivity_putative ~ "lost_putative",
+          TRUE ~ "neither_putative"
+        )
+      ) %>%
+      count(membership_transition, name = "n_loops")
+    df.promoter.window.anchor.side.transitions <- df.promoter.window.loop.comparison %>%
+      count(
+        primary_1kb_n_direct_anchor_sides,
+        sensitivity_n_direct_anchor_sides = .data[[sensitivity.anchor.col]],
+        name = "n_loops"
+      )
+
+    primary.gene.assignment.file <- file.path(
+      analysis.dir,
+      "results",
+      "revised_direct_loop_gene_assignments.tsv"
+    )
+    if (file.exists(primary.gene.assignment.file)) {
+      df.primary.putative.gene.assignment <- readr::read_tsv(
+        primary.gene.assignment.file,
+        col_select = c(
+          loop_id, resolution, anchor_side, gene_id, gene_name,
+          is_direction_supported_putative_gene_assignment
+        ),
+        show_col_types = FALSE
+      ) %>%
+        filter(is_direction_supported_putative_gene_assignment) %>%
+        distinct(loop_id, resolution, gene_id, .keep_all = TRUE)
+
+      df.primary.putative.gene.loop.count <- summarise.putative.gene.loop.counts(
+        df.primary.putative.gene.assignment
+      )
+
+      df.promoter.window.gene.loop.count.comparison <- full_join(
+        df.primary.putative.gene.loop.count %>%
+          dplyr::rename(
+            primary_1kb_rank = rank_by_putative_loop_count,
+            primary_1kb_gene_symbol = gene_symbol,
+            primary_1kb_n_putative_loops = n_putative_loops,
+            primary_1kb_n_5kb_putative_loops = n_5kb_putative_loops,
+            primary_1kb_n_10kb_putative_loops = n_10kb_putative_loops,
+            primary_1kb_n_25kb_putative_loops = n_25kb_putative_loops
+          ),
+        df.promoter.window.sensitivity.gene.loop.count %>%
+          dplyr::rename(
+            sensitivity_rank = rank_by_putative_loop_count,
+            sensitivity_gene_symbol = gene_symbol,
+            sensitivity_n_putative_loops = n_putative_loops,
+            sensitivity_n_5kb_putative_loops = n_5kb_putative_loops,
+            sensitivity_n_10kb_putative_loops = n_10kb_putative_loops,
+            sensitivity_n_25kb_putative_loops = n_25kb_putative_loops
+          ),
+        by = "gene_id"
+      ) %>%
+        mutate(
+          gene_symbol = coalesce(sensitivity_gene_symbol, primary_1kb_gene_symbol),
+          across(
+            c(
+              primary_1kb_n_putative_loops,
+              primary_1kb_n_5kb_putative_loops,
+              primary_1kb_n_10kb_putative_loops,
+              primary_1kb_n_25kb_putative_loops,
+              sensitivity_n_putative_loops,
+              sensitivity_n_5kb_putative_loops,
+              sensitivity_n_10kb_putative_loops,
+              sensitivity_n_25kb_putative_loops
+            ),
+            ~ coalesce(.x, 0L)
+          ),
+          difference_n_putative_loops = sensitivity_n_putative_loops - primary_1kb_n_putative_loops,
+          difference_n_5kb_putative_loops = sensitivity_n_5kb_putative_loops - primary_1kb_n_5kb_putative_loops,
+          difference_n_10kb_putative_loops = sensitivity_n_10kb_putative_loops - primary_1kb_n_10kb_putative_loops,
+          difference_n_25kb_putative_loops = sensitivity_n_25kb_putative_loops - primary_1kb_n_25kb_putative_loops,
+          rank_change = primary_1kb_rank - sensitivity_rank,
+          gene_membership_change = case_when(
+            primary_1kb_n_putative_loops == 0L ~ "new_gene_in_sensitivity",
+            sensitivity_n_putative_loops == 0L ~ "lost_gene_in_sensitivity",
+            difference_n_putative_loops > 0L ~ "increased_loop_count",
+            difference_n_putative_loops < 0L ~ "decreased_loop_count",
+            TRUE ~ "unchanged_loop_count"
+          )
+        ) %>%
+        dplyr::select(
+          gene_id, gene_symbol, gene_membership_change,
+          primary_1kb_rank, sensitivity_rank, rank_change,
+          primary_1kb_n_putative_loops, sensitivity_n_putative_loops,
+          difference_n_putative_loops,
+          primary_1kb_n_5kb_putative_loops, sensitivity_n_5kb_putative_loops,
+          difference_n_5kb_putative_loops,
+          primary_1kb_n_10kb_putative_loops, sensitivity_n_10kb_putative_loops,
+          difference_n_10kb_putative_loops,
+          primary_1kb_n_25kb_putative_loops, sensitivity_n_25kb_putative_loops,
+          difference_n_25kb_putative_loops
+        ) %>%
+        arrange(dplyr::desc(sensitivity_n_putative_loops), sensitivity_rank, gene_symbol, gene_id)
+
+      gene.count.metric <- function(df.count) {
+        c(
+          direction_supported_gene_loop_pairs = sum(df.count$n_putative_loops),
+          unique_genes = nrow(df.count),
+          genes_with_at_least_2_loops = sum(df.count$n_putative_loops >= 2L),
+          genes_with_at_least_5_loops = sum(df.count$n_putative_loops >= 5L),
+          genes_with_at_least_10_loops = sum(df.count$n_putative_loops >= 10L)
+        )
+      }
+      primary.gene.metrics <- gene.count.metric(df.primary.putative.gene.loop.count)
+      sensitivity.gene.metrics <- gene.count.metric(df.promoter.window.sensitivity.gene.loop.count)
+      df.promoter.window.gene.loop.count.summary <- tibble(
+        metric = names(primary.gene.metrics),
+        primary_1kb = as.integer(primary.gene.metrics),
+        sensitivity = as.integer(sensitivity.gene.metrics)
+      ) %>%
+        mutate(difference = sensitivity - primary_1kb)
+
+      df.shared.gene.count <- df.promoter.window.gene.loop.count.comparison %>%
+        filter(primary_1kb_n_putative_loops > 0L, sensitivity_n_putative_loops > 0L)
+      top.n.values <- c(25L, 50L, 100L)
+      df.promoter.window.gene.rank.stability <- bind_rows(
+        tibble(
+          metric = c(
+            "shared_genes",
+            "spearman_loop_count_shared_genes",
+            "pearson_loop_count_shared_genes"
+          ),
+          value = c(
+            nrow(df.shared.gene.count),
+            cor(
+              df.shared.gene.count$primary_1kb_n_putative_loops,
+              df.shared.gene.count$sensitivity_n_putative_loops,
+              method = "spearman"
+            ),
+            cor(
+              df.shared.gene.count$primary_1kb_n_putative_loops,
+              df.shared.gene.count$sensitivity_n_putative_loops,
+              method = "pearson"
+            )
+          )
+        ),
+        map_dfr(top.n.values, function(top.n) {
+          primary.top <- df.primary.putative.gene.loop.count %>%
+            arrange(rank_by_putative_loop_count, gene_id) %>%
+            slice_head(n = top.n) %>%
+            pull(gene_id)
+          sensitivity.top <- df.promoter.window.sensitivity.gene.loop.count %>%
+            arrange(rank_by_putative_loop_count, gene_id) %>%
+            slice_head(n = top.n) %>%
+            pull(gene_id)
+          tibble(
+            metric = paste0("top_", top.n, "_gene_overlap_fraction"),
+            value = length(intersect(primary.top, sensitivity.top)) / top.n
+          )
+        })
+      )
+
+      gained.putative.loop.ids <- df.promoter.window.loop.comparison %>%
+        filter(!primary_1kb_revised_putative_regulatory_support, .data[[sensitivity.putative.col]]) %>%
+        pull(loop_id)
+      lost.putative.loop.ids <- df.promoter.window.loop.comparison %>%
+        filter(primary_1kb_revised_putative_regulatory_support, !.data[[sensitivity.putative.col]]) %>%
+        pull(loop_id)
+
+      df.promoter.window.gained.putative.gene.loop.count <- df.promoter.window.sensitivity.putative.gene.assignment %>%
+        filter(loop_id %in% gained.putative.loop.ids) %>%
+        summarise.putative.gene.loop.counts() %>%
+        dplyr::rename(n_gained_putative_loops = n_putative_loops) %>%
+        arrange(dplyr::desc(n_gained_putative_loops), gene_symbol, gene_id)
+      df.promoter.window.lost.putative.gene.loop.count <- df.primary.putative.gene.assignment %>%
+        filter(loop_id %in% lost.putative.loop.ids) %>%
+        summarise.putative.gene.loop.counts() %>%
+        dplyr::rename(n_lost_putative_loops = n_putative_loops) %>%
+        arrange(dplyr::desc(n_lost_putative_loops), gene_symbol, gene_id)
+    } else {
+      warning("Primary direction-aware gene assignment file was not found: ", primary.gene.assignment.file)
+    }
+  } else {
+    warning("Primary +/-1-kb loop resource was not found: ", primary.resource.file)
+  }
+
+  readr::write_tsv(
+    df.promoter.window.sensitivity.metadata,
+    file.path(output.dir, "promoter_window_sensitivity_metadata.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.sensitivity.metric.comparison,
+    file.path(output.dir, "promoter_window_sensitivity_metric_comparison.tsv")
+  )
+  readr::write_tsv(
+    df.loop.category.summary,
+    file.path(output.dir, "promoter_window_sensitivity_major_category_summary.tsv")
+  )
+  readr::write_tsv(
+    df.loop.category.by.resolution,
+    file.path(output.dir, "promoter_window_sensitivity_major_category_by_resolution.tsv")
+  )
+  readr::write_tsv(
+    df.loop.detailed.category.summary,
+    file.path(output.dir, "promoter_window_sensitivity_detailed_category_summary.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.sensitivity.loop.annotation,
+    file.path(output.dir, "promoter_window_sensitivity_loop_annotation.tsv.gz")
+  )
+  readr::write_tsv(
+    df.promoter.window.major.category.transitions,
+    file.path(output.dir, "promoter_window_sensitivity_major_category_transitions.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.detailed.category.transitions,
+    file.path(output.dir, "promoter_window_sensitivity_detailed_category_transitions.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.putative.membership.transitions,
+    file.path(output.dir, "promoter_window_sensitivity_putative_membership_transitions.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.anchor.side.transitions,
+    file.path(output.dir, "promoter_window_sensitivity_anchor_side_transitions.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.sensitivity.putative.gene.assignment,
+    file.path(output.dir, "promoter_window_sensitivity_putative_gene_assignments.tsv.gz")
+  )
+  readr::write_tsv(
+    df.promoter.window.sensitivity.gene.loop.count,
+    file.path(output.dir, "promoter_window_sensitivity_gene_loop_counts.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.gene.loop.count.comparison,
+    file.path(output.dir, "promoter_window_sensitivity_gene_loop_count_comparison.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.gene.loop.count.summary,
+    file.path(output.dir, "promoter_window_sensitivity_gene_loop_count_summary.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.gene.rank.stability,
+    file.path(output.dir, "promoter_window_sensitivity_gene_rank_stability.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.gained.putative.gene.loop.count,
+    file.path(output.dir, "promoter_window_sensitivity_gained_putative_gene_loop_counts.tsv")
+  )
+  readr::write_tsv(
+    df.promoter.window.lost.putative.gene.loop.count,
+    file.path(output.dir, "promoter_window_sensitivity_lost_putative_gene_loop_counts.tsv")
+  )
+  saveRDS(
+    list(
+      metadata = df.promoter.window.sensitivity.metadata,
+      metric_comparison = df.promoter.window.sensitivity.metric.comparison,
+      loop_annotation = df.promoter.window.sensitivity.loop.annotation,
+      major_category_summary = df.loop.category.summary,
+      major_category_by_resolution = df.loop.category.by.resolution,
+      detailed_category_summary = df.loop.detailed.category.summary,
+      major_category_transitions = df.promoter.window.major.category.transitions,
+      detailed_category_transitions = df.promoter.window.detailed.category.transitions,
+      putative_membership_transitions = df.promoter.window.putative.membership.transitions,
+      anchor_side_transitions = df.promoter.window.anchor.side.transitions,
+      putative_gene_assignments = df.promoter.window.sensitivity.putative.gene.assignment,
+      sensitivity_gene_loop_counts = df.promoter.window.sensitivity.gene.loop.count,
+      gene_loop_count_comparison = df.promoter.window.gene.loop.count.comparison,
+      gene_loop_count_summary = df.promoter.window.gene.loop.count.summary,
+      gene_rank_stability = df.promoter.window.gene.rank.stability,
+      gained_putative_gene_loop_counts = df.promoter.window.gained.putative.gene.loop.count,
+      lost_putative_gene_loop_counts = df.promoter.window.lost.putative.gene.loop.count
+    ),
+    file.path(output.dir, "promoter_window_sensitivity_results.rds")
+  )
+  writeLines(
+    str_replace(capture.output(sessionInfo()), "\\s+$", ""),
+    con = file.path(output.dir, "promoter_window_sensitivity_session_info.txt")
+  )
+
+  message("Sensitivity-only outputs written to: ", output.dir)
+  if (!interactive()) {
+    quit(save = "no", status = 0L)
+  }
+}
 
 # Retain only promoter genes on directions supported by distal non-TSS ATAC.
 df.putative.regulatory.gene.assignment <- df.direct.gene.assignment.position.flags %>%

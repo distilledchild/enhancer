@@ -1,0 +1,7 @@
+metric	value
+shared_genes	8548
+spearman_loop_count_shared_genes	0.9222815059895433
+pearson_loop_count_shared_genes	0.9286458666401483
+top_25_gene_overlap_fraction	0.8
+top_50_gene_overlap_fraction	0.76
+top_100_gene_overlap_fraction	0.75
