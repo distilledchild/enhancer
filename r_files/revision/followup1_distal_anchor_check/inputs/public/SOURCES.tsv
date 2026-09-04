@@ -1,0 +1,6 @@
+file	accession_or_source	url	assembly_or_coordinates	condition_and_use
+GSE193757_family.soft.gz	GSE193757	https://ftp.ncbi.nlm.nih.gov/geo/series/GSE193nnn/GSE193757/soft/GSE193757_family.soft.gz	metadata	GEO sample and processed-file metadata
+GSE193757_tsr.pfc.bed.gz	GSE193757	https://ftp.ncbi.nlm.nih.gov/geo/series/GSE193nnn/GSE193757/suppl/GSE193757_tsr.pfc.bed.gz	mRatBN7.2/rn7	PFC META-experiment TSR catalog pooled across naive cocaine and oxycodone conditions
+GSE193757_gene_counts.txt.gz	GSE193757	https://ftp.ncbi.nlm.nih.gov/geo/series/GSE193nnn/GSE193757/suppl/GSE193757_gene_counts.txt.gz	gene-symbol count table	Naive PFC replicate columns used for tissue-level expression support
+GSM5820551_filtered_peak_bc_matrix.h5	GSM5820551	https://ftp.ncbi.nlm.nih.gov/geo/samples/GSM5820nnn/GSM5820551/suppl/GSM5820551_filtered_peak_bc_matrix.h5	rn6 source peaks	PFC single-nucleus ATAC peak matrix used to audit the locally lifted rn7 peak catalog
+Duttke2022_snATAC_peaks_rn7.narrowPeak	local revision_main input	../../../revision_main/inputs/data/Duttke2022_snATAC_peaks_rn7.narrowPeak	mRatBN7.2/rn7	Locally lifted peak catalog used for overlap analysis; source names audited against GSM5820551
