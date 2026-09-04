@@ -1,0 +1,6 @@
+promoter_window_width_bp	minimum_ATAC_overlap_bp	revised_detailed_category	n_loops	pct_pooled_loops
+4001	50	no_direct_promoter_TSS	13579	43.8
+4001	50	single_promoter_distal_ATAC	10964	35.3
+4001	50	promoter_at_both_anchors_with_directional_distal_ATAC	3246	10.5
+4001	50	single_promoter_no_distal_ATAC	1895	6.1
+4001	50	promoter_at_both_anchors_without_directional_distal_ATAC	1337	4.3

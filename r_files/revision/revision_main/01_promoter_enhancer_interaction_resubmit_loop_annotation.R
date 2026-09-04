@@ -38,6 +38,26 @@ promoter.window.sensitivity.only <- identical(
   Sys.getenv("PROMOTER_WINDOW_SENSITIVITY_ONLY", unset = "0"),
   "1"
 )
+promoter.anchor.match.mode <- Sys.getenv(
+  "PROMOTER_ANCHOR_MATCH_MODE",
+  unset = "interval"
+)
+if (!promoter.anchor.match.mode %in% c("interval", "midpoint")) {
+  stop(
+    "PROMOTER_ANCHOR_MATCH_MODE must be either 'interval' or 'midpoint'.",
+    call. = FALSE
+  )
+}
+promoter.window.gene.list.only <- identical(
+  Sys.getenv("PROMOTER_WINDOW_GENE_LIST_ONLY", unset = "0"),
+  "1"
+)
+if (promoter.window.gene.list.only && !promoter.window.sensitivity.only) {
+  stop(
+    "PROMOTER_WINDOW_GENE_LIST_ONLY=1 requires PROMOTER_WINDOW_SENSITIVITY_ONLY=1.",
+    call. = FALSE
+  )
+}
 
 ################################################################################
 # Resubmission analysis: pooled rat frontal cortex chromatin-loop annotation
@@ -183,7 +203,8 @@ list.primary.direct.tier <- build_direct_promoter_tss_tier(
   # The helper currently uses this as a tier identifier; the actual flank is
   # recorded separately in promoter.window.flank.bp.
   evidence.definition = "primary_1kb",
-  promoter.window.flank.bp = promoter.window.flank.bp
+  promoter.window.flank.bp = promoter.window.flank.bp,
+  anchor.match.mode = promoter.anchor.match.mode
 )
 names(list.primary.direct.tier)
 
@@ -295,7 +316,21 @@ df.direct.promoter.tss.loop.summary %>%
 #######################################################################################
 # 5-1. Process Ensemble TSS & EPD TSS
 #######################################################################################
-atac.minimum.overlap.bp <- 50L
+atac.minimum.overlap.bp <- suppressWarnings(as.integer(Sys.getenv(
+  "ATAC_MINIMUM_OVERLAP_BP",
+  unset = "50"
+)))
+if (length(atac.minimum.overlap.bp) != 1L || is.na(atac.minimum.overlap.bp) || atac.minimum.overlap.bp < 1L) {
+  stop("ATAC_MINIMUM_OVERLAP_BP must be one positive integer.", call. = FALSE)
+}
+if (promoter.window.gene.list.only && atac.minimum.overlap.bp != 50L) {
+  stop(
+    "The consolidated promoter-window gene-list analysis fixes ATAC overlap at 50 bp.",
+    call. = FALSE
+  )
+}
+# Internal names ending in `_ge50` are retained for production compatibility.
+# Sensitivity exports rename threshold-specific columns and record the active value.
 tss.exclusion.flank.bp <- promoter.window.flank.bp
 
 # 5-1-1. Combine every transcript-level Ensembl TSS with every EPD TSS.
@@ -1035,14 +1070,19 @@ df.atac.analysis.definition <- tribble(
   "known_TSS_exclusion", paste0("Union of strand-aware Ensembl transcript TSS and lifted EPD TSS, expanded symmetrically by ", promoter.window.label, " in rn7 coordinates."),
   "primary_directional_set", paste0("Loops with primary TSS ", promoter.window.label, " promoter-window evidence at exactly one anchor; the opposite anchor is evaluated as a candidate regulatory anchor."),
   "both_direct_anchors", paste0("Loops with primary TSS ", promoter.window.label, " promoter-window evidence at both anchors are retained as a promoter-promoter-compatible class without forced direction."),
-  "minimum_overlap", paste0("Any-bp overlap is reported for sensitivity; >=50 bp overlap with one ", "reduced ATAC interval is the primary robust-support flag."),
+  "minimum_overlap", paste0(
+    "Any-bp overlap is reported for sensitivity; >=",
+    atac.minimum.overlap.bp,
+    " bp overlap with one reduced ATAC interval is the active support flag."
+  ),
   "fragment_sensitivity", paste0("TSS regions are subtracted independently from each candidate anchor and ", "the residual fragments are tested without losing original anchor identity."),
   "paired_test_interpretation", paste0("McNemar tests compare paired accessibility states conditional on selection ", "of loops with one direct promoter/TSS anchor; they do not validate the ", "opposite anchor as a functional enhancer."),
   "proximal_catalog", paste0("ATAC is available in the complete anchor evidence table, but the full ", "1-200 kb proximal catalog is not promoted to primary directional evidence.")
 )
 
 message(
-  "Non-TSS ATAC support (>=50 bp) was found at the opposite anchor in ",
+  "Non-TSS ATAC support (>=", atac.minimum.overlap.bp,
+  " bp) was found at the opposite anchor in ",
   sum(df.atac.unambiguous.orientation$candidate_non_tss_atac_overlap_ge50),
   " of ",
   nrow(df.atac.unambiguous.orientation),
@@ -1301,7 +1341,11 @@ df.loop.detailed.category.summary <- df.loop.evidence %>%
 message("Loop categories cover all ", nrow(df.loop.distinct.2mb), " calls.")
 
 # Verify the locked production counts only for the default +/-1-kb analysis.
-if (promoter.window.flank.bp == 1000L) {
+if (
+  promoter.window.flank.bp == 1000L &&
+    atac.minimum.overlap.bp == 50L &&
+    promoter.anchor.match.mode == "interval"
+) {
   assert_analysis_condition(
     identical(
       df.loop.category.summary %>%
@@ -1349,17 +1393,93 @@ if (promoter.window.flank.bp == 1000L) {
 if (promoter.window.sensitivity.only) {
   dir.create(output.dir, recursive = TRUE, showWarnings = FALSE)
 
+  promoter.window.width.bp <- 2L * promoter.window.flank.bp + 1L
+  primary.promoter.window.width.bp <- 2001L
+  primary.atac.minimum.overlap.bp <- 50L
+  sensitivity.output.tag <- paste0(
+    "promoter_window_", promoter.window.width.bp,
+    "bp_anchor_", promoter.anchor.match.mode,
+    "_atac_overlap_", atac.minimum.overlap.bp, "bp"
+  )
+  primary.output.tag <- paste0(
+    "promoter_window_", primary.promoter.window.width.bp,
+    "bp_anchor_interval_atac_overlap_",
+    primary.atac.minimum.overlap.bp, "bp"
+  )
+  comparison.output.tag <- if (identical(sensitivity.output.tag, primary.output.tag)) {
+    sensitivity.output.tag
+  } else {
+    paste0(primary.output.tag, "_vs_", sensitivity.output.tag)
+  }
+  sensitivity.output.file <- function(stem, extension = "tsv", comparison = FALSE) {
+    tag <- if (comparison) comparison.output.tag else sensitivity.output.tag
+    file.path(output.dir, paste0(tag, "_", stem, ".", extension))
+  }
+  add.sensitivity.parameters <- function(df) {
+    df %>%
+      mutate(
+        promoter_window_width_bp = promoter.window.width.bp,
+        promoter_anchor_match_mode = promoter.anchor.match.mode,
+        minimum_ATAC_overlap_bp = atac.minimum.overlap.bp,
+        .before = 1
+      )
+  }
+  add.comparison.parameters <- function(df) {
+    df %>%
+      mutate(
+        primary_promoter_window_width_bp = primary.promoter.window.width.bp,
+        primary_promoter_anchor_match_mode = "interval",
+        primary_minimum_ATAC_overlap_bp = primary.atac.minimum.overlap.bp,
+        sensitivity_promoter_window_width_bp = promoter.window.width.bp,
+        sensitivity_promoter_anchor_match_mode = promoter.anchor.match.mode,
+        sensitivity_minimum_ATAC_overlap_bp = atac.minimum.overlap.bp,
+        .before = 1
+      )
+  }
+
+  # Remove legacy parameter-ambiguous exports before writing self-describing files.
+  legacy.sensitivity.output.files <- c(
+    "promoter_window_sensitivity_metadata.tsv",
+    "promoter_window_sensitivity_metric_comparison.tsv",
+    "promoter_window_sensitivity_major_category_summary.tsv",
+    "promoter_window_sensitivity_major_category_by_resolution.tsv",
+    "promoter_window_sensitivity_detailed_category_summary.tsv",
+    "promoter_window_sensitivity_loop_annotation.tsv.gz",
+    "promoter_window_sensitivity_major_category_transitions.tsv",
+    "promoter_window_sensitivity_detailed_category_transitions.tsv",
+    "promoter_window_sensitivity_putative_membership_transitions.tsv",
+    "promoter_window_sensitivity_anchor_side_transitions.tsv",
+    "promoter_window_sensitivity_putative_gene_assignments.tsv.gz",
+    "promoter_window_sensitivity_gene_loop_counts.tsv",
+    "promoter_window_sensitivity_ensembl_gene_loop_counts.tsv",
+    "promoter_window_sensitivity_ensembl_gene_list.txt",
+    "promoter_window_sensitivity_gene_loop_count_comparison.tsv",
+    "promoter_window_sensitivity_gene_loop_count_summary.tsv",
+    "promoter_window_sensitivity_gene_rank_stability.tsv",
+    "promoter_window_sensitivity_gained_putative_gene_loop_counts.tsv",
+    "promoter_window_sensitivity_lost_putative_gene_loop_counts.tsv",
+    "promoter_window_sensitivity_results.rds",
+    "promoter_window_sensitivity_session_info.txt"
+  )
+  legacy.sensitivity.output.paths <- file.path(
+    output.dir,
+    legacy.sensitivity.output.files
+  )
+  unlink(legacy.sensitivity.output.paths[file.exists(legacy.sensitivity.output.paths)])
+
   df.promoter.window.sensitivity.metadata <- tibble(
     parameter = c(
       "promoter_window_flank_bp",
       "promoter_window_width_bp_1based_closed",
+      "promoter_anchor_match_mode",
       "tss_exclusion_flank_bp",
       "minimum_ATAC_overlap_bp",
       "pooled_loop_denominator"
     ),
     value = c(
       promoter.window.flank.bp,
-      2L * promoter.window.flank.bp + 1L,
+      promoter.window.width.bp,
+      promoter.anchor.match.mode,
       tss.exclusion.flank.bp,
       atac.minimum.overlap.bp,
       nrow(df.loop.distinct.2mb)
@@ -1376,6 +1496,10 @@ if (promoter.window.sensitivity.only) {
       revised_promoter_associated_without_distal_atac,
       revised_no_direct_promoter_tss,
       revised_major_category, revised_detailed_category
+    ) %>%
+    rename_with(
+      ~ str_replace(.x, "ge50", paste0("ge", atac.minimum.overlap.bp)),
+      contains("ge50")
     )
 
   # Retain only genes on promoter sides supported by the inferred regulatory
@@ -1443,6 +1567,36 @@ if (promoter.window.sensitivity.only) {
   df.promoter.window.sensitivity.gene.loop.count <- summarise.putative.gene.loop.counts(
     df.promoter.window.sensitivity.putative.gene.assignment
   )
+
+  df.promoter.window.compact.gene.list <-
+    df.promoter.window.sensitivity.gene.loop.count %>%
+    transmute(
+      ensembl_gene_id = gene_id,
+      gene_symbol,
+      n = as.integer(n_putative_loops)
+    ) %>%
+    arrange(dplyr::desc(n), gene_symbol, ensembl_gene_id)
+
+  assert_analysis_condition(
+    !anyDuplicated(df.promoter.window.compact.gene.list$ensembl_gene_id) &&
+      all(!is.na(df.promoter.window.compact.gene.list$ensembl_gene_id)) &&
+      all(df.promoter.window.compact.gene.list$n > 0L),
+    "Compact sensitivity gene list contains duplicate, missing, or zero-count genes."
+  )
+
+  if (promoter.window.gene.list.only) {
+    readr::write_tsv(
+      df.promoter.window.compact.gene.list,
+      sensitivity.output.file("gene_counts_for_workbook")
+    )
+    message(
+      "Compact gene list written for ", promoter.window.width.bp, "-bp ",
+      promoter.anchor.match.mode, " matching with ATAC overlap fixed at 50 bp."
+    )
+    if (!interactive()) {
+      quit(save = "no", status = 0L)
+    }
+  }
 
   sensitivity.metric.table <- function(df) {
     tibble(
@@ -1732,71 +1886,81 @@ if (promoter.window.sensitivity.only) {
 
   readr::write_tsv(
     df.promoter.window.sensitivity.metadata,
-    file.path(output.dir, "promoter_window_sensitivity_metadata.tsv")
+    sensitivity.output.file("metadata")
   )
   readr::write_tsv(
-    df.promoter.window.sensitivity.metric.comparison,
-    file.path(output.dir, "promoter_window_sensitivity_metric_comparison.tsv")
+    add.comparison.parameters(df.promoter.window.sensitivity.metric.comparison),
+    sensitivity.output.file("metric_comparison", comparison = TRUE)
   )
   readr::write_tsv(
-    df.loop.category.summary,
-    file.path(output.dir, "promoter_window_sensitivity_major_category_summary.tsv")
+    add.sensitivity.parameters(df.loop.category.summary),
+    sensitivity.output.file("major_category_summary")
   )
   readr::write_tsv(
-    df.loop.category.by.resolution,
-    file.path(output.dir, "promoter_window_sensitivity_major_category_by_resolution.tsv")
+    add.sensitivity.parameters(df.loop.category.by.resolution),
+    sensitivity.output.file("major_category_by_resolution")
   )
   readr::write_tsv(
-    df.loop.detailed.category.summary,
-    file.path(output.dir, "promoter_window_sensitivity_detailed_category_summary.tsv")
+    add.sensitivity.parameters(df.loop.detailed.category.summary),
+    sensitivity.output.file("detailed_category_summary")
   )
   readr::write_tsv(
-    df.promoter.window.sensitivity.loop.annotation,
-    file.path(output.dir, "promoter_window_sensitivity_loop_annotation.tsv.gz")
+    add.sensitivity.parameters(df.promoter.window.sensitivity.loop.annotation),
+    sensitivity.output.file("loop_annotation", extension = "tsv.gz")
   )
   readr::write_tsv(
-    df.promoter.window.major.category.transitions,
-    file.path(output.dir, "promoter_window_sensitivity_major_category_transitions.tsv")
+    add.comparison.parameters(df.promoter.window.major.category.transitions),
+    sensitivity.output.file("major_category_transitions", comparison = TRUE)
   )
   readr::write_tsv(
-    df.promoter.window.detailed.category.transitions,
-    file.path(output.dir, "promoter_window_sensitivity_detailed_category_transitions.tsv")
+    add.comparison.parameters(df.promoter.window.detailed.category.transitions),
+    sensitivity.output.file("detailed_category_transitions", comparison = TRUE)
   )
   readr::write_tsv(
-    df.promoter.window.putative.membership.transitions,
-    file.path(output.dir, "promoter_window_sensitivity_putative_membership_transitions.tsv")
+    add.comparison.parameters(df.promoter.window.putative.membership.transitions),
+    sensitivity.output.file("putative_membership_transitions", comparison = TRUE)
   )
   readr::write_tsv(
-    df.promoter.window.anchor.side.transitions,
-    file.path(output.dir, "promoter_window_sensitivity_anchor_side_transitions.tsv")
+    add.comparison.parameters(df.promoter.window.anchor.side.transitions),
+    sensitivity.output.file("anchor_side_transitions", comparison = TRUE)
   )
   readr::write_tsv(
-    df.promoter.window.sensitivity.putative.gene.assignment,
-    file.path(output.dir, "promoter_window_sensitivity_putative_gene_assignments.tsv.gz")
+    add.sensitivity.parameters(df.promoter.window.sensitivity.putative.gene.assignment),
+    sensitivity.output.file("putative_gene_assignments", extension = "tsv.gz")
   )
   readr::write_tsv(
-    df.promoter.window.sensitivity.gene.loop.count,
-    file.path(output.dir, "promoter_window_sensitivity_gene_loop_counts.tsv")
+    add.sensitivity.parameters(df.promoter.window.sensitivity.gene.loop.count),
+    sensitivity.output.file("gene_loop_counts")
   )
   readr::write_tsv(
-    df.promoter.window.gene.loop.count.comparison,
-    file.path(output.dir, "promoter_window_sensitivity_gene_loop_count_comparison.tsv")
+    df.promoter.window.sensitivity.gene.loop.count %>%
+      dplyr::select(gene_id, n_putative_loops) %>%
+      add.sensitivity.parameters(),
+    sensitivity.output.file("ensembl_gene_loop_counts")
+  )
+  readr::write_lines(
+    df.promoter.window.sensitivity.gene.loop.count$gene_id,
+    sensitivity.output.file("ensembl_gene_list", extension = "txt")
   )
   readr::write_tsv(
-    df.promoter.window.gene.loop.count.summary,
-    file.path(output.dir, "promoter_window_sensitivity_gene_loop_count_summary.tsv")
+    add.comparison.parameters(df.promoter.window.gene.loop.count.comparison),
+    sensitivity.output.file("gene_loop_count_comparison", comparison = TRUE)
   )
   readr::write_tsv(
-    df.promoter.window.gene.rank.stability,
-    file.path(output.dir, "promoter_window_sensitivity_gene_rank_stability.tsv")
+    add.comparison.parameters(df.promoter.window.gene.loop.count.summary),
+    sensitivity.output.file("gene_loop_count_summary", comparison = TRUE)
   )
   readr::write_tsv(
-    df.promoter.window.gained.putative.gene.loop.count,
-    file.path(output.dir, "promoter_window_sensitivity_gained_putative_gene_loop_counts.tsv")
+    add.comparison.parameters(df.promoter.window.gene.rank.stability),
+    sensitivity.output.file("gene_rank_stability", comparison = TRUE)
   )
   readr::write_tsv(
-    df.promoter.window.lost.putative.gene.loop.count,
-    file.path(output.dir, "promoter_window_sensitivity_lost_putative_gene_loop_counts.tsv")
+    add.comparison.parameters(df.promoter.window.gained.putative.gene.loop.count),
+    sensitivity.output.file("gained_putative_gene_loop_counts", comparison = TRUE)
+  )
+  readr::write_tsv(
+    add.comparison.parameters(df.promoter.window.lost.putative.gene.loop.count),
+    sensitivity.output.file("lost_putative_gene_loop_counts", comparison = TRUE)
   )
   saveRDS(
     list(
@@ -1818,11 +1982,11 @@ if (promoter.window.sensitivity.only) {
       gained_putative_gene_loop_counts = df.promoter.window.gained.putative.gene.loop.count,
       lost_putative_gene_loop_counts = df.promoter.window.lost.putative.gene.loop.count
     ),
-    file.path(output.dir, "promoter_window_sensitivity_results.rds")
+    sensitivity.output.file("results", extension = "rds")
   )
   writeLines(
     str_replace(capture.output(sessionInfo()), "\\s+$", ""),
-    con = file.path(output.dir, "promoter_window_sensitivity_session_info.txt")
+    con = sensitivity.output.file("session_info", extension = "txt")
   )
 
   message("Sensitivity-only outputs written to: ", output.dir)

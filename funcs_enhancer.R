@@ -2595,11 +2595,14 @@ create_epd_promoter_granges <- function(df.promoter) {
   )
 }
 
-# Return every interval overlap between one loop-anchor side and an annotation set without nearest-feature selection or deduplication.
+# Return every interval or one-base midpoint overlap between one loop-anchor
+# side and an annotation set without nearest-feature selection or deduplication.
 find_direct_anchor_annotation_overlaps <- function(
   gr.anchor,
-  gr.annotation
+  gr.annotation,
+  anchor.match.mode = c("interval", "midpoint")
 ) {
+  anchor.match.mode <- match.arg(anchor.match.mode)
   required.anchor.metadata <- c("loop_id", "resolution", "anchor_side")
   missing.anchor.metadata <- setdiff(
     required.anchor.metadata,
@@ -2613,8 +2616,17 @@ find_direct_anchor_annotation_overlaps <- function(
     )
   }
 
+  gr.anchor.match <- gr.anchor
+  if (anchor.match.mode == "midpoint") {
+    anchor.midpoint <- start(gr.anchor) + (width(gr.anchor) - 1L) %/% 2L
+    ranges(gr.anchor.match) <- IRanges(
+      start = anchor.midpoint,
+      end = anchor.midpoint
+    )
+  }
+
   hits <- findOverlaps(
-    gr.anchor,
+    gr.anchor.match,
     gr.annotation,
     ignore.strand = TRUE
   )
@@ -2630,6 +2642,10 @@ find_direct_anchor_annotation_overlaps <- function(
         anchor_start = integer(),
         anchor_end = integer(),
         anchor_width_bp = integer(),
+        anchor_match_mode = character(),
+        anchor_match_start = integer(),
+        anchor_match_end = integer(),
+        anchor_match_width_bp = integer(),
         annotation_index = integer(),
         annotation_chr = character(),
         annotation_start = integer(),
@@ -2644,9 +2660,10 @@ find_direct_anchor_annotation_overlaps <- function(
   query.index <- queryHits(hits)
   subject.index <- subjectHits(hits)
   gr.anchor.hit <- gr.anchor[query.index]
+  gr.anchor.match.hit <- gr.anchor.match[query.index]
   gr.annotation.hit <- gr.annotation[subject.index]
-  overlap.start <- pmax(start(gr.anchor.hit), start(gr.annotation.hit))
-  overlap.end <- pmin(end(gr.anchor.hit), end(gr.annotation.hit))
+  overlap.start <- pmax(start(gr.anchor.match.hit), start(gr.annotation.hit))
+  overlap.end <- pmin(end(gr.anchor.match.hit), end(gr.annotation.hit))
 
   df.overlap <- tibble(
     loop_id = as.character(mcols(gr.anchor.hit)$loop_id),
@@ -2661,6 +2678,10 @@ find_direct_anchor_annotation_overlaps <- function(
     anchor_start = start(gr.anchor.hit),
     anchor_end = end(gr.anchor.hit),
     anchor_width_bp = width(gr.anchor.hit),
+    anchor_match_mode = anchor.match.mode,
+    anchor_match_start = start(gr.anchor.match.hit),
+    anchor_match_end = end(gr.anchor.match.hit),
+    anchor_match_width_bp = width(gr.anchor.match.hit),
     annotation_index = as.integer(subject.index),
     annotation_chr = as.character(seqnames(gr.annotation.hit)),
     annotation_start = start(gr.annotation.hit),
@@ -2690,9 +2711,11 @@ build_direct_promoter_tss_tier <- function(
   df.epd.promoter,
   df.loop.distinct.2mb,
   evidence.definition = c("strict", "primary_1kb"),
-  promoter.window.flank.bp = NA_integer_
+  promoter.window.flank.bp = NA_integer_,
+  anchor.match.mode = c("interval", "midpoint")
 ) {
   evidence.definition <- match.arg(evidence.definition)
+  anchor.match.mode <- match.arg(anchor.match.mode)
   is.primary <- evidence.definition == "primary_1kb"
 
   true.source.lookup <- df.true.tss %>%
@@ -2790,7 +2813,8 @@ build_direct_promoter_tss_tier <- function(
     map_loop_anchors_dfr(
       gr.loop.anchor.by.side,
       find_direct_anchor_annotation_overlaps,
-      gr.annotation = gr.annotation
+      gr.annotation = gr.annotation,
+      anchor.match.mode = anchor.match.mode
     ) %>%
       left_join(df.lookup, by = "annotation_index")
   }
@@ -2831,6 +2855,10 @@ build_direct_promoter_tss_tier <- function(
       anchor_start,
       anchor_end,
       anchor_width_bp,
+      anchor_match_mode,
+      anchor_match_start,
+      anchor_match_end,
+      anchor_match_width_bp,
       annotation_class,
       annotation_source,
       annotation_id,

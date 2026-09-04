@@ -1,4 +1,4 @@
-# TSS +/-2-kb promoter-window sensitivity analysis
+# TSS +/-2-kb promoter-window sensitivity analysis (4,001-bp window; 50-bp ATAC overlap)
 
 ## Purpose
 
@@ -54,6 +54,9 @@ promoter side or sides of dual-promoter putative loops. Each distinct pooled
 `loop_id` is counted once per Ensembl gene. Calls at different HiCCUPS
 resolutions remain distinct pooled loop records.
 
+The 5-, 10-, and 25-kb columns refer to HiCCUPS loop-calling resolution, not
+the ATAC-overlap threshold. The minimum ATAC overlap is 50 bp in this analysis.
+
 | Metric | +/-1 kb | +/-2 kb | Difference |
 |---|---:|---:|---:|
 | Direction-supported gene-loop pairs | 19,292 | 20,878 | +1,586 |
@@ -69,19 +72,31 @@ same loop count, 830 increased, 321 decreased, 566 appeared only under the
 Pearson correlation of 0.929. Top-gene overlap was 80% for the top 25, 76% for
 the top 50, and 75% for the top 100.
 
-Gene-level output files:
+Consolidated gene-list output:
 
-- `promoter_window_sensitivity_gene_loop_counts.tsv`: complete +/-2-kb gene
-  table, ranked by total putative-loop count, with 5-, 10-, and 25-kb counts;
-- `promoter_window_sensitivity_gene_loop_count_comparison.tsv`: side-by-side
+- `outputs/promoter-window-anchor-sensitivity/promoter_window_anchor_sensitivity_atac50bp_pooled_5k_10k_25k_gene_lists.xlsx`
+  contains the 2,001-, 3,001-, and 4,001-bp promoter-window results for both
+  full-anchor interval and one-base anchor-midpoint matching. Each of its six
+  sheets contains `ensembl_gene_id`, `gene_symbol`, and `n`, where `n` is the
+  number of distinct pooled 5-, 10-, and 25-kb loop records assigned to the
+  gene. Superseded standalone promoter-window gene-list files are removed only
+  after this workbook is created successfully.
+
+Other gene-level sensitivity files retained here:
+
+- `promoter_window_2001bp_atac_overlap_50bp_vs_promoter_window_4001bp_atac_overlap_50bp_gene_loop_count_comparison.tsv`: side-by-side
   +/-1-kb versus +/-2-kb counts, rank changes, and membership categories;
-- `promoter_window_sensitivity_gained_putative_gene_loop_counts.tsv`: gene
+- `promoter_window_2001bp_atac_overlap_50bp_vs_promoter_window_4001bp_atac_overlap_50bp_gained_putative_gene_loop_counts.tsv`: gene
   counts contributed by the 1,063 gained putative loops;
-- `promoter_window_sensitivity_lost_putative_gene_loop_counts.tsv`: gene counts
+- `promoter_window_2001bp_atac_overlap_50bp_vs_promoter_window_4001bp_atac_overlap_50bp_lost_putative_gene_loop_counts.tsv`: gene counts
   contributed by the 229 lost putative loops;
-- `promoter_window_sensitivity_gene_loop_count_summary.tsv` and
-  `promoter_window_sensitivity_gene_rank_stability.tsv`: compact sensitivity
+- `promoter_window_2001bp_atac_overlap_50bp_vs_promoter_window_4001bp_atac_overlap_50bp_gene_loop_count_summary.tsv` and
+  `promoter_window_2001bp_atac_overlap_50bp_vs_promoter_window_4001bp_atac_overlap_50bp_gene_rank_stability.tsv`: compact sensitivity
   summaries.
+
+All TSV exports also record the promoter-window width and minimum ATAC-overlap
+threshold in leading columns. The one-ID-per-line text file carries both values
+in its filename so it remains directly usable as a gene-list input.
 
 ## Interpretation
 
@@ -108,6 +123,7 @@ Run from the directory containing the `enhancer` repository:
 ```bash
 env \
   PROMOTER_WINDOW_FLANK_BP=2000 \
+  ATAC_MINIMUM_OVERLAP_BP=50 \
   PROMOTER_WINDOW_SENSITIVITY_ONLY=1 \
   RESUBMIT_OUTPUT_DIR=/Users/pete/Desktop/playground/enhancer/r_files/revision/revision_main/sensitivity_promoter_window_2kb \
   Rscript /Users/pete/Desktop/playground/enhancer/r_files/revision/revision_main/01_promoter_enhancer_interaction_resubmit_loop_annotation.R

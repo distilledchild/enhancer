@@ -1,0 +1,5 @@
+primary_promoter_window_width_bp	primary_minimum_ATAC_overlap_bp	sensitivity_promoter_window_width_bp	sensitivity_minimum_ATAC_overlap_bp	membership_transition	n_loops
+2001	50	4001	50	gained_putative	1063
+2001	50	4001	50	lost_putative	229
+2001	50	4001	50	neither_putative	16582
+2001	50	4001	50	retained_putative	13147

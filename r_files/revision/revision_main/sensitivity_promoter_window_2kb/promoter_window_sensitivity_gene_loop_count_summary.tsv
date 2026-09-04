@@ -1,6 +1,0 @@
-metric	primary_1kb	sensitivity	difference
-direction_supported_gene_loop_pairs	19292	20878	1586
-unique_genes	8775	9114	339
-genes_with_at_least_2_loops	4631	4947	316
-genes_with_at_least_5_loops	830	988	158
-genes_with_at_least_10_loops	41	56	15

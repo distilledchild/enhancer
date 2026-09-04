@@ -1,0 +1,7 @@
+primary_promoter_window_width_bp	primary_minimum_ATAC_overlap_bp	sensitivity_promoter_window_width_bp	sensitivity_minimum_ATAC_overlap_bp	primary_1kb_n_direct_anchor_sides	sensitivity_n_direct_anchor_sides	n_loops
+2001	50	4001	50	0	0	13579
+2001	50	4001	50	0	1	1070
+2001	50	4001	50	0	2	29
+2001	50	4001	50	1	1	11789
+2001	50	4001	50	1	2	506
+2001	50	4001	50	2	2	4048

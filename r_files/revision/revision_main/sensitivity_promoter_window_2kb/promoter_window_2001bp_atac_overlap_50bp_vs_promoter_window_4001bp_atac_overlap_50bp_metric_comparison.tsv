@@ -1,0 +1,10 @@
+primary_promoter_window_width_bp	primary_minimum_ATAC_overlap_bp	sensitivity_promoter_window_width_bp	sensitivity_minimum_ATAC_overlap_bp	metric	primary_1kb_n_loops	sensitivity_n_loops	difference_n_loops	difference_percentage_points
+2001	50	4001	50	pooled_loops	31021	31021	0	0
+2001	50	4001	50	no_direct_promoter_TSS	14678	13579	-1099	-3.54
+2001	50	4001	50	exactly_one_promoter_anchor	12295	12859	564	1.82
+2001	50	4001	50	promoter_at_both_anchors	4048	4583	535	1.72
+2001	50	4001	50	any_promoter_associated_loop	16343	17442	1099	3.54
+2001	50	4001	50	putative_regulatory	13376	14210	834	2.69
+2001	50	4001	50	promoter_associated_without_distal_ATAC_support	2967	3232	265	0.85
+2001	50	4001	50	single_promoter_distal_ATAC	10469	10964	495	1.6
+2001	50	4001	50	dual_promoter_directional_distal_ATAC	2907	3246	339	1.09

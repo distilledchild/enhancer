@@ -1,0 +1,7 @@
+primary_promoter_window_width_bp	primary_minimum_ATAC_overlap_bp	sensitivity_promoter_window_width_bp	sensitivity_minimum_ATAC_overlap_bp	metric	value
+2001	50	4001	50	shared_genes	8548
+2001	50	4001	50	spearman_loop_count_shared_genes	0.9222815059895433
+2001	50	4001	50	pearson_loop_count_shared_genes	0.9286458666401483
+2001	50	4001	50	top_25_gene_overlap_fraction	0.8
+2001	50	4001	50	top_50_gene_overlap_fraction	0.76
+2001	50	4001	50	top_100_gene_overlap_fraction	0.75
