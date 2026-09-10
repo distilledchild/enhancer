@@ -1106,153 +1106,6 @@ df.atac.matched.null.method <- tribble(
   )
 )
 
-plot.atac.null <- df.atac.matched.null.summary %>%
-  filter(metric == "atac_overlap_ge50") %>%
-  mutate(
-    resolution = factor(resolution, levels = c("5K", "10K", "25K", "ALL")),
-    null_method = recode(
-      null_method,
-      matched_HiC_anchor = "Matched promoter-free Hi-C anchors",
-      rigid_loop_pair_relocation = "Rigid within-chromosome loop relocation"
-    )
-  ) %>%
-  ggplot(aes(x = resolution)) +
-  geom_linerange(
-    aes(ymin = null_rate_q025, ymax = null_rate_q975),
-    color = "grey45",
-    linewidth = 0.8
-  ) +
-  geom_point(
-    aes(y = mean_null_rate, shape = "Null mean"),
-    color = "grey25",
-    size = 2.5
-  ) +
-  geom_point(
-    aes(y = observed_rate, shape = "Observed"),
-    color = "#B2182B",
-    size = 2.8
-  ) +
-  facet_wrap(vars(null_method)) +
-  scale_y_continuous(labels = scales::label_percent(accuracy = 1)) +
-  scale_shape_manual(values = c("Null mean" = 1, "Observed" = 16)) +
-  labs(
-    x = "HiCCUPS resolution",
-    y = "Candidate anchors with >=50 bp non-TSS ATAC overlap",
-    shape = NULL
-  ) +
-  theme_bw(base_size = 10) +
-  theme(
-    panel.grid.minor = element_blank(),
-    legend.position = "bottom"
-  )
-
-# Slide-ready summary of the primary matched-anchor null model. This plot uses
-# the analysis results above directly; no values are entered manually.
-plot.atac.matched.null.dumbbell <- df.atac.matched.null.summary %>%
-  filter(
-    null_method == "matched_HiC_anchor",
-    metric == "atac_overlap_ge50"
-  ) %>%
-  mutate(
-    resolution = factor(resolution, levels = c("5K", "10K", "25K", "ALL")),
-    resolution_label = recode(
-      as.character(resolution),
-      `5K` = "5 kb",
-      `10K` = "10 kb",
-      `25K` = "25 kb",
-      ALL = "All"
-    ),
-    resolution_label = factor(
-      resolution_label,
-      levels = c("All", "25 kb", "10 kb", "5 kb")
-    ),
-    observed_pct = 100 * observed_rate,
-    null_pct = 100 * mean_null_rate,
-    null_low_pct = 100 * null_rate_q025,
-    null_high_pct = 100 * null_rate_q975
-  ) %>%
-  ggplot(aes(y = resolution_label)) +
-  geom_segment(
-    aes(x = null_low_pct, xend = null_high_pct, yend = resolution_label),
-    color = "#8A99A6",
-    linewidth = 1.1,
-    lineend = "round"
-  ) +
-  geom_segment(
-    aes(x = null_pct, xend = observed_pct, yend = resolution_label),
-    color = "#D8A62A",
-    linewidth = 1.5,
-    lineend = "round"
-  ) +
-  geom_point(aes(x = null_pct), size = 3.8, color = "#8A99A6") +
-  geom_point(aes(x = observed_pct), size = 4.2, color = "#1C918D") +
-  geom_text(
-    aes(x = null_low_pct - 0.35, label = sprintf("%.1f%%", null_pct)),
-    hjust = 1,
-    color = "#687783",
-    fontface = "bold",
-    size = 3.8
-  ) +
-  geom_text(
-    aes(x = observed_pct + 0.55, label = sprintf("%.1f%%", observed_pct)),
-    hjust = 0,
-    color = "#0B7773",
-    fontface = "bold",
-    size = 3.8
-  ) +
-  annotate(
-    "point",
-    x = 69.5,
-    y = 4.65,
-    color = "#8A99A6",
-    size = 3.2
-  ) +
-  annotate(
-    "text",
-    x = 70,
-    y = 4.65,
-    label = "Matched null",
-    hjust = 0,
-    color = "#8A99A6",
-    fontface = "bold",
-    size = 3.7
-  ) +
-  annotate(
-    "point",
-    x = 77.5,
-    y = 4.65,
-    color = "#1C918D",
-    size = 3.5
-  ) +
-  annotate(
-    "text",
-    x = 78,
-    y = 4.65,
-    label = "Observed",
-    hjust = 0,
-    color = "#1C918D",
-    fontface = "bold",
-    size = 3.7
-  ) +
-  scale_x_continuous(
-    limits = c(68, 93),
-    breaks = c(70, 75, 80, 85, 90),
-    labels = function(x) paste0(x, "%"),
-    expand = expansion(mult = c(0, 0))
-  ) +
-  coord_cartesian(clip = "off") +
-  labs(x = NULL, y = NULL) +
-  theme_minimal(base_size = 12) +
-  theme(
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_line(color = "#DFE6EC", linewidth = 0.55),
-    axis.text.x = element_text(color = "#657584", size = 10.5),
-    axis.text.y = element_text(color = "#123E6A", face = "bold", size = 11.5),
-    plot.margin = margin(16, 32, 8, 8),
-    plot.background = element_rect(fill = "white", color = NA),
-    panel.background = element_rect(fill = "white", color = NA)
-  )
 
 # Slide-ready summary of the random genomic relocation null model.
 plot.atac.random.relocation.dumbbell <- df.atac.matched.null.summary %>%
@@ -1312,7 +1165,7 @@ plot.atac.random.relocation.dumbbell <- df.atac.matched.null.summary %>%
     "text",
     x = 26,
     y = 4.65,
-    label = "Random genomic null",
+    label = "Random relocation null",
     hjust = 0,
     color = "#8A99A6",
     fontface = "bold",
@@ -1389,44 +1242,6 @@ walk2(names(output.tables), output.tables, function(file.stem, table) {
   write_tsv(table, file.path(output.dir, paste0(file.stem, ".tsv")))
 })
 
-ggsave(
-  file.path(output.dir, "revised_atac_observed_vs_matched_null.pdf"),
-  plot.atac.null,
-  width = 8,
-  height = 4.2,
-  device = "pdf"
-)
-ggsave(
-  file.path(output.dir, "revised_atac_observed_vs_matched_null.png"),
-  plot.atac.null,
-  width = 8,
-  height = 4.2,
-  dpi = 300,
-  bg = "white"
-)
-
-ggsave(
-  file.path(
-    output.dir,
-    "revised_atac_matched_null_dumbbell_by_resolution.pdf"
-  ),
-  plot.atac.matched.null.dumbbell,
-  width = 6.35,
-  height = 3.05,
-  device = "pdf",
-  bg = "white"
-)
-ggsave(
-  file.path(
-    output.dir,
-    "revised_atac_matched_null_dumbbell_by_resolution.png"
-  ),
-  plot.atac.matched.null.dumbbell,
-  width = 6.35,
-  height = 3.05,
-  dpi = 300,
-  bg = "white"
-)
 
 ggsave(
   file.path(
@@ -1479,6 +1294,20 @@ write_tsv(
   df.output.manifest,
   file.path(output.dir, "resubmit_output_manifest.tsv")
 )
+
+resubmit.main.dir <- file.path(revision.main.dir, "results")
+resubmit.2nd.dir <- file.path(revision.main.dir, "results", "2nd_resubmission")
+target.results.dirs <- unique(c(resubmit.main.dir, resubmit.2nd.dir))
+
+for (t.dir in target.results.dirs) {
+  if (dir.exists(dirname(t.dir))) {
+    dir.create(t.dir, recursive = TRUE, showWarnings = FALSE)
+    for (f in release.output.paths) {
+      file.copy(f, file.path(t.dir, basename(f)), overwrite = TRUE)
+    }
+  }
+}
+message("Copied ATAC validation deliverables to: ", paste(target.results.dirs, collapse = ", "))
 
 message("ATAC overlap threshold sensitivity by resolution:")
 print(df.atac.threshold.sensitivity.by.resolution)

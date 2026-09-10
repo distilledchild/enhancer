@@ -3,6 +3,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from pathlib import Path
+import csv
+import os
 
 # Base typography configuration
 BASE_FONTSIZE = 14
@@ -507,7 +509,35 @@ def draw_polyline_arrow(ax, points, label=None, label_idx=0, offset_label=(0, 0)
             )
 
 
+def read_workflow_metrics(results_dir):
+    metrics_file = results_dir / "figure_source_data" / "run_metrics.tsv"
+    with metrics_file.open() as handle:
+        metrics = {row["metric"]: row["value"] for row in csv.DictReader(handle, delimiter="\t")}
+    with (results_dir / "figure_source_data" / "r_generation_complete.tsv").open() as handle:
+        completion = next(csv.DictReader(handle, delimiter="\t"))
+    if completion["run_started"] != metrics["run_started"]:
+        raise ValueError("Run the R figure generator to completion before drawing Figure 7")
+    counts = {key: int(value) for key, value in metrics.items() if key not in {"anchor_mode", "run_started"}}
+    if (counts["window_bp"], metrics["anchor_mode"], counts["atac_min_bp"]) != (2001, "interval", 50):
+        raise ValueError("Figure 7 requires W2001 / interval / ATAC50 results")
+    if counts["single_supported"] + counts["dual_supported"] != counts["putative"]:
+        raise ValueError("Putative category totals do not reconcile")
+    if sum(counts[k] for k in ("single_supported", "single_unsupported", "dual_supported", "dual_unsupported", "no_promoter")) != counts["pooled_lt2mb"]:
+        raise ValueError("Workflow categories do not cover the pooled universe")
+    return counts
+
+
 def generate_revision_flowchart(output_file):
+    counts = read_workflow_metrics(Path(output_file).parent)
+    def n(key):
+        return f"{counts[key]:,}"
+
+    def category(key):
+        return f"{n(key)} loops ({100 * counts[key] / counts['pooled_lt2mb']:.1f}%)"
+
+    single = counts["single_supported"] + counts["single_unsupported"]
+    dual = counts["dual_supported"] + counts["dual_unsupported"]
+    unsupported = counts["single_unsupported"] + counts["dual_unsupported"]
     fig, ax = plt.subplots(figsize=(17, 22))
     ax.set_xlim(-15, 178)
     ax.set_ylim(0, 220)
@@ -549,7 +579,7 @@ def generate_revision_flowchart(output_file):
         (x_center, y_start),
         76,
         11.5,
-        "59,000 pooled HiCCUPS loop calls\n(10 rat strains across 5K, 10K, 25K resolutions)",
+        f"{n('raw_calls')} sample-level HiCCUPS call records\n({n('n_libraries')} Hi-C libraries; 5K, 10K, 25K resolutions)",
         fill_color='#F0F4F8',
         edgecolor='#334E68',
         fontsize=14.5,
@@ -558,23 +588,23 @@ def generate_revision_flowchart(output_file):
     )
 
     # 2. Decision 1: Distinct Coordinates
-    n_dec1 = draw_diamond(
+    n_dec1 = draw_box(
         ax,
         (x_center, y_dec1),
         48,
         13,
-        "Collapse to unique\nloop coordinates",
+        "Collapse identical coordinates\nwithin each resolution",
         fill_color='#E0F2FE',
         edgecolor='#0284C7',
         fontsize=14.5,
-        fit_text=False
+        fit_text=True
     )
     n_rem1 = draw_box(
         ax,
         (x_rem_right, y_dec1),
         34,
         9,
-        "27,222 replicate calls\ncollapsed",
+        f"{counts['raw_calls'] - counts['distinct_calls']:,} repeated calls\ncollapsed across libraries",
         fill_color='#FFE6E6',
         edgecolor='black',
         fontweight='normal'
@@ -597,7 +627,7 @@ def generate_revision_flowchart(output_file):
         (x_rem_right, y_dec2),
         34,
         9,
-        "757 loops (≥ 2 Mb)\nexcluded",
+        f"{counts['distinct_calls'] - counts['pooled_lt2mb']:,} loops (≥ 2 Mb)\nexcluded",
         fill_color='#FFE6E6',
         edgecolor='black',
         fontweight='normal'
@@ -609,7 +639,7 @@ def generate_revision_flowchart(output_file):
         (x_center, y_dec3),
         56,
         14,
-        "Direct TSS/Promoter overlap\n(TSS ± 1 kb at ≥ 1 anchor)",
+        "2001-bp TSS window overlaps\n≥1 full anchor interval (≥1 bp)?",
         fill_color='#E0F2FE',
         edgecolor='#0284C7',
         fontsize=14.5,
@@ -621,7 +651,7 @@ def generate_revision_flowchart(output_file):
         (x_rem_right, y_dec3),
         36,
         13,
-        "14,678 loops (47.3%)\n❺ Loops without\ndirect TSS/Promoter overlap",
+        f"{category('no_promoter')}\n❺ Loops without\ndirect TSS/Promoter overlap",
         fill_color='#FFE6E6',
         edgecolor='black',
         fontsize=13.0,
@@ -654,7 +684,7 @@ def generate_revision_flowchart(output_file):
         (x_box1_center, y_leaf_boxes),
         32,
         15,
-        "10,469 loops (33.7%)\n❶ Single-promoter with\ndistal non-TSS ATAC support",
+        f"{category('single_supported')}\n❶ Single-promoter with\ndistal non-TSS ATAC support",
         fill_color='#DCFCE7',
         edgecolor='#16A34A',
         fontsize=LEAF_FONTSIZE,
@@ -669,7 +699,7 @@ def generate_revision_flowchart(output_file):
         (x_box2_center, y_leaf_boxes),
         32,
         15,
-        "1,826 loops (5.9%)\n    ❷ Single-promoter without\ndistal non-TSS ATAC support",
+        f"{category('single_unsupported')}\n    ❷ Single-promoter without\ndistal non-TSS ATAC support",
         fill_color='#FFF7ED',
         edgecolor='#C2410C',
         fontsize=LEAF_FONTSIZE,
@@ -684,11 +714,11 @@ def generate_revision_flowchart(output_file):
         (x_right, y_atac_split),
         54,
         14,
-        "Residual non-TSS ATAC (≥ 50 bp)\nat ≥ 1 anchor?",
+        "≥1 supported direction?\nPromoter-window ATAC ≥50 bp AND\nopposite non-TSS ATAC ≥50 bp",
         fill_color='#E0F2FE',
         edgecolor='#0284C7',
-        fontsize=14.5,
-        fit_text=False,
+        fontsize=12.0,
+        fit_text=True,
         y_offset=-0.75
     )
 
@@ -698,7 +728,7 @@ def generate_revision_flowchart(output_file):
         (x_box3_center, y_leaf_boxes),
         39.0,
         15,
-        "2,907 loops (9.4%)\n❸ Dual-promoter with\nresidual non-TSS ATAC support\n(P–E:1,094 | P–P/E:629 | P/E–P/E:1,184)",
+        f"{category('dual_supported')}\n❸ Dual-promoter with\ndirectional ATAC support",
         fill_color='#DCFCE7',
         edgecolor='#16A34A',
         fontsize=LEAF_FONTSIZE,
@@ -713,7 +743,7 @@ def generate_revision_flowchart(output_file):
         (x_box4_center, y_leaf_boxes),
         33.0,
         15,
-        "1,141 loops (3.7%)\n  ❹ Dual–promoter without\nresidual non-TSS ATAC support",
+        f"{category('dual_unsupported')}\n  ❹ Dual-promoter without\na supported ATAC direction",
         fill_color='#FFF7ED',
         edgecolor='#C2410C',
         fontsize=LEAF_FONTSIZE,
@@ -728,14 +758,14 @@ def generate_revision_flowchart(output_file):
         (x_center + 4, y_end + 11.5),
         156,
         25,
-        title="Final Categorization of 31,021 Pooled HiCCUPS Call Records (< 2 Mb)",
+        title=f"Final Categorization of {n('pooled_lt2mb')} Pooled Exact Calls (< 2 Mb)",
         list_items=[
             "1. Putative regulatory loops with non-TSS ATAC support",
-            "   • ❶ (10,469) + ❸ (2,907) = 13,376 loops (43.1%)",
+            f"   • ❶ ({n('single_supported')}) + ❸ ({n('dual_supported')}) = {category('putative')}",
             "2. Promoter-associated loops without non-TSS ATAC support",
-            "   • ❷ (1,826) + ❹ (1,141) = 2,967 loops (9.6%)",
+            f"   • ❷ ({n('single_unsupported')}) + ❹ ({n('dual_unsupported')}) = {unsupported:,} loops ({100 * unsupported / counts['pooled_lt2mb']:.1f}%)",
             "3. Loops without direct TSS/Promoter overlap",
-            "   • ❺ 14,678 loops (47.3%)"
+            f"   • ❺ {category('no_promoter')}"
         ],
         # footer_note="* Independent Structural Annotation: 29,980 loops (96.6%) have predicted CTCF motifs at both anchors",
         fill_color='#ECFCCB',
@@ -747,11 +777,11 @@ def generate_revision_flowchart(output_file):
 
     # Connecting Arrows
     draw_arrow(ax, n_start['bottom_mid'], n_dec1['n'])
-    draw_arrow(ax, n_dec1['e'], n_rem1['w'], label="No", offset_label=(0, 1.5))
-    draw_arrow(ax, n_dec1['s'], n_dec2['n'], label="Yes (31,778 retained)", offset_label=(0, 0))
+    draw_arrow(ax, n_dec1['e'], n_rem1['w'], label="Collapsed", offset_label=(0, 1.5))
+    draw_arrow(ax, n_dec1['s'], n_dec2['n'], label=f"{n('distinct_calls')} retained", offset_label=(0, 0))
 
     draw_arrow(ax, n_dec2['e'], n_rem2['w'], label="No", offset_label=(0, 1.5))
-    draw_arrow(ax, n_dec2['s'], n_dec3['n'], label="Yes (31,021 distinct loops)", offset_label=(0, 0))
+    draw_arrow(ax, n_dec2['s'], n_dec3['n'], label=f"Yes ({n('pooled_lt2mb')} pooled exact calls)", offset_label=(0, 0))
 
     draw_arrow(ax, n_dec3['e'], n_rem3['w'], label="None", offset_label=(0, 1.5))
 
@@ -760,7 +790,7 @@ def generate_revision_flowchart(output_file):
     draw_polyline_arrow(
         ax,
         [n_dec3['s'], (x_center, y_split_pt), (x_left, y_split_pt), n_dec_single_atac['n']],
-        label="Direct overlap at\nsingle anchor (12,295 loops)",
+        label=f"Direct overlap at\nsingle anchor ({single:,} loops)",
         label_idx=1,
         offset_label=(0, 2.5),
         label_fontsize=11
@@ -768,7 +798,7 @@ def generate_revision_flowchart(output_file):
     draw_polyline_arrow(
         ax,
         [n_dec3['s'], (x_center, y_split_pt), (x_right, y_split_pt), n_dec_dual_atac['n']],
-        label="Direct overlap at\nboth anchors (4,048 loops)",
+        label=f"Direct overlap at\nboth anchors ({dual:,} loops)",
         label_idx=1,
         offset_label=(0, 2.5),
         label_fontsize=11
@@ -796,7 +826,7 @@ def generate_revision_flowchart(output_file):
     draw_polyline_arrow(
         ax,
         [n_dec_dual_atac['w'], (x_box3_center, n_dec_dual_atac['w'][1]), n_box_dual_putative['n']],
-        label="Yes  (≥ 50 bp)",
+        label="Yes (direction supported)",
         label_idx=1,
         offset_label=(0, 0),
         label_fontsize=10
@@ -804,7 +834,7 @@ def generate_revision_flowchart(output_file):
     draw_polyline_arrow(
         ax,
         [n_dec_dual_atac['e'], (x_box4_center, n_dec_dual_atac['e'][1]), n_box_dual_no_atac['n']],
-        label="No  (< 50 bp)",
+        label="No (neither direction)",
         label_idx=1,
         offset_label=(0, 0),
         label_fontsize=10
@@ -828,6 +858,10 @@ def generate_revision_flowchart(output_file):
         lw=2.0
     )
 
+    ax.text(x_center + 4, 5,
+            "rn7; Ensembl + EPD TSS ±1000 bp; non-TSS ATAC excludes these windows.\n"
+            "No nearest-gene / gene-inside-loop restriction or CTCF-count filter. ATAC support is not functional validation.",
+            ha="center", va="center", fontsize=11)
     plt.tight_layout()
     output_png = Path(output_file).with_suffix(".png")
     output_pdf = Path(output_file).with_suffix(".pdf")
@@ -838,7 +872,7 @@ def generate_revision_flowchart(output_file):
 
 
 if __name__ == "__main__":
-    results_dir = Path(__file__).resolve().parent / "results"
+    results_dir = Path(os.environ.get("RESUBMIT_OUTPUT_DIR", Path(__file__).resolve().parent / "results" / "2nd_resubmission"))
     results_dir.mkdir(parents=True, exist_ok=True)
     out_base = results_dir / "revision_figure7_flowchart"
     generate_revision_flowchart(out_base)

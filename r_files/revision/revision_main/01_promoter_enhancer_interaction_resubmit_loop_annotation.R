@@ -1589,9 +1589,19 @@ if (promoter.window.sensitivity.only) {
       df.promoter.window.compact.gene.list,
       sensitivity.output.file("gene_counts_for_workbook")
     )
+    readr::write_tsv(
+      tibble(
+        n_putative_regulatory_loops = as.integer(
+          sum(df.loop.evidence$revised_putative_regulatory_support)
+        )
+      ),
+      sensitivity.output.file("case_summary_for_workbook")
+    )
     message(
       "Compact gene list written for ", promoter.window.width.bp, "-bp ",
-      promoter.anchor.match.mode, " matching with ATAC overlap fixed at 50 bp."
+      promoter.anchor.match.mode, " matching with ATAC overlap fixed at 50 bp (",
+      sum(df.loop.evidence$revised_putative_regulatory_support),
+      " putative regulatory loops)."
     )
     if (!interactive()) {
       quit(save = "no", status = 0L)
@@ -1628,11 +1638,15 @@ if (promoter.window.sensitivity.only) {
   df.promoter.window.sensitivity.metric.comparison <- sensitivity.metric.table(df.loop.evidence) %>%
     dplyr::rename(sensitivity_n_loops = n_loops)
 
-  primary.resource.file <- file.path(
-    analysis.dir,
-    "results",
-    "revised_pooled_loop_annotation_resource.tsv"
+  primary.resource.candidates <- c(
+    file.path(output.dir, "revised_pooled_loop_annotation_resource.tsv"),
+    file.path(analysis.dir, "results", "2nd_resubmission", "revised_pooled_loop_annotation_resource.tsv"),
+    file.path(analysis.dir, "results", "revised_pooled_loop_annotation_resource.tsv")
   )
+  primary.resource.file <- primary.resource.candidates[file.exists(primary.resource.candidates)][1]
+  if (is.na(primary.resource.file)) {
+    primary.resource.file <- file.path(analysis.dir, "results", "revised_pooled_loop_annotation_resource.tsv")
+  }
   df.promoter.window.major.category.transitions <- tibble()
   df.promoter.window.detailed.category.transitions <- tibble()
   df.promoter.window.putative.membership.transitions <- tibble()
@@ -1718,11 +1732,15 @@ if (promoter.window.sensitivity.only) {
         name = "n_loops"
       )
 
-    primary.gene.assignment.file <- file.path(
-      analysis.dir,
-      "results",
-      "revised_direct_loop_gene_assignments.tsv"
+    primary.gene.assignment.candidates <- c(
+      file.path(output.dir, "revised_direct_loop_gene_assignments.tsv"),
+      file.path(analysis.dir, "results", "2nd_resubmission", "revised_direct_loop_gene_assignments.tsv"),
+      file.path(analysis.dir, "results", "revised_direct_loop_gene_assignments.tsv")
     )
+    primary.gene.assignment.file <- primary.gene.assignment.candidates[file.exists(primary.gene.assignment.candidates)][1]
+    if (is.na(primary.gene.assignment.file)) {
+      primary.gene.assignment.file <- file.path(analysis.dir, "results", "revised_direct_loop_gene_assignments.tsv")
+    }
     if (file.exists(primary.gene.assignment.file)) {
       df.primary.putative.gene.assignment <- readr::read_tsv(
         primary.gene.assignment.file,
@@ -2031,6 +2049,37 @@ assert_analysis_condition(
 # 10. figures
 ################################################################################
 
+assert_analysis_condition(
+  promoter.window.flank.bp == 1000L && promoter.anchor.match.mode == "interval" &&
+    atac.minimum.overlap.bp == 50L,
+  "Manuscript figures require W2001, full anchor intervals, and ATAC >=50 bp. Use sensitivity-only mode for other settings."
+)
+results.dir <- output.dir
+figure.source.dir <- file.path(results.dir, "figure_source_data")
+dir.create(figure.source.dir, recursive = TRUE, showWarnings = FALSE)
+figure.run.started <- format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")
+df.figure.run.metrics <- tibble(
+  metric = c("window_bp", "flank_bp", "anchor_mode", "atac_min_bp", "n_libraries",
+             "raw_calls", "distinct_calls", "pooled_lt2mb", "single_supported",
+             "single_unsupported", "dual_supported", "dual_unsupported", "no_promoter",
+             "putative", "gene_loop_pairs", "genes", "run_started"),
+  value = as.character(c(2L * promoter.window.flank.bp + 1L, promoter.window.flank.bp,
+    promoter.anchor.match.mode, atac.minimum.overlap.bp, n_distinct(df.sample.loop.1based$sample),
+    nrow(df.sample.loop.1based), nrow(df.loop.distinct), nrow(df.loop.evidence),
+    sum(df.loop.evidence$revised_single_promoter_distal_atac_support),
+    sum(df.loop.evidence$revised_single_promoter_without_opposite_atac),
+    sum(df.loop.evidence$revised_dual_promoter_directional_distal_atac_support),
+    sum(df.loop.evidence$revised_dual_promoter_without_directional_distal_atac),
+    sum(df.loop.evidence$revised_no_direct_promoter_tss),
+    sum(df.loop.evidence$revised_putative_regulatory_support),
+    nrow(df.putative.regulatory.gene.assignment),
+    n_distinct(df.putative.regulatory.gene.assignment$gene_id), figure.run.started))
+)
+write_tsv(df.figure.run.metrics, file.path(figure.source.dir, "run_metrics.tsv"))
+write_tsv(df.loop.evidence, file.path(figure.source.dir, "loop_evidence.tsv.gz"))
+write_tsv(df.putative.regulatory.gene.assignment, file.path(figure.source.dir, "putative_gene_assignments.tsv.gz"))
+write_tsv(df.analysis.input.files, file.path(figure.source.dir, "input_files.tsv"))
+
 # ==============================================================================
 # 10-1. Figure 1: Read Category and Correlation with Loop Counts (Juicer sb-option QC)
 # ==============================================================================
@@ -2127,6 +2176,15 @@ df.figure1.qc <- map2_dfr(
     Chimeric_ambiguous_and_Unmapped_Percentage = (Chimeric_ambiguous_and_Unmapped / Sequenced_RP) * 100
   )
 
+assert_analysis_condition(
+  nrow(df.figure1.qc) == 10L &&
+    all(is.finite(df.figure1.qc$Sequenced_RP)) &&
+    all(abs(df.figure1.qc$Unique_Reads_Percentage + df.figure1.qc$Duplicates_Percentage +
+      df.figure1.qc$Chimeric_ambiguous_and_Unmapped_Percentage - 100) < 0.01),
+  "QC requires ten libraries and exhaustive read categories summing to 100%."
+)
+write_tsv(df.figure1.qc, file.path(figure.source.dir, "figure1_qc.tsv"))
+
 # --- Panel 1a: Read Category Stacked Horizontal Bar Plot ---
 df.fig1a.melted <- df.figure1.qc %>%
   pivot_longer(
@@ -2161,10 +2219,10 @@ plot.figure1a.read.category <- ggplot(
     )
   ) +
   labs(
-    title = "a. Read Category",
+    title = "a. Read-pair Categories",
     x = "Sample",
     y = "Percent of Total",
-    fill = "Category"
+    fill = NULL
   ) +
   theme_minimal(base_size = 11) +
   theme(
@@ -2211,7 +2269,7 @@ df.fig1b.correlations <- df.fig1b.merged %>%
   ungroup() %>%
   mutate(
     r = format(round(estimate, 2), nsmall = 2),
-    p = format(round(p.value, 4), nsmall = 4),
+    p = formatC(p.value, format = "e", digits = 2),
     label = paste0("R = ", r, ", p = ", p)
   )
 
@@ -2256,11 +2314,11 @@ plot.figure1b.loop.correlation <- ggplot(
   scale_color_manual(values = fig1_metric_colors) +
   scale_fill_manual(values = fig1_metric_colors) +
   labs(
-    title = "b. Read Counts vs Loop Counts by Category",
-    x = "Number of Reads",
-    y = "Number of Loops",
-    color = "Category",
-    fill = "Category"
+    title = "b. Read Depth vs Loop Calls",
+    x = "Number of Read Pairs",
+    y = "Number of Exact Calls (<2 Mb)",
+    color = NULL,
+    fill = NULL
   ) +
   theme_minimal(base_size = 11) +
   theme(
@@ -2290,7 +2348,7 @@ plot.figure1.revised <- patchwork::wrap_plots(
 )
 
 # Save Figure 1 to results directory
-results.dir <- file.path(getwd(), "r_files", "revision", "revision_main", "results")
+results.dir <- output.dir
 if (!dir.exists(results.dir)) {
   dir.create(results.dir, recursive = TRUE)
 }
@@ -2393,17 +2451,9 @@ strain_clean_map <- c(
   "BN-Lx" = "BN-Lx/Cub"
 )
 
-strain_depth_map <- c(
-  "HXB31/Ipcv" = "491M",
-  "HXB10/Ipcv" = "528M",
-  "BN-Lx/Cub" = "392M",
-  "SHRxBN F1" = "486M",
-  "SHR/OlaIpcv" = "422M",
-  "HXB2/Ipcv" = "281M",
-  "HXB23/Ipcv" = "450M",
-  "BXH6/Cub" = "350M",
-  "LE/Stm" = "185M",
-  "F344/Stm" = "181M"
+strain_depth_map <- setNames(
+  paste0(round(df.figure1.qc$Unique_Reads / 1e6), "M"),
+  recode(df.figure1.qc$Strain, !!!strain_clean_map)
 )
 
 df.sample.2mb.figure3 <- df.sample.loop.1based %>%
@@ -2443,16 +2493,18 @@ message(
   full.depth.loop.count.path
 )
 
-# --- Panel 3a: Shared Loops by Resolution (Mean & SD per resolution) ---
-shared_loops_per_res <- df.sample.2mb.figure3 %>%
-  group_by(resolution, loop_id) %>%
-  summarise(n_samples = n_distinct(sample), .groups = "drop") %>%
-  filter(n_samples > 1) %>%
-  inner_join(df.sample.2mb.figure3, by = c("resolution", "loop_id"))
-
-df.fig3a.summary <- shared_loops_per_res %>%
-  group_by(resolution, sample) %>%
-  summarise(shared_count = n_distinct(loop_id), .groups = "drop") %>%
+# --- Panel 3a: Exact overlap for all 45 unordered library pairs, including zeros. ---
+df.fig3a.pairs <- map_dfr(c("5K", "10K", "25K"), function(res) {
+  calls <- df.sample.2mb.figure3 %>% filter(resolution == res)
+  pairs <- combn(sort(unique(df.sample.2mb.figure3$sample)), 2)
+  map_dfr(seq_len(ncol(pairs)), function(i) {
+    tibble(resolution = res, sample1 = pairs[1, i], sample2 = pairs[2, i],
+      shared_count = length(intersect(calls$loop_id[calls$sample == pairs[1, i]],
+                                     calls$loop_id[calls$sample == pairs[2, i]])))
+  })
+})
+write_tsv(df.fig3a.pairs, file.path(figure.source.dir, "figure3_pairwise_counts.tsv"))
+df.fig3a.summary <- df.fig3a.pairs %>%
   group_by(resolution) %>%
   summarise(
     mean_shared_loops = mean(shared_count),
@@ -2478,9 +2530,9 @@ plot.figure3a.shared.resolution <- ggplot(
   scale_fill_manual(
     values = c("5K" = "#a6cee3", "10K" = "#1f78b4", "25K" = "#1f3a93")
   ) +
-  coord_cartesian(ylim = c(0, 2100)) +
   labs(
-    title = "a. Multi-library-supported Calls\n   by Resolution",
+    title = "a. Pairwise Shared Calls",
+    subtitle = "Mean +/- SD across 45 library pairs",
     x = "Resolution",
     y = "Number of Exact Calls"
   ) +
@@ -2534,9 +2586,10 @@ plot.figure3b.shared.sample <- ggplot(
     breaks = c("Single-library-supported", "Multi-library-supported")
   ) +
   scale_x_discrete(labels = strain_depth_labels) +
-  scale_y_continuous(breaks = seq(0, 10000, 2500), limits = c(0, 9500)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
   labs(
     title = "\nb. Library Support Composition",
+    subtitle = "Labels: unique read pairs (millions)",
     x = "Hi-C Library",
     y = "Number of Exact Calls",
     fill = "Loop Type"
@@ -2564,7 +2617,7 @@ plot.figure3.revised <- cowplot::plot_grid(
 )
 
 # Save Figure 3 to results directory
-results.dir <- file.path(getwd(), "r_files", "revision", "revision_main", "results")
+results.dir <- output.dir
 if (!dir.exists(results.dir)) {
   dir.create(results.dir, recursive = TRUE)
 }
@@ -2648,14 +2701,15 @@ process_feature_bins_ideogram <- function(feature_df, chrom_df, bin_size = 10000
   for (i in seq_len(nrow(chrom_df))) {
     chr_name <- chrom_df$Chr[i]
     chr_end <- chrom_df$End[i]
-    starts <- seq(0L, chr_end, by = bin_size)
+    starts <- seq(0L, chr_end - 1L, by = bin_size)
     ends <- pmin(starts + bin_size, chr_end)
     bin_list[[i]] <- tibble(Chr = chr_name, Start = as.integer(starts), End = as.integer(ends))
   }
   bins_df <- bind_rows(bin_list)
 
   feature_gr <- GRanges(seqnames = feature_df$Chr, ranges = IRanges(start = feature_df$Start, end = feature_df$End))
-  bins_gr <- GRanges(seqnames = bins_df$Chr, ranges = IRanges(start = bins_df$Start, end = bins_df$End))
+  # Display bins are BED-like; GRanges requires non-overlapping 1-based bins.
+  bins_gr <- GRanges(seqnames = bins_df$Chr, ranges = IRanges(start = bins_df$Start + 1L, end = bins_df$End))
 
   overlaps <- countOverlaps(bins_gr, feature_gr)
   bins_df %>% mutate(Value = as.numeric(overlaps))
@@ -2666,6 +2720,7 @@ ctcf_density_for_ideogram <- process_feature_bins_ideogram(
   chrom_df = karyotype_data_fig4,
   bin_size = 1000000
 )
+write_tsv(ctcf_density_for_ideogram, file.path(figure.source.dir, "figure4_motif_bins.tsv"))
 
 figure4_ideogram_png <- file.path(results.dir, "revision_figure4_panel_a_ctcf_ideogram.png")
 
@@ -2720,6 +2775,7 @@ build_figure4_density_summary <- function(chrom_data, df_gene_input, ctcf_data) 
 make_figure4_scatter_plot <- function(gene_df, title_text) {
   sum_df <- build_figure4_density_summary(df_chrom_fig4, gene_df, df_ctcf_fig4)
   cor_res <- cor.test(sum_df$genes_per_mb, sum_df$ctcf_per_mb, method = "pearson")
+  write_tsv(sum_df, file.path(figure.source.dir, paste0("figure4_", gsub("[^a-zA-Z0-9]", "_", title_text), ".tsv")))
   r_val <- round(cor_res$estimate, 3)
   p_val <- formatC(cor_res$p.value, format = "e", digits = 2)
 
@@ -2751,8 +2807,7 @@ plot_fig4_d <- make_figure4_scatter_plot(df_ensembl_genes %>% filter(gene_biotyp
 
 # Combine Figure 4 into 1x4 layout
 panel_4a <- ggdraw() +
-  draw_image(figure4_ideogram_png, scale = 0.9) +
-  draw_label("a", x = 0.08, y = 0.985, hjust = 0, vjust = 1, fontface = "bold", size = 13)
+  draw_image(figure4_ideogram_png, scale = 0.9)
 
 fig4_grid <- cowplot::plot_grid(
   panel_4a, plot_fig4_b, plot_fig4_c, plot_fig4_d,
@@ -2762,13 +2817,15 @@ fig4_grid <- cowplot::plot_grid(
 )
 
 plot.figure4.revised <- ggdraw() +
-  draw_plot(fig4_grid, x = -0.05, y = -0.055, width = 1.043, height = 1.11)
+  draw_plot(fig4_grid, x = 0, y = 0, width = 1, height = 1) +
+  draw_label("a", x = 0.015, y = 0.98, hjust = 0, vjust = 1, fontface = "bold", size = 13)
 
 figure4.png.path <- file.path(results.dir, "revision_figure4_ctcf_and_gene_density.png")
 figure4.pdf.path <- file.path(results.dir, "revision_figure4_ctcf_and_gene_density.pdf")
 
 ggsave(
   filename = figure4.png.path,
+  bg = "white",
   plot = plot.figure4.revised,
   width = 15.4,
   height = 4.3,
@@ -2777,6 +2834,7 @@ ggsave(
 
 ggsave(
   filename = figure4.pdf.path,
+  bg = "white",
   plot = plot.figure4.revised,
   width = 15.4,
   height = 4.3,
@@ -3035,6 +3093,29 @@ message("  - PDF: ", figure5.pdf.path)
 # ==============================================================================
 # 10-6. Figure 6: Loop-level direct TSS/promoter status stacked bar
 # ==============================================================================
+
+# Retain the legacy Figure 6 subject as descriptive motif annotation, not a filter.
+df.figure6.ctcf <- df.ctcf.evidence %>%
+  dplyr::select(loop_id, resolution, starts_with("predicted_ctcf_motif_interval_count_")) %>%
+  pivot_longer(starts_with("predicted_ctcf_motif_interval_count_"),
+    names_to = "anchor_side", values_to = "motif_count") %>%
+  mutate(anchor_side = factor(if_else(str_ends(anchor_side, "anchor1"), "UP (anchor 1)", "DOWN (anchor 2)"),
+                             levels = c("UP (anchor 1)", "DOWN (anchor 2)")),
+         resolution = factor(resolution, levels = c("5K", "10K", "25K")))
+assert_analysis_condition(nrow(df.figure6.ctcf) == 2L * nrow(df.loop.evidence),
+                          "CTCF histogram must contain both anchors of every pooled loop.")
+write_tsv(df.figure6.ctcf, file.path(figure.source.dir, "figure6_motif_counts.tsv.gz"))
+plot.figure6.ctcf <- ggplot(df.figure6.ctcf, aes(x = log2(motif_count + 1))) +
+  geom_histogram(binwidth = 0.25, boundary = 0, fill = "grey35", color = "white", linewidth = 0.1) +
+  facet_grid(anchor_side ~ resolution) +
+  labs(title = "Predicted CTCF motif intervals at loop anchors",
+       subtitle = "31,021 pooled calls <2 Mb; zero-count anchors retained; no motif-count filtering",
+       x = "log2(predicted motif interval count + 1)", y = "Number of anchors") +
+  theme_bw(base_size = 11) + theme(panel.grid.minor = element_blank())
+for (ext in c("png", "pdf")) {
+  ggsave(file.path(results.dir, paste0("revision_figure6_ctcf_anchor_motif_counts.", ext)),
+         plot.figure6.ctcf, width = 8.5, height = 6, dpi = 300, bg = "white")
+}
 
 figure6.promoter.status.levels <- c(
   "Direct at one anchor",
@@ -3321,6 +3402,7 @@ figure8.pdf.path <- file.path(results.dir, "revision_figure8_circos_putative_reg
 
 ggsave(
   filename = figure8.png.path,
+  bg = "white",
   plot = combined_plot_fig8,
   width = 8,
   height = 4.5,
@@ -3329,6 +3411,7 @@ ggsave(
 
 ggsave(
   filename = figure8.pdf.path,
+  bg = "white",
   plot = combined_plot_fig8,
   width = 8,
   height = 4.5,
@@ -3438,6 +3521,7 @@ strain_to_qc_map <- c(
 )
 
 loop_counts_by_sample_figS1 <- df.sample.loop.1based %>%
+  filter(passes_lt2mb) %>%
   mutate(Strain_qc = recode(strain, !!!strain_to_qc_map)) %>%
   count(Strain_qc, name = "Number_of_Loops")
 
@@ -3475,8 +3559,9 @@ plot.figureS1.heatmap <- ggplot(loop_qc_correlation_long, aes(x = Var2, y = Var1
   ) +
   labs(
     title = "Correlation between number of loops and Hi-C QC metrics",
-    x = "Var2",
-    y = "Var1"
+    subtitle = "10 libraries; exact HiCCUPS calls <2 Mb (same loop counts as Figure 1)",
+    x = NULL,
+    y = NULL
   ) +
   coord_fixed() +
   theme_minimal(base_size = 9) +
@@ -3608,7 +3693,8 @@ plots.figureS3 <- list()
 
 for (res in figureS3.resolutions) {
   df.sample.res <- df.sample.loop.1based %>%
-    filter(resolution == res)
+    filter(resolution == res, passes_lt2mb) %>%
+    distinct(strain, loop_id, .keep_all = TRUE)
 
   location_list <- split(
     df.sample.res$loop_id,
@@ -3646,6 +3732,7 @@ for (res in figureS3.resolutions) {
       X_strain = factor(X_strain, levels = figureS3.strains.order),
       Y_strain = factor(Y_strain, levels = figureS3.strains.order)
     )
+  write_tsv(df.mat.long, file.path(figure.source.dir, paste0("figureS3_", res, ".tsv")))
 
   p <- ggplot(df.mat.long, aes(x = X_strain, y = Y_strain, fill = value)) +
     geom_tile(color = "grey80", linewidth = 0.2) +
@@ -3657,9 +3744,10 @@ for (res in figureS3.resolutions) {
       limits = c(0, 100)
     ) +
     labs(
-      x = "Strain",
-      y = "Strain",
-      title = paste("Heatmap of Common Loops Percentage -", res, "Resolution")
+      x = "Reference library (denominator)",
+      y = "Comparison library",
+      title = paste("Common exact calls <2 Mb -", res, "resolution"),
+      subtitle = "100 x shared calls / calls in the x-axis library"
     ) +
     theme_minimal(base_size = 9) +
     theme(
@@ -4211,3 +4299,32 @@ print_table_s3_by_min_interactions <- function(df_table, min_interactions = 9L) 
 
 # Print all genes with at least nine exact loop calls.
 print_table_s3_by_min_interactions(df.table.s3.putative, min_interactions = 9L)
+
+# Small source tables make manuscript replacements independently auditable.
+df.figure.gene.counts <- df.putative.regulatory.gene.assignment %>%
+  group_by(gene_id) %>%
+  summarise(gene_symbol = {
+              symbols <- sort(unique(gene_name[!is.na(gene_name) & str_trim(gene_name) != ""]))
+              if (length(symbols) == 0L) gene_id[[1]] else symbols[[1]]
+            },
+            n = n_distinct(loop_id), .groups = "drop") %>%
+  transmute(ensembl_gene_id = gene_id, gene_symbol, n) %>% arrange(desc(n), gene_symbol, ensembl_gene_id)
+write_tsv(df.figure.gene.counts, file.path(figure.source.dir, "putative_gene_counts.tsv"))
+write_tsv(df_chr_loop_counts, file.path(figure.source.dir, "figure2_counts.tsv"))
+write_tsv(df.fig3b.data, file.path(figure.source.dir, "figure3_library_support.tsv"))
+write_tsv(df.fig1b.correlations, file.path(figure.source.dir, "figure1_correlations.tsv"))
+write_tsv(merged_df_figS1, file.path(figure.source.dir, "figureS1_input.tsv"))
+write_tsv(df.figure5.loop.window, file.path(figure.source.dir, "positional_loop_universe.tsv.gz"))
+write_tsv(bind_rows(
+  df.figure5.ctcf.relative.position %>% count(chr, resolution, name = "n_feature_loop_overlaps") %>% mutate(feature = "Predicted CTCF motif interval"),
+  df.figure5.true.tss.relative.position %>% count(chr, resolution, name = "n_feature_loop_overlaps") %>% mutate(feature = "Ensembl TSS"),
+  df.figure5.promoter.relative.position %>% count(chr, resolution, name = "n_feature_loop_overlaps") %>% mutate(feature = "EPD promoter midpoint")
+), file.path(figure.source.dir, "positional_feature_counts.tsv"))
+write_tsv(df.circos.input.putative %>% count(chr1, resolution, name = "n_loops"),
+          file.path(figure.source.dir, "circos_counts.tsv"))
+assert_analysis_condition(sum(df_chr_loop_counts$n_loops) == nrow(df.loop.evidence) &&
+  sum(df.figure.gene.counts$n) == nrow(df.putative.regulatory.gene.assignment),
+  "Figure source tables do not reconcile with the master annotation.")
+write_tsv(tibble(run_started = figure.run.started, completed = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z")),
+          file.path(figure.source.dir, "r_generation_complete.tsv"))
+message("All manuscript R figures and source tables completed.")

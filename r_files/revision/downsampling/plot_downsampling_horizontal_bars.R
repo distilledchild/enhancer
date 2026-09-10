@@ -64,7 +64,15 @@ output_dir <- normalizePath(
   winslash = "/",
   mustWork = FALSE
 )
-dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+resubmit_2nd_dir <- normalizePath(
+  file.path(dirname(analysis_dir), "revision_main", "results", "2nd_resubmission"),
+  winslash = "/",
+  mustWork = FALSE
+)
+target_dirs <- unique(c(output_dir, resubmit_2nd_dir))
+for (d in target_dirs) {
+  dir.create(d, recursive = TRUE, showWarnings = FALSE)
+}
 
 required_matched_files <- c(
   exact = file.path(matched_result_dir, "pooled_exact_recovery.tsv"),
@@ -326,51 +334,53 @@ p_matched <- ggplot(
 combined_plot <- p_resolution + p_matched +
   plot_layout(widths = c(0.92, 1.08))
 
-ggsave(
-  file.path(output_dir, "exact_recovery_140M_by_resolution.png"),
-  p_resolution,
-  width = 6.2,
-  height = 4.1,
-  dpi = 300,
-  bg = "white"
-)
-ggsave(
-  file.path(output_dir, "exact_recovery_140M_by_resolution.pdf"),
-  p_resolution,
-  width = 6.2,
-  height = 4.1,
-  bg = "white"
-)
-ggsave(
-  file.path(output_dir, "matched_7_full_depth_recovery.png"),
-  p_matched,
-  width = 7.0,
-  height = 4.1,
-  dpi = 300,
-  bg = "white"
-)
-ggsave(
-  file.path(output_dir, "matched_7_full_depth_recovery.pdf"),
-  p_matched,
-  width = 7.0,
-  height = 4.1,
-  bg = "white"
-)
-ggsave(
-  file.path(output_dir, "downsampling_horizontal_bars_combined.png"),
-  combined_plot,
-  width = 13.2,
-  height = 4.2,
-  dpi = 300,
-  bg = "white"
-)
-ggsave(
-  file.path(output_dir, "downsampling_horizontal_bars_combined.pdf"),
-  combined_plot,
-  width = 13.2,
-  height = 4.2,
-  bg = "white"
-)
+for (out_d in target_dirs) {
+  ggsave(
+    file.path(out_d, "exact_recovery_140M_by_resolution.png"),
+    p_resolution,
+    width = 6.2,
+    height = 4.1,
+    dpi = 300,
+    bg = "white"
+  )
+  ggsave(
+    file.path(out_d, "exact_recovery_140M_by_resolution.pdf"),
+    p_resolution,
+    width = 6.2,
+    height = 4.1,
+    bg = "white"
+  )
+  ggsave(
+    file.path(out_d, "matched_7_full_depth_recovery.png"),
+    p_matched,
+    width = 7.0,
+    height = 4.1,
+    dpi = 300,
+    bg = "white"
+  )
+  ggsave(
+    file.path(out_d, "matched_7_full_depth_recovery.pdf"),
+    p_matched,
+    width = 7.0,
+    height = 4.1,
+    bg = "white"
+  )
+  ggsave(
+    file.path(out_d, "downsampling_horizontal_bars_combined.png"),
+    combined_plot,
+    width = 13.2,
+    height = 4.2,
+    dpi = 300,
+    bg = "white"
+  )
+  ggsave(
+    file.path(out_d, "downsampling_horizontal_bars_combined.pdf"),
+    combined_plot,
+    width = 13.2,
+    height = 4.2,
+    bg = "white"
+  )
+}
 
 plot_data <- bind_rows(
   all_ten_recovery %>%
@@ -394,10 +404,12 @@ plot_data <- bind_rows(
       source
     )
 )
-write_tsv(
-  plot_data,
-  file.path(output_dir, "downsampling_horizontal_bars_plot_data.tsv")
-)
+for (out_d in target_dirs) {
+  write_tsv(
+    plot_data,
+    file.path(out_d, "downsampling_horizontal_bars_plot_data.tsv")
+  )
+}
 
-message("Wrote horizontal-bar figures to: ", output_dir)
+message("Wrote horizontal-bar figures to: ", paste(target_dirs, collapse = ", "))
 print(plot_data)

@@ -3329,8 +3329,8 @@ atac.matched.null.output.files <- c(
   "revised_atac_threshold_sensitivity_by_resolution.tsv", "revised_atac_matched_null_summary.tsv",
   "revised_atac_matched_null_permutation.tsv", "revised_atac_matched_null_method.tsv",
   "revised_atac_matched_control_quality.tsv", "revised_atac_matched_control_strata.tsv",
-  "revised_atac_matched_null_run_metadata.tsv", "revised_atac_observed_vs_matched_null.pdf",
-  "revised_atac_observed_vs_matched_null.png", "revised_atac_matched_null_session_info.txt"
+  "revised_atac_matched_null_run_metadata.tsv", "revised_atac_random_relocation_null_dumbbell_by_resolution.pdf",
+  "revised_atac_random_relocation_null_dumbbell_by_resolution.png", "revised_atac_matched_null_session_info.txt"
 )
 available.atac.matched.null.output.files <- intersect(atac.matched.null.output.files, list.files(output.dir, all.files = FALSE, no.. = TRUE))
 
@@ -3355,7 +3355,7 @@ df.output.manifest <- tibble(
   file_size_bytes = as.numeric(file.info(output_path)$size),
   sha256 = map_chr(output_path, sha256_file),
   generated_by = if_else(
-    str_starts(output_file, "revised_atac_matched") | str_starts(output_file, "revised_atac_threshold") | output_file %in% c("revised_atac_observed_vs_matched_null.pdf", "revised_atac_observed_vs_matched_null.png"),
+    str_starts(output_file, "revised_atac_matched") | str_starts(output_file, "revised_atac_threshold") | str_starts(output_file, "revised_atac_random"),
     "atac_validation.R",
     "promoter_enhancer_interaction_resubmit.R"
   ),

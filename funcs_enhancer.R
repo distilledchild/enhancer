@@ -139,7 +139,7 @@ resolve_enhancer_analysis_paths <- function(
     coord.cache.dir = file.path(analysis.dir, "cache_data"),
     output.dir = path.expand(Sys.getenv(
       "RESUBMIT_OUTPUT_DIR",
-      unset = file.path(analysis.dir, "results")
+      unset = file.path(analysis.dir, "results", "2nd_resubmission")
     ))
   )
 }
